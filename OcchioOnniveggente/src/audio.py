@@ -161,7 +161,13 @@ def record_until_silence(
     return True
 
 
-def play_and_pulse(path: Path, light: Any, sr: int, lighting_conf: Dict[str, Any]) -> None:
+def play_and_pulse(
+    path: Path,
+    light: Any,
+    sr: int,
+    lighting_conf: Dict[str, Any],
+    output_device_id: Any | None = None,
+) -> None:
     """Play audio file and pulse the given light accordingly."""
     y, sr = load_audio_as_float(path, sr)
     stop = False
@@ -187,7 +193,7 @@ def play_and_pulse(path: Path, light: Any, sr: int, lighting_conf: Dict[str, Any
 
     t = threading.Thread(target=worker, daemon=True)
     t.start()
-    sd.play(y, sr, blocking=True)
+    sd.play(y, sr, blocking=True, device=output_device_id)
     stop = True
     t.join()
 
