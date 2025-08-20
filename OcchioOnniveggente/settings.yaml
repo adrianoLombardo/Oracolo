@@ -1,0 +1,86 @@
+# settings.yaml
+
+# Log di debug (mostra device audio e info VAD)
+debug: false
+
+openai:
+  # Modello per trascrizione audio (puoi usare anche "whisper-1")
+  stt_model: gpt-4o-mini-transcribe
+  # Modello per il testo "oracolare"
+  llm_model: gpt-5-mini
+  # Modello TTS per la voce
+  tts_model: gpt-4o-mini-tts
+  # Voce TTS
+  tts_voice: alloy
+
+audio:
+  # Audio I/O e file temporanei
+  sample_rate: 24000
+  ask_seconds: 10
+  input_wav: "data/temp/input.wav"
+  output_wav: "data/temp/answer.wav"
+
+  # Selezione dispositivi audio
+  # Metti l'indice numerico (es. 1) oppure una parte del nome (es. "USB Microphone").
+  # Lascia null per usare il dispositivo di default di sistema.
+  input_device: null
+  output_device: null
+
+recording:
+  # "vad" = ascolta e si ferma al silenzio; "timed" = durata fissa (ask_seconds)
+  mode: "vad"
+  timed_seconds: 10
+
+  # NUOVO: se true, in caso di silenzio il sistema fa fallback alla registrazione a tempo.
+  # Se false (consigliato per "occhio dormiente"), resta in attesa e NON risponde.
+  fallback_to_timed: false
+
+  # NUOVO: soglia minima di ampiezza (0..1) per considerare valida una registrazione.
+  # Se il picco audio è sotto questa soglia, la registrazione viene scartata come "silenzio".
+  min_speech_level: 0.01
+
+vad:
+  # Parametri del VAD "a energia"
+  frame_ms: 30         # 10/20/30 ms per frame
+  start_ms: 150        # parlato continuo per partire
+  end_ms: 800          # silenzio continuo per fermarsi
+  max_ms: 15000        # durata massima ascolto (ms)
+  preroll_ms: 300      # audio tenuto prima dello start (ms)
+  noise_window_ms: 800 # finestra per stimare il rumore (ms)
+
+  # Soglie adattive = max(noise * mult, base)
+  start_mult: 1.8
+  end_mult: 1.3
+  base_start: 0.006
+  base_end: 0.0035
+
+# Filtro contenuti: "block" rifiuta, "mask" censura con ***
+filter:
+  mode: block
+
+# Luci: sACN/E1.31 o WLED
+lighting:
+  mode: "sacn"            # "sacn" oppure "wled"
+  sacn:
+    universe: 1
+    destination_ip: "192.168.1.50"     # <--- IP del tuo nodo sACN/E1.31
+    rgb_channels: [1, 2, 3]
+    idle_level: 10
+    peak_level: 255
+  wled:
+    host: "192.168.1.77"               # <--- IP del tuo WLED
+
+# Parole-chiave -> palette colore base (per la luce)
+palette_keywords:
+  mare:   { rgb: [40, 80, 200],  style: "swell" }
+  stella: { rgb: [255, 230, 120], style: "twinkle" }
+  fuoco:  { rgb: [255, 90, 20],   style: "flare" }
+  ombra:  { rgb: [40, 40, 60],    style: "pulse" }
+  vento:  { rgb: [120, 200, 255], style: "breeze" }
+  radice: { rgb: [150, 80, 50],   style: "ground" }
+
+# Voce dell'Oracolo (prompt di sistema)
+oracle_system: >
+  Parla come un antico oracolo cosmico. Rispondi in italiano o in inglese seguendo la lingua dell’utente,
+  in 2-5 frasi poetiche e visionarie, usando metafore di luce, stelle, mare e destino.
+  Evita istruzioni tecniche; offri immagini ed enigmi, con tono solenne ma empatico.
