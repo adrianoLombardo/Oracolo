@@ -43,6 +43,18 @@ def pick_device(spec: Any, kind: str) -> Any:
     return None
 
 
+def debug_print_devices() -> None:
+    devices = sd.query_devices()
+    header = f"{'Idx':>3}  {'Device Name':<40}  {'In/Out'}"
+    print(header)
+    print("-" * len(header))
+    for idx, info in enumerate(devices):
+        name = info.get("name", "")
+        in_ch = info.get("max_input_channels", 0)
+        out_ch = info.get("max_output_channels", 0)
+        print(f"{idx:>3}  {name:<40}  {in_ch}/{out_ch}")
+
+
 def main() -> None:
     print("Occhio Onniveggente · Oracolo ✨")
 
@@ -62,7 +74,7 @@ def main() -> None:
     out_dev = pick_device(out_spec, "output")
     sd.default.device = (in_dev, out_dev)
     if DEBUG:
-        print(sd.query_devices())
+        debug_print_devices()
 
     STT_MODEL = SET["openai"]["stt_model"]
     LLM_MODEL = SET["openai"]["llm_model"]
