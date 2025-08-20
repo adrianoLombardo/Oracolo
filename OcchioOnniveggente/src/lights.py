@@ -2,11 +2,14 @@ from __future__ import annotations
 
 from typing import Any, Dict, Tuple
 
+import logging
 import numpy as np
 import sacn
 from requests import exceptions as req_exc
 
 from .wled_client import WLED
+
+logger = logging.getLogger(__name__)
 
 
 class SacnLight:
@@ -52,7 +55,10 @@ class WledLight:
         host = conf["wled"]["host"]
         self.w = WLED(host)
         self.base_rgb = (180, 180, 200)
-        self.w.set_color(*self.base_rgb, brightness=40)
+        try:
+            self.w.set_color(*self.base_rgb, brightness=40)
+        except req_exc.RequestException as exc:
+            logger.warning("WLED set_color failed: %s", exc)
 
     def set_base_rgb(self, rgb: Tuple[int, int, int]) -> None:
         self.base_rgb = tuple(int(x) for x in rgb)
@@ -60,14 +66,20 @@ class WledLight:
     def pulse(self, level: float) -> None:
         try:
             self.w.pulse_by_level(level, base_rgb=self.base_rgb)
-        except req_exc.RequestException:
-            pass
+        except req_exc.RequestException as exc:
+            logger.warning("WLED pulse failed: %s", exc)
 
     def idle(self) -> None:
-        self.w.set_color(*self.base_rgb, brightness=30)
+        try:
+            self.w.set_color(*self.base_rgb, brightness=30)
+        except req_exc.RequestException as exc:
+            logger.warning("WLED set_color failed: %s", exc)
 
     def blackout(self) -> None:
-        self.w.set_color(0, 0, 0, brightness=0)
+        try:
+            self.w.set_color(0, 0, 0, brightness=0)
+        except req_exc.RequestException as exc:
+            logger.warning("WLED set_color failed: %s", exc)
 
     def stop(self) -> None:
         pass
