@@ -1,6 +1,8 @@
 import os
 from pathlib import Path
+from typing import Any
 
+import sounddevice as sd
 import yaml
 from dotenv import load_dotenv
 from openai import OpenAI
@@ -10,7 +12,35 @@ from src.audio import record_until_silence, play_and_pulse
 from src.lights import SacnLight, WledLight, color_from_text
 from src.oracle import transcribe, oracle_answer, synthesize, append_log
 
-DEBUG = True  # metti False in mostra
+
+def pick_device(spec: Any, kind: str) -> Any:
+    devices = sd.query_devices()
+
+    def _valid(info: dict) -> bool:
+        ch_key = "max_input_channels" if kind == "input" else "max_output_channels"
+        return info.get(ch_key, 0) > 0
+
+    if spec in (None, ""):
+        try:
+            idx = sd.default.device[0 if kind == "input" else 1]
+            if idx is not None and _valid(sd.query_devices(idx)):
+                return None
+        except Exception:
+            pass
+    else:
+        if isinstance(spec, int) or str(spec).isdigit():
+            idx = int(spec)
+            if 0 <= idx < len(devices) and _valid(devices[idx]):
+                return idx
+        spec_str = str(spec).lower()
+        for i, info in enumerate(devices):
+            if spec_str in info.get("name", "").lower() and _valid(info):
+                return i
+
+    for i, info in enumerate(devices):
+        if _valid(info):
+            return i
+    return None
 
 
 def main() -> None:
@@ -20,10 +50,19 @@ def main() -> None:
     client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
     SET = yaml.safe_load(Path("settings.yaml").read_text(encoding="utf-8"))
+    DEBUG = bool(SET.get("debug", False))
 
-    AUDIO_SR = int(SET["audio"]["sample_rate"])
-    INPUT_WAV = Path(SET["audio"]["input_wav"])
-    OUTPUT_WAV = Path(SET["audio"]["output_wav"])
+    AUDIO_CONF = SET["audio"]
+    AUDIO_SR = int(AUDIO_CONF["sample_rate"])
+    INPUT_WAV = Path(AUDIO_CONF["input_wav"])
+    OUTPUT_WAV = Path(AUDIO_CONF["output_wav"])
+    in_spec = AUDIO_CONF.get("input_device")
+    out_spec = AUDIO_CONF.get("output_device")
+    in_dev = pick_device(in_spec, "input")
+    out_dev = pick_device(out_spec, "output")
+    sd.default.device = (in_dev, out_dev)
+    if DEBUG:
+        print(sd.query_devices())
 
     STT_MODEL = SET["openai"]["stt_model"]
     LLM_MODEL = SET["openai"]["llm_model"]
@@ -65,6 +104,7 @@ def main() -> None:
                 vad_conf,
                 recording_conf,
                 debug=DEBUG,
+                input_device_id=in_dev,
             )
             if not ok:
                 continue
@@ -104,7 +144,13 @@ def main() -> None:
                 light.idle()
 
             synthesize(a, OUTPUT_WAV, client, TTS_MODEL, TTS_VOICE)
-            play_and_pulse(OUTPUT_WAV, light, AUDIO_SR, lighting_conf)
+            play_and_pulse(
+                OUTPUT_WAV,
+                light,
+                AUDIO_SR,
+                lighting_conf,
+                output_device_id=out_dev,
+            )
     finally:
         light.blackout()
         light.stop()
