@@ -66,8 +66,11 @@ def main() -> None:
     load_dotenv()
     client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
+    config_path = Path("settings.yaml")
+    if not config_path.exists():
+        print("⚠️ File di configurazione non trovato, uso impostazioni di default.")
     try:
-        SET = Settings.model_validate_yaml(Path("settings.yaml"))
+        SET = Settings.model_validate_yaml(config_path)
     except ValidationError as e:
         print("⚠️ Configurazione non valida:", e)
         print("Uso impostazioni di default.")
