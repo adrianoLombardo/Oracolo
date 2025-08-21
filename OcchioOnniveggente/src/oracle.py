@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
 from typing import Tuple
@@ -45,52 +46,48 @@ def _score_lang(text: str, lang: str, *, debug: bool = False) -> float:
 
 
 def transcribe(path: Path, client, stt_model: str, *, debug: bool = False) -> Tuple[str, str]:
-    try:
-        with open(path, "rb") as f:
-            print("🧠 Trascrizione (auto)…")
-            tx_auto = client.audio.transcriptions.create(
-                model=stt_model,
-                file=f,
-                prompt=(
-                    "Language is either Italian or English. Focus on neuroscience, "
-                    "neuroaesthetics, contemporary art, the universe, and "
-                    "neuroscientific AI. Ignore any other language."
-                ),
-            )
-        text_auto = (tx_auto.text or "").strip()
-    except Exception:
-        text_auto = ""
-    try:
-        with open(path, "rb") as f_it:
-            print("↻ Trascrizione forzata IT…")
-            tx_it = client.audio.transcriptions.create(
-                model=stt_model,
-                file=f_it,
-                language="it",
-                prompt=(
-                    "Lingua: italiano. Dominio: neuroscienze, neuroestetica, "
-                    "arte contemporanea, universo e IA neuroscientifica."
-                ),
-            )
-        text_it = (tx_it.text or "").strip()
-    except Exception:
-        text_it = ""
+    def _call(lang: str | None) -> str:
+        try:
+            with open(path, "rb") as f:
+                if lang == "it":
+                    print("↻ Trascrizione forzata IT…")
+                    tx = client.audio.transcriptions.create(
+                        model=stt_model,
+                        file=f,
+                        language="it",
+                        prompt=(
+                            "Lingua: italiano. Dominio: neuroscienze, neuroestetica, "
+                            "arte contemporanea, universo e IA neuroscientifica."
+                        ),
+                    )
+                elif lang == "en":
+                    print("↻ Trascrizione forzata EN…")
+                    tx = client.audio.transcriptions.create(
+                        model=stt_model,
+                        file=f,
+                        language="en",
+                        prompt=(
+                            "Language: English. Domain: neuroscience, neuroaesthetics, "
+                            "contemporary art, universe, and neuroscientific AI."
+                        ),
+                    )
+                else:
+                    print("🧠 Trascrizione (auto)…")
+                    tx = client.audio.transcriptions.create(
+                        model=stt_model,
+                        file=f,
+                        prompt=(
+                            "Language is either Italian or English. Focus on neuroscience, "
+                            "neuroaesthetics, contemporary art, the universe, and "
+                            "neuroscientific AI. Ignore any other language."
+                        ),
+                    )
+            return (tx.text or "").strip()
+        except Exception:
+            return ""
 
-    try:
-        with open(path, "rb") as f_en:
-            print("↻ Trascrizione forzata EN…")
-            tx_en = client.audio.transcriptions.create(
-                model=stt_model,
-                file=f_en,
-                language="en",
-                prompt=(
-                    "Language: English. Domain: neuroscience, neuroaesthetics, "
-                    "contemporary art, universe, and neuroscientific AI."
-                ),
-            )
-        text_en = (tx_en.text or "").strip()
-    except Exception:
-        text_en = ""
+    with ThreadPoolExecutor() as ex:
+        text_auto, text_it, text_en = ex.map(_call, [None, "it", "en"])
 
     s_it = _score_lang(text_it, "it", debug=debug)
     s_en = _score_lang(text_en, "en", debug=debug)
@@ -99,20 +96,25 @@ def transcribe(path: Path, client, stt_model: str, *, debug: bool = False) -> Tu
         auto_lang = detect(text_auto) if text_auto else None
     except Exception:
         auto_lang = None
+    s_auto = _score_lang(text_auto, auto_lang, debug=debug) if auto_lang in {"it", "en"} else 0.0
     if auto_lang == "it":
         s_it += 0.05
     elif auto_lang == "en":
         s_en += 0.05
 
-    if s_it == 0 and s_en == 0:
+    scores = {"auto": s_auto, "it": s_it, "en": s_en}
+    best = max(scores, key=scores.get)
+    if scores[best] == 0:
         print("⚠️ Per favore parla in italiano o inglese.")
         return "", ""
-    if s_it >= s_en:
+    if best == "auto":
+        print(f"🌐 Lingua rilevata: {auto_lang.upper()}")
+        return text_auto, auto_lang or ""
+    if best == "it":
         print("🌐 Lingua rilevata: IT")
         return text_it, "it"
-    else:
-        print("🌐 Lingua rilevata: EN")
-        return text_en, "en"
+    print("🌐 Lingua rilevata: EN")
+    return text_en, "en"
 
 
 def oracle_answer(question: str, lang_hint: str, client, llm_model: str, oracle_system: str) -> str:
