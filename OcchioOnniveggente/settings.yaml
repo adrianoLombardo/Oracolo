@@ -2,6 +2,7 @@
 
 # Log di debug (mostra device audio e info VAD)
 debug: false
+wakeword: null
 
 openai:
   # Modello per trascrizione audio (puoi usare anche "whisper-1")
