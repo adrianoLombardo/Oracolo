@@ -141,6 +141,8 @@ def main() -> None:
     LIGHT_MODE = SET.lighting.mode
     LOG_PATH = Path("data/logs/dialoghi.csv")
 
+    history: list[tuple[str, str]] = []
+
     PROF = ProfanityFilter(
         Path("data/filters/it_blacklist.txt"),
         Path("data/filters/en_blacklist.txt"),
@@ -199,6 +201,11 @@ def main() -> None:
             if not q:
                 continue
 
+            if q.strip().lower() == "!reset":
+                history.clear()
+                print("🔄 Conversazione azzerata.", flush=True)
+                continue
+
             # 3) Filtro input utente
             if PROF.contains_profanity(q):
                 if FILTER_MODE == "block":
@@ -210,7 +217,7 @@ def main() -> None:
 
             # 4) Risposta oracolare (stessa lingua)
             print("✨ Interrogo l’Oracolo…", flush=True)
-            a = oracle_answer(q, lang or "it", client, LLM_MODEL, ORACLE_SYSTEM)
+            a = oracle_answer(q, lang or "it", client, LLM_MODEL, ORACLE_SYSTEM, history)
 
             # 5) Filtro output oracolo
             if PROF.contains_profanity(a):
@@ -223,6 +230,8 @@ def main() -> None:
                     ).output_text.strip()
                 else:
                     a = PROF.mask(a)
+
+            history.append((q, a))
 
             # 6) Log
             try:
