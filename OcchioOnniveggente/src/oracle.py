@@ -108,15 +108,29 @@ def transcribe(path: Path, client, stt_model: str, *, debug: bool = False) -> Tu
         return text_en, "en"
 
 
-def oracle_answer(question: str, lang_hint: str, client, llm_model: str, oracle_system: str) -> str:
+def oracle_answer(
+    question: str,
+    lang_hint: str,
+    client,
+    llm_model: str,
+    oracle_system: str,
+    history: list[tuple[str, str]] | None = None,
+) -> str:
     print("✨ Interrogo l’Oracolo…")
     lang_clause = "Answer in English." if lang_hint == "en" else "Rispondi in italiano."
+
+    messages = []
+    for q_prev, a_prev in (history or []):
+        messages.append({"role": "user", "content": q_prev})
+        messages.append({"role": "assistant", "content": a_prev})
+    messages.append({"role": "user", "content": question})
+
     for _ in range(3):
         try:
             resp = client.responses.create(
                 model=llm_model,
                 instructions=(oracle_system + " " + lang_clause),
-                input=[{"role": "user", "content": question}],
+                input=messages,
             )
             ans = resp.output_text.strip()
             print(f"🔮 Oracolo: {ans}")
