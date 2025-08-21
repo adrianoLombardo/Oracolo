@@ -26,6 +26,13 @@ from typing import Any, Tuple
 import sounddevice as sd
 import yaml
 
+# opzionale: miglior compatibilità PNG con fallback
+try:
+    from PIL import Image, ImageTk  # pip install pillow
+except Exception:
+    Image = None
+    ImageTk = None
+
 
 # ------------------------------ helpers ---------------------------------- #
 def deep_update(base: dict, upd: dict) -> dict:
@@ -99,7 +106,35 @@ class OracoloUI(tk.Tk):
 
     def __init__(self) -> None:
         super().__init__()
+        self.root_dir = Path(__file__).resolve().parents[1]
         self.title("Occhio Onniveggente")
+
+        # --- Icona finestra con fallback robusto (PNG via Tk -> PNG via Pillow -> ICO su Windows) ---
+        try:
+            logo_png = self.root_dir / "img" / "logo.png"
+            if logo_png.exists():
+                try:
+                    self.iconphoto(False, tk.PhotoImage(file=str(logo_png)))
+                except tk.TclError:
+                    # fallback via Pillow se disponibile
+                    if Image is not None and ImageTk is not None:
+                        try:
+                            img = Image.open(str(logo_png))
+                            icon = ImageTk.PhotoImage(img)
+                            self.iconphoto(False, icon)
+                        except Exception:
+                            pass
+            # Prova ICO su Windows se PNG non impostato
+            logo_ico = self.root_dir / "img" / "logo.ico"
+            if sys.platform.startswith("win") and logo_ico.exists():
+                try:
+                    self.iconbitmap(default=str(logo_ico))
+                except Exception:
+                    pass
+        except Exception:
+            # mai far crashare l'UI per l'icona
+            pass
+
         self.geometry("900x600")
 
         # tema scuro
@@ -534,10 +569,6 @@ class OracoloUI(tk.Tk):
         rest = f.read()
         if rest:
             self.after(0, self._append_log, rest)
-        if self.proc and self.proc.poll() is not None:
-            self.after(0, lambda: self.status_var.set("🟡 In attesa"))
-            if not self._stop_reader.is_set():
-                self.after(0, self.stop_oracolo)
 
     def stop_oracolo(self) -> None:
         if not self.proc or self.proc.poll() is not None:
@@ -578,11 +609,6 @@ class OracoloUI(tk.Tk):
                 self.status_var.set("🟡 In attesa")
                 self.start_btn.configure(state="normal")
                 self.stop_btn.configure(state="disabled")
-        else:
-            if self.status_var.get() != "🟡 In attesa":
-                self.status_var.set("🟡 In attesa")
-            self.start_btn.configure(state="normal")
-            self.stop_btn.configure(state="disabled")
         self.after(500, self._poll_process)
 
     # ------------------------------ Exit ----------------------------------- #
@@ -601,4 +627,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
