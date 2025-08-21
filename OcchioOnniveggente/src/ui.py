@@ -76,6 +76,7 @@ class OracoloUI(tk.Tk):
         docs_menu = tk.Menu(menubar, tearoff=0)
         docs_menu.add_command(label="Aggiungi…", command=self._add_documents)
         docs_menu.add_command(label="Rimuovi…", command=self._remove_documents)
+        docs_menu.add_command(label="Aggiorna indice", command=self._refresh_index)
         menubar.add_cascade(label="Documenti", menu=docs_menu)
 
         settings_menu = tk.Menu(menubar, tearoff=0)
@@ -85,9 +86,7 @@ class OracoloUI(tk.Tk):
         settings_menu.add_command(
             label="Audio Device…", command=self._open_audio_dialog
         )
-        settings_menu.add_command(
-            label="Lighting…", command=self._open_lighting_dialog
-        )
+        settings_menu.add_command(label="Lighting…", command=self._open_lighting_dialog)
         settings_menu.add_separator()
         settings_menu.add_command(label="Save", command=self.save_settings)
         menubar.add_cascade(label="Impostazioni", menu=settings_menu)
@@ -196,11 +195,27 @@ class OracoloUI(tk.Tk):
 
         script = Path(__file__).resolve().parents[1] / "scripts" / "ingest_docs.py"
         try:
-            subprocess.run([sys.executable, str(script), "--remove", *paths], check=True)
+            subprocess.run(
+                [sys.executable, str(script), "--remove", *paths], check=True
+            )
         except subprocess.CalledProcessError as exc:
             messagebox.showerror("Errore", f"Impossibile rimuovere i documenti: {exc}")
         else:
             messagebox.showinfo("Successo", "Documenti rimossi correttamente")
+
+    def _refresh_index(self) -> None:
+        """Regenerate the document index by re-ingesting the database."""
+
+        script = Path(__file__).resolve().parents[1] / "scripts" / "ingest_docs.py"
+        database = Path(__file__).resolve().parents[1] / "DataBase"
+        try:
+            subprocess.run(
+                [sys.executable, str(script), "--add", str(database)], check=True
+            )
+        except subprocess.CalledProcessError as exc:
+            messagebox.showerror("Errore", f"Impossibile aggiornare l'indice: {exc}")
+        else:
+            messagebox.showinfo("Successo", "Indice aggiornato correttamente")
 
     # ----- settings handling -------------------------------------------------
 
@@ -225,16 +240,16 @@ class OracoloUI(tk.Tk):
         ttk.Label(win, text="Input", style="Cmd.TLabel").grid(
             row=0, column=0, padx=5, pady=5, sticky="e"
         )
-        ttk.OptionMenu(win, in_var, in_var.get(), "", *names, style="Cmd.TMenubutton").grid(
-            row=0, column=1, padx=5, pady=5
-        )
+        ttk.OptionMenu(
+            win, in_var, in_var.get(), "", *names, style="Cmd.TMenubutton"
+        ).grid(row=0, column=1, padx=5, pady=5)
 
         ttk.Label(win, text="Output", style="Cmd.TLabel").grid(
             row=1, column=0, padx=5, pady=5, sticky="e"
         )
-        ttk.OptionMenu(win, out_var, out_var.get(), "", *names, style="Cmd.TMenubutton").grid(
-            row=1, column=1, padx=5, pady=5
-        )
+        ttk.OptionMenu(
+            win, out_var, out_var.get(), "", *names, style="Cmd.TMenubutton"
+        ).grid(row=1, column=1, padx=5, pady=5)
 
         def on_ok() -> None:
             audio["input_device"] = in_var.get() or None
@@ -259,9 +274,9 @@ class OracoloUI(tk.Tk):
         ttk.Label(win, text="Modalità", style="Cmd.TLabel").grid(
             row=0, column=0, padx=5, pady=5, sticky="e"
         )
-        ttk.OptionMenu(win, mode_var, mode_var.get(), "sacn", "wled", style="Cmd.TMenubutton").grid(
-            row=0, column=1, padx=5, pady=5
-        )
+        ttk.OptionMenu(
+            win, mode_var, mode_var.get(), "sacn", "wled", style="Cmd.TMenubutton"
+        ).grid(row=0, column=1, padx=5, pady=5)
 
         sacn_frame = ttk.Frame(win, style="Cmd.TFrame")
         sacn_conf = lighting.setdefault("sacn", {})
@@ -332,4 +347,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
