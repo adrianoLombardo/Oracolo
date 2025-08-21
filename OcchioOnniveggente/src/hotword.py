@@ -11,14 +11,14 @@ run without hotword support.
 
 from typing import Optional
 
+import struct
+
 _warned = False
 try:  # pragma: no cover - optional dependency
-    import struct
     import pvporcupine
     import pyaudio
     _PORCUPINE_AVAILABLE = True
 except Exception:  # pragma: no cover - handled gracefully
-    struct = None  # type: ignore
     pvporcupine = None  # type: ignore
     pyaudio = None  # type: ignore
     _PORCUPINE_AVAILABLE = False
