@@ -52,7 +52,10 @@ class WledLight:
         host = conf["wled"]["host"]
         self.w = WLED(host)
         self.base_rgb = (180, 180, 200)
-        self.w.set_color(*self.base_rgb, brightness=40)
+        try:
+            self.w.set_color(*self.base_rgb, brightness=40)
+        except req_exc.RequestException as e:
+            print(f"⚠️ WLED non raggiungibile: {e}")
 
     def set_base_rgb(self, rgb: Tuple[int, int, int]) -> None:
         self.base_rgb = tuple(int(x) for x in rgb)
@@ -64,10 +67,16 @@ class WledLight:
             pass
 
     def idle(self) -> None:
-        self.w.set_color(*self.base_rgb, brightness=30)
+        try:
+            self.w.set_color(*self.base_rgb, brightness=30)
+        except req_exc.RequestException:
+            print("⚠️ WLED non raggiungibile (idle)")
 
     def blackout(self) -> None:
-        self.w.set_color(0, 0, 0, brightness=0)
+        try:
+            self.w.set_color(0, 0, 0, brightness=0)
+        except req_exc.RequestException:
+            print("⚠️ WLED non raggiungibile (blackout)")
 
     def stop(self) -> None:
         pass

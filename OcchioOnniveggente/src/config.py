@@ -81,5 +81,8 @@ class Settings(BaseModel):
 
     @classmethod
     def model_validate_yaml(cls, path: Path) -> "Settings":
-        data = yaml.safe_load(path.read_text(encoding="utf-8"))
-        return cls.model_validate(data)
+        try:
+            data = yaml.safe_load(path.read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            return cls()
+        return cls.model_validate(data or {})
