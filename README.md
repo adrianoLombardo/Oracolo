@@ -16,3 +16,12 @@ Dal repository "OcchioOnniveggente" eseguire:
 python -m src.main
 ```
 
+Per una semplice interfaccia grafica in stile futuristico è possibile avviare:
+
+```bash
+python -m src.ui
+```
+
+L'interfaccia offre un menu **Impostazioni** per scegliere i dispositivi audio
+e modificare i parametri di illuminazione (Art-Net/sACN o WLED).
+
