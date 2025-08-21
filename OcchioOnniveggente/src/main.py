@@ -11,7 +11,22 @@ from src.config import Settings
 from src.filters import ProfanityFilter
 from src.audio import record_until_silence, play_and_pulse
 from src.lights import SacnLight, WledLight, color_from_text
-from src.oracle import transcribe, oracle_answer, synthesize, append_log
+from src.oracle import (
+    transcribe,
+    oracle_answer,
+    synthesize,
+    append_log,
+    is_relevant,
+)
+
+
+TOPICS = [
+    "neuroscience",
+    "neuroaesthetics",
+    "contemporary art",
+    "universe",
+    "neuroscientific ai",
+]
 
 
 def pick_device(spec: Any, kind: str) -> Any:
@@ -151,7 +166,14 @@ def main() -> None:
                     q = PROF.mask(q)
                     print("⚠️ Testo filtrato:", q)
 
-            a = oracle_answer(q, lang or "it", client, LLM_MODEL, ORACLE_SYSTEM)
+            if not is_relevant(q, TOPICS):
+                a = (
+                    "The question is not relevant. Try asking something else."
+                    if lang == "en"
+                    else "La domanda non è pertinente. Prova a chiedere altro."
+                )
+            else:
+                a = oracle_answer(q, lang or "it", client, LLM_MODEL, ORACLE_SYSTEM)
 
             if PROF.contains_profanity(a):
                 if FILTER_MODE == "block":

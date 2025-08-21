@@ -22,6 +22,25 @@ _EN_SW = {
 }
 
 
+def is_relevant(question: str, topics: list[str]) -> bool:
+    """Check if *question* mentions at least one of the allowed *topics*.
+
+    Matching is case-insensitive and looks for whole words/phrases to avoid
+    accidental partial hits (e.g. ``art`` in ``cartoon``).
+    """
+
+    if not question or not topics:
+        return False
+
+    for topic in topics:
+        # ``re.escape`` guards against special characters in topics; ``\b``
+        # ensures we match whole words or phrases.
+        pattern = rf"\b{re.escape(topic)}\b"
+        if re.search(pattern, question, flags=re.IGNORECASE):
+            return True
+    return False
+
+
 def _score_lang(text: str, lang: str, *, debug: bool = False) -> float:
     if not text:
         return 0.0
