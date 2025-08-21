@@ -25,10 +25,11 @@ class OracoloUI(tk.Tk):
     def __init__(self) -> None:
         super().__init__()
         self.title("Occhio Onniveggente")
+        self.option_add("*Font", ("Consolas", 12))
 
         # Futuristic dark theme
-        bg = "#0f0f0f"
-        fg = "#00ffe1"
+        bg = "#000000"
+        fg = "#00ffcc"
         self.configure(bg=bg)
         self._bg = bg
         self._fg = fg
@@ -36,15 +37,24 @@ class OracoloUI(tk.Tk):
         style = ttk.Style(self)
         style.theme_use("clam")
         style.configure(
-            "TButton",
-            background="#1e1e1e",
+            "Cmd.TButton",
+            background=bg,
             foreground=fg,
             borderwidth=1,
             focusthickness=3,
             focuscolor="none",
         )
         style.map(
-            "TButton",
+            "Cmd.TButton",
+            background=[("active", fg)],
+            foreground=[("active", bg)],
+        )
+        style.configure("Cmd.TLabel", background=bg, foreground=fg)
+        style.configure("Cmd.TFrame", background=bg)
+        style.configure("Cmd.TEntry", fieldbackground=bg, foreground=fg, insertcolor=fg)
+        style.configure("Cmd.TMenubutton", background=bg, foreground=fg)
+        style.map(
+            "Cmd.TMenubutton",
             background=[("active", fg)],
             foreground=[("active", bg)],
         )
@@ -81,19 +91,28 @@ class OracoloUI(tk.Tk):
         menubar.add_cascade(label="Impostazioni", menu=settings_menu)
         self.config(menu=menubar)
 
-        label = tk.Label(
+        self.canvas = tk.Canvas(self, bg=bg, highlightthickness=0)
+        self.canvas.place(relx=0, rely=0, relwidth=1, relheight=1)
+        self.canvas.create_oval(10, 10, 390, 390, outline=fg, width=2)
+        self.canvas.create_oval(60, 60, 340, 340, outline="#00ffff", width=1)
+        self.canvas.lower()
+
+        label = ttk.Label(
             self,
             text="Occhio Onniveggente",
-            fg=fg,
-            bg=bg,
-            font=("Helvetica", 18, "bold"),
+            style="Cmd.TLabel",
+            font=("Consolas", 18, "bold"),
         )
         label.pack(pady=20)
 
-        start_btn = ttk.Button(self, text="Avvia", command=self.start_oracolo)
+        start_btn = ttk.Button(
+            self, text="Avvia", command=self.start_oracolo, style="Cmd.TButton"
+        )
         start_btn.pack(pady=10)
 
-        quit_btn = ttk.Button(self, text="Esci", command=self.destroy)
+        quit_btn = ttk.Button(
+            self, text="Esci", command=self.destroy, style="Cmd.TButton"
+        )
         quit_btn.pack(pady=10)
 
     def start_oracolo(self) -> None:
@@ -150,6 +169,7 @@ class OracoloUI(tk.Tk):
         win = tk.Toplevel(self)
         win.title("Dispositivi audio")
         win.configure(bg=self._bg)
+        win.option_add("*Font", ("Consolas", 12))
 
         devices = sd.query_devices()
         names = [d["name"] for d in devices]
@@ -158,22 +178,26 @@ class OracoloUI(tk.Tk):
         in_var = tk.StringVar(value=audio.get("input_device") or "")
         out_var = tk.StringVar(value=audio.get("output_device") or "")
 
-        tk.Label(win, text="Input", fg=self._fg, bg=self._bg).grid(
+        ttk.Label(win, text="Input", style="Cmd.TLabel").grid(
             row=0, column=0, padx=5, pady=5, sticky="e"
         )
-        tk.OptionMenu(win, in_var, "", *names).grid(row=0, column=1, padx=5, pady=5)
+        ttk.OptionMenu(win, in_var, in_var.get(), "", *names, style="Cmd.TMenubutton").grid(
+            row=0, column=1, padx=5, pady=5
+        )
 
-        tk.Label(win, text="Output", fg=self._fg, bg=self._bg).grid(
+        ttk.Label(win, text="Output", style="Cmd.TLabel").grid(
             row=1, column=0, padx=5, pady=5, sticky="e"
         )
-        tk.OptionMenu(win, out_var, "", *names).grid(row=1, column=1, padx=5, pady=5)
+        ttk.OptionMenu(win, out_var, out_var.get(), "", *names, style="Cmd.TMenubutton").grid(
+            row=1, column=1, padx=5, pady=5
+        )
 
         def on_ok() -> None:
             audio["input_device"] = in_var.get() or None
             audio["output_device"] = out_var.get() or None
             win.destroy()
 
-        ttk.Button(win, text="OK", command=on_ok).grid(
+        ttk.Button(win, text="OK", command=on_ok, style="Cmd.TButton").grid(
             row=2, column=0, columnspan=2, pady=10
         )
 
@@ -183,41 +207,42 @@ class OracoloUI(tk.Tk):
         win = tk.Toplevel(self)
         win.title("Luci")
         win.configure(bg=self._bg)
+        win.option_add("*Font", ("Consolas", 12))
 
         lighting = self.settings.setdefault("lighting", {})
         mode_var = tk.StringVar(value=lighting.get("mode", "sacn"))
 
-        tk.Label(win, text="Modalità", fg=self._fg, bg=self._bg).grid(
+        ttk.Label(win, text="Modalità", style="Cmd.TLabel").grid(
             row=0, column=0, padx=5, pady=5, sticky="e"
         )
-        tk.OptionMenu(win, mode_var, "sacn", "wled").grid(
+        ttk.OptionMenu(win, mode_var, mode_var.get(), "sacn", "wled", style="Cmd.TMenubutton").grid(
             row=0, column=1, padx=5, pady=5
         )
 
-        sacn_frame = tk.Frame(win, bg=self._bg)
+        sacn_frame = ttk.Frame(win, style="Cmd.TFrame")
         sacn_conf = lighting.setdefault("sacn", {})
         sacn_ip = tk.StringVar(value=sacn_conf.get("destination_ip", ""))
         sacn_uni = tk.StringVar(value=str(sacn_conf.get("universe", 1)))
-        tk.Label(sacn_frame, text="IP", fg=self._fg, bg=self._bg).grid(
+        ttk.Label(sacn_frame, text="IP", style="Cmd.TLabel").grid(
             row=0, column=0, padx=5, pady=5, sticky="e"
         )
-        tk.Entry(sacn_frame, textvariable=sacn_ip).grid(
+        ttk.Entry(sacn_frame, textvariable=sacn_ip, style="Cmd.TEntry").grid(
             row=0, column=1, padx=5, pady=5
         )
-        tk.Label(sacn_frame, text="Universe", fg=self._fg, bg=self._bg).grid(
+        ttk.Label(sacn_frame, text="Universe", style="Cmd.TLabel").grid(
             row=1, column=0, padx=5, pady=5, sticky="e"
         )
-        tk.Entry(sacn_frame, textvariable=sacn_uni).grid(
+        ttk.Entry(sacn_frame, textvariable=sacn_uni, style="Cmd.TEntry").grid(
             row=1, column=1, padx=5, pady=5
         )
 
-        wled_frame = tk.Frame(win, bg=self._bg)
+        wled_frame = ttk.Frame(win, style="Cmd.TFrame")
         wled_conf = lighting.setdefault("wled", {})
         wled_host = tk.StringVar(value=wled_conf.get("host", ""))
-        tk.Label(wled_frame, text="Host", fg=self._fg, bg=self._bg).grid(
+        ttk.Label(wled_frame, text="Host", style="Cmd.TLabel").grid(
             row=0, column=0, padx=5, pady=5, sticky="e"
         )
-        tk.Entry(wled_frame, textvariable=wled_host).grid(
+        ttk.Entry(wled_frame, textvariable=wled_host, style="Cmd.TEntry").grid(
             row=0, column=1, padx=5, pady=5
         )
 
@@ -242,7 +267,7 @@ class OracoloUI(tk.Tk):
             wled_conf["host"] = wled_host.get()
             win.destroy()
 
-        ttk.Button(win, text="OK", command=on_ok).grid(
+        ttk.Button(win, text="OK", command=on_ok, style="Cmd.TButton").grid(
             row=2, column=0, columnspan=2, pady=10
         )
 
