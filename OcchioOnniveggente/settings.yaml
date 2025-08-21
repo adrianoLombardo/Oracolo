@@ -58,6 +58,17 @@ vad:
 filter:
   mode: block
 
+# Argomenti consentiti per le domande. Modifica la lista per cambiare i temi ammessi.
+allowed_topics:
+  - arte
+  - scienza
+  - filosofia
+
+# Messaggi restituiti quando la domanda non rientra negli argomenti consentiti.
+# Aggiungi o modifica le frasi secondo le tue esigenze.
+refusal_messages:
+  - "Non posso parlare di questo. Chiedimi di arte, scienza o filosofia."
+
 # Luci: sACN/E1.31 o WLED
 lighting:
   mode: "sacn"            # "sacn" oppure "wled"
