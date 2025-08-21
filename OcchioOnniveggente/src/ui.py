@@ -12,11 +12,18 @@ from __future__ import annotations
 import subprocess
 import sys
 import tkinter as tk
-from tkinter import ttk
+from tkinter import ttk, messagebox
 from pathlib import Path
 
 import sounddevice as sd
 import yaml
+from src.config import Settings
+
+
+try:
+    SET = Settings.model_validate_yaml(Path(__file__).resolve().parents[1] / "settings.yaml")
+except Exception:  # pragma: no cover - fallback to defaults
+    SET = Settings()
 
 
 class OracoloUI(tk.Tk):
@@ -87,6 +94,11 @@ class OracoloUI(tk.Tk):
         start_btn = ttk.Button(self, text="Avvia", command=self.start_oracolo)
         start_btn.pack(pady=10)
 
+        reindex_btn = ttk.Button(
+            self, text="Aggiorna indice", command=self._reindex_docstore
+        )
+        reindex_btn.pack(pady=10)
+
         quit_btn = ttk.Button(self, text="Esci", command=self.destroy)
         quit_btn.pack(pady=10)
 
@@ -94,6 +106,25 @@ class OracoloUI(tk.Tk):
         """Launch the existing CLI main module in a new process."""
 
         subprocess.Popen([sys.executable, "-m", "src.main"])
+
+    def _reindex_docstore(self) -> None:
+        """Rebuild the document store index and report the result."""
+
+        proc = subprocess.Popen(
+            [
+                sys.executable,
+                "scripts/ingest_docs.py",
+                "--add",
+                SET.docstore_path,
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        stdout, stderr = proc.communicate()
+        if proc.returncode == 0:
+            messagebox.showinfo("Indicizzazione", stdout.decode() or "Completata")
+        else:
+            messagebox.showerror("Indicizzazione", stderr.decode() or "Errore")
 
     # ----- settings handling -------------------------------------------------
 
