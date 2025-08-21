@@ -6,6 +6,7 @@ import os
 import sys
 import time
 import argparse
+import difflib
 from pathlib import Path
 from typing import Any
 
@@ -83,6 +84,50 @@ def debug_print_devices() -> None:
         in_ch = info.get("max_input_channels", 0)
         out_ch = info.get("max_output_channels", 0)
         print(f"{idx:>3}  {name:<40}  {in_ch}/{out_ch}", flush=True)
+
+def _phrase_to_regex_tokens(phrase: str) -> re.Pattern:
+    """
+    "ciao oracolo" -> regex tollerante a punteggiatura/spazi:
+    r"\bciao[\W_]*oracolo\b"
+    """
+    phrase = _normalize_lang(phrase)
+    tokens = re.split(r"\s+", phrase.strip())
+    parts = [re.escape(t) for t in tokens if t]
+    if not parts:
+        parts = [re.escape(phrase.strip())]
+    pattern = r"\b" + r"[\W_]*".join(parts) + r"\b"
+    return re.compile(pattern, flags=re.IGNORECASE)
+
+
+def _match_hotword(text: str, phrases: Iterable[str]) -> bool:
+    """
+    Match robusto:
+    1) regex tollerante (spazi/punteggiatura/maiuscole/accenti)
+    2) fallback fuzzy: consente piccoli errori di STT ("oràcolo", "oraccolo", ecc.)
+    """
+    norm = _normalize_lang(text or "")
+    # 1) regex tollerante
+    for p in phrases or []:
+        if _phrase_to_regex_tokens(p).search(norm):
+            return True
+
+    # 2) fuzzy fallback (senza simboli)
+    letters = re.sub(r"[\W_]+", "", norm)
+    if not letters:
+        return False
+
+    for p in phrases or []:
+        cand = re.sub(r"[\W_]+", "", _normalize_lang(p))
+        if not cand:
+            continue
+        if cand in letters:
+            return True
+        # similarità globale; per frasi cortissime funziona bene
+        ratio = difflib.SequenceMatcher(None, letters, cand).ratio()
+        if ratio >= 0.85:
+            return True
+
+    return False
 
 
 def main() -> None:
