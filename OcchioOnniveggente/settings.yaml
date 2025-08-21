@@ -86,7 +86,23 @@ oracle_system: >
   in 2-5 frasi poetiche e visionarie, usando metafore di luce, stelle, mare, destino e l'universo.
   Intreccia richiami a neuroscienze, neuroestetica e arte contemporanea, evocando l'IA applicata alle neuroscienze.
   Evita istruzioni tecniche; offri immagini ed enigmi, con tono solenne ma empatico.
+  
+wake:
+  enabled: true           # usa la hotword; se metti false parla sempre (sconsigliato)
+  single_turn: true       # dopo 1 risposta torna a SLEEP; metti false per dialogo continuo
+  idle_timeout: 60        # secondi di inattività prima di tornare a SLEEP
+
+  # Frasi riconosciute (tolleranti a maiuscole, punteggiatura, piccoli errori STT)
+  it_phrases:
+    - "ciao oracolo"
+    - "ehi oracolo"
+    - "salve oracolo"
+    - "ciao, oracolo"
+  en_phrases:
+    - "hello oracle"
+    - "hey oracle"
+    - "hi oracle"
+    - "hello, oracle"
 
 docstore_path: DataBase/index.json
 retrieval_top_k: 3
-
