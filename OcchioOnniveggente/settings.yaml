@@ -89,3 +89,4 @@ oracle_system: >
 
 docstore_path: DataBase/index.json
 retrieval_top_k: 3
+
