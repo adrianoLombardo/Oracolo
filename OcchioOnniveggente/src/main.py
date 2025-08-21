@@ -17,6 +17,7 @@ from pydantic import ValidationError
 from src.config import Settings
 from src.filters import ProfanityFilter
 from src.audio import record_until_silence, play_and_pulse
+from src.hotword import listen_for_wakeword
 from src.lights import SacnLight, WledLight, color_from_text
 from src.oracle import transcribe, oracle_answer, synthesize, append_log
 
@@ -182,7 +183,11 @@ def main() -> None:
                 # un breve respiro per non ciclare a vuoto
                 time.sleep(0.05)
 
-            # 1) Registrazione (VAD / dorme in silenzio)
+            # 1) Attesa wakeword (se configurata)
+            if SET.wakeword:
+                listen_for_wakeword(SET.wakeword, in_dev)
+
+            # 2) Registrazione (VAD / dorme in silenzio)
             ok = record_until_silence(
                 INPUT_WAV,
                 AUDIO_SR,
@@ -196,7 +201,7 @@ def main() -> None:
                 time.sleep(2)
                 continue
 
-            # 2) Trascrizione + lingua
+            # 3) Trascrizione + lingua
             q, lang = transcribe(INPUT_WAV, client, STT_MODEL, debug=DEBUG)
             if not q:
                 continue
@@ -206,7 +211,7 @@ def main() -> None:
                 print("🔄 Conversazione azzerata.", flush=True)
                 continue
 
-            # 3) Filtro input utente
+            # 4) Filtro input utente
             if PROF.contains_profanity(q):
                 if FILTER_MODE == "block":
                     print("🚫 Linguaggio offensivo/bestemmie non ammessi. Riformula in italiano o inglese.", flush=True)
@@ -215,11 +220,11 @@ def main() -> None:
                     q = PROF.mask(q)
                     print("⚠️ Testo filtrato:", q, flush=True)
 
-            # 4) Risposta oracolare (stessa lingua)
+            # 5) Risposta oracolare (stessa lingua)
             print("✨ Interrogo l’Oracolo…", flush=True)
             a = oracle_answer(q, lang or "it", client, LLM_MODEL, ORACLE_SYSTEM, history)
 
-            # 5) Filtro output oracolo
+            # 6) Filtro output oracolo
             if PROF.contains_profanity(a):
                 if FILTER_MODE == "block":
                     print("⚠️ La risposta conteneva termini non ammessi, riformulo…", flush=True)
@@ -233,23 +238,23 @@ def main() -> None:
 
             history.append((q, a))
 
-            # 6) Log
+            # 7) Log
             try:
                 append_log(q, a, LOG_PATH)
             except Exception:
                 pass
 
-            # 7) Colori base da testo
+            # 8) Colori base da testo
             base = color_from_text(a, PALETTES)
             if hasattr(light, "set_base_rgb"):
                 light.set_base_rgb(base)
                 light.idle()
 
-            # 8) TTS → WAV
+            # 9) TTS → WAV
             print("🎧 Sintesi vocale…", flush=True)
             synthesize(a, OUTPUT_WAV, client, TTS_MODEL, TTS_VOICE)
 
-            # 9) Riproduzione + pulsazioni luci
+            # 10) Riproduzione + pulsazioni luci
             play_and_pulse(
                 OUTPUT_WAV,
                 light,
