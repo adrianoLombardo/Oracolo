@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import re
 from datetime import datetime
 from pathlib import Path
@@ -55,30 +56,39 @@ def transcribe(path: Path, client, stt_model: str, *, debug: bool = False) -> Tu
             )
         text_auto = (tx_auto.text or "").strip()
     except Exception:
+        logging.exception("Automatic transcription failed")
         text_auto = ""
 
-    with open(path, "rb") as f_it:
-        print("↻ Trascrizione forzata IT…")
-        tx_it = client.audio.transcriptions.create(
-            model=stt_model,
-            file=f_it,
-            language="it",
-            prompt="Lingua: italiano. Dominio: arte, luce, mare, destino.",
-        )
-    text_it = (tx_it.text or "").strip()
+    try:
+        with open(path, "rb") as f_it:
+            print("↻ Trascrizione forzata IT…")
+            tx_it = client.audio.transcriptions.create(
+                model=stt_model,
+                file=f_it,
+                language="it",
+                prompt="Lingua: italiano. Dominio: arte, luce, mare, destino.",
+            )
+        text_it = (tx_it.text or "").strip()
+    except Exception:
+        logging.exception("Italian transcription failed")
+        text_it = ""
 
-    with open(path, "rb") as f_en:
-        print("↻ Trascrizione forzata EN…")
-        tx_en = client.audio.transcriptions.create(
-            model=stt_model,
-            file=f_en,
-            language="en",
-            prompt="Language: English. Domain: art, light, sea, destiny.",
-        )
-    text_en = (tx_en.text or "").strip()
+    try:
+        with open(path, "rb") as f_en:
+            print("↻ Trascrizione forzata EN…")
+            tx_en = client.audio.transcriptions.create(
+                model=stt_model,
+                file=f_en,
+                language="en",
+                prompt="Language: English. Domain: art, light, sea, destiny.",
+            )
+        text_en = (tx_en.text or "").strip()
+    except Exception:
+        logging.exception("English transcription failed")
+        text_en = ""
 
-    s_it = _score_lang(text_it, "it", debug=debug)
-    s_en = _score_lang(text_en, "en", debug=debug)
+    s_it = _score_lang(text_it, "it", debug=debug) if text_it else 0.0
+    s_en = _score_lang(text_en, "en", debug=debug) if text_en else 0.0
 
     try:
         auto_lang = detect(text_auto) if text_auto else None
