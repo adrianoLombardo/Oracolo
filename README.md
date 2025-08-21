@@ -25,6 +25,19 @@ python -m src.ui
 L'interfaccia offre un menu **Impostazioni** per scegliere i dispositivi audio
 e modificare i parametri di illuminazione (Art-Net/sACN o WLED).
 
+## Modalità realtime
+
+È disponibile un client WebSocket sperimentale che trasmette audio PCM dal
+microfono e riceve trascrizioni parziali e risposta TTS a flusso continuo. Dal
+repository "OcchioOnniveggente" eseguire:
+
+```bash
+python -m src.realtime_oracolo
+```
+
+Impostare la variabile d'ambiente `ORACOLO_WS_URL` con l'indirizzo del backend
+realtime se diverso da `ws://localhost:8765`.
+
 ## Gestione documenti
 
 Il menu **Documenti** consente di inserire o rimuovere file dal datastore.
