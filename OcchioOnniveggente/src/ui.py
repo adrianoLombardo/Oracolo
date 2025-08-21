@@ -534,6 +534,10 @@ class OracoloUI(tk.Tk):
         rest = f.read()
         if rest:
             self.after(0, self._append_log, rest)
+        if self.proc and self.proc.poll() is not None:
+            self.after(0, lambda: self.status_var.set("🟡 In attesa"))
+            if not self._stop_reader.is_set():
+                self.after(0, self.stop_oracolo)
 
     def stop_oracolo(self) -> None:
         if not self.proc or self.proc.poll() is not None:
@@ -574,6 +578,11 @@ class OracoloUI(tk.Tk):
                 self.status_var.set("🟡 In attesa")
                 self.start_btn.configure(state="normal")
                 self.stop_btn.configure(state="disabled")
+        else:
+            if self.status_var.get() != "🟡 In attesa":
+                self.status_var.set("🟡 In attesa")
+            self.start_btn.configure(state="normal")
+            self.stop_btn.configure(state="disabled")
         self.after(500, self._poll_process)
 
     # ------------------------------ Exit ----------------------------------- #
