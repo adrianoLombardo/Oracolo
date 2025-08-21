@@ -31,6 +31,11 @@ def test_mask_preserves_length(pf: ProfanityFilter) -> None:
     assert masked != text
 
 
+def test_mask_leet_and_accents(pf: ProfanityFilter) -> None:
+    assert pf.mask("càzz0 che schifo") == "***** che schifo"
+    assert pf.mask("sh1t happens") == "**** happens"
+
+
 def test_multiword_phrase_with_punctuation(pf: ProfanityFilter) -> None:
     assert pf.contains_profanity("porco dio")
     assert pf.contains_profanity("Che porco, dio?")
