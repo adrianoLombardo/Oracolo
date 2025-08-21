@@ -278,7 +278,12 @@ class OracoloUI(tk.Tk):
             messagebox.showwarning("Documento", "Script di ingest non trovato (scripts/ingest_docs.py).")
             return
         try:
-            subprocess.run([sys.executable, str(script), "--add", *paths], check=True, cwd=self.root_dir)
+            # ▶︎ usa il modulo
+            subprocess.run(
+                [sys.executable, "-m", "scripts.ingest_docs", "--add", *paths],
+                check=True,
+                cwd=self.root_dir,
+            )
             messagebox.showinfo("Successo", "Documenti aggiunti.")
         except subprocess.CalledProcessError as exc:
             messagebox.showerror("Errore", f"Ingest fallito: {exc}")
@@ -296,7 +301,12 @@ class OracoloUI(tk.Tk):
             messagebox.showwarning("Documento", "Script di ingest non trovato (scripts/ingest_docs.py).")
             return
         try:
-            subprocess.run([sys.executable, str(script), "--remove", *paths], check=True, cwd=self.root_dir)
+            # ▶︎ usa il modulo
+            subprocess.run(
+                [sys.executable, "-m", "scripts.ingest_docs", "--remove", *paths],
+                check=True,
+                cwd=self.root_dir,
+            )
             messagebox.showinfo("Successo", "Documenti rimossi.")
         except subprocess.CalledProcessError as exc:
             messagebox.showerror("Errore", f"Rimozione fallita: {exc}")
@@ -308,14 +318,19 @@ class OracoloUI(tk.Tk):
             messagebox.showwarning("Indice", "Script di ingest non trovato (scripts/ingest_docs.py).")
             return
 
-        tried = [
+        tried = (
             ["--reindex"],
             ["--rebuild"],
             ["--refresh"],
-        ]
+        )
         for args in tried:
             try:
-                subprocess.run([sys.executable, str(script), *args], check=True, cwd=self.root_dir)
+                # ▶︎ usa il modulo
+                subprocess.run(
+                    [sys.executable, "-m", "scripts.ingest_docs", *args],
+                    check=True,
+                    cwd=self.root_dir,
+                )
                 messagebox.showinfo("Indice", f"Indice aggiornato ({' '.join(args)}).")
                 return
             except subprocess.CalledProcessError:
