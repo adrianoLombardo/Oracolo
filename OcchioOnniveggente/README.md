@@ -41,3 +41,15 @@ Per eseguire i test installa le dipendenze e lancia `pytest`:
 pip install -r requirements.txt
 pytest
 ```
+
+## Interfaccia grafica
+
+Un'interfaccia utente minimale con stile futuristico è disponibile nel modulo
+`src.ui`. Per avviarla:
+
+```bash
+python -m src.ui
+```
+Dal menu **Impostazioni** è possibile selezionare i dispositivi audio e
+configurare la luce via Art-Net/sACN o WLED.
+
