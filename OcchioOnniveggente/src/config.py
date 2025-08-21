@@ -83,8 +83,22 @@ class Settings(BaseModel):
 
     @classmethod
     def model_validate_yaml(cls, path: Path) -> "Settings":
+        """Load settings from a YAML file.
+
+        Returns the default configuration if the file does not exist and raises
+        a ``ValueError`` when the YAML content is invalid. This makes the
+        application fail fast on misconfigured YAML files instead of silently
+        falling back to defaults.
+        """
+
         try:
-            data = yaml.safe_load(path.read_text(encoding="utf-8"))
+            text = path.read_text(encoding="utf-8")
         except FileNotFoundError:
             return cls()
-        return cls.model_validate(data or {})
+
+        try:
+            data = yaml.safe_load(text) or {}
+        except yaml.YAMLError as exc:
+            raise ValueError(f"Invalid YAML in {path}") from exc
+
+        return cls.model_validate(data)

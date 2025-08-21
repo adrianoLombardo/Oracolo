@@ -1,0 +1,20 @@
+import sys
+from pathlib import Path
+import pytest
+
+sys.path.append(str(Path(__file__).resolve().parents[1]))
+from OcchioOnniveggente.src.config import Settings
+
+
+def test_model_validate_yaml_invalid_yaml(tmp_path: Path) -> None:
+    bad = tmp_path / "settings.yaml"
+    bad.write_text("debug: [::]", encoding="utf-8")
+    with pytest.raises(ValueError):
+        Settings.model_validate_yaml(bad)
+
+
+def test_model_validate_yaml_valid_yaml(tmp_path: Path) -> None:
+    good = tmp_path / "settings.yaml"
+    good.write_text("debug: true", encoding="utf-8")
+    settings = Settings.model_validate_yaml(good)
+    assert settings.debug is True
