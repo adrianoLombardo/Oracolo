@@ -51,7 +51,11 @@ def transcribe(path: Path, client, stt_model: str, *, debug: bool = False) -> Tu
             tx_auto = client.audio.transcriptions.create(
                 model=stt_model,
                 file=f,
-                prompt="Language is either Italian or English. Ignore any other language.",
+                prompt=(
+                    "Language is either Italian or English. Focus on neuroscience, "
+                    "neuroaesthetics, contemporary art, the universe, and "
+                    "neuroscientific AI. Ignore any other language."
+                ),
             )
         text_auto = (tx_auto.text or "").strip()
     except Exception:
@@ -63,7 +67,10 @@ def transcribe(path: Path, client, stt_model: str, *, debug: bool = False) -> Tu
                 model=stt_model,
                 file=f_it,
                 language="it",
-                prompt="Lingua: italiano. Dominio: arte, luce, mare, destino.",
+                prompt=(
+                    "Lingua: italiano. Dominio: neuroscienze, neuroestetica, "
+                    "arte contemporanea, universo e IA neuroscientifica."
+                ),
             )
         text_it = (tx_it.text or "").strip()
     except Exception:
@@ -76,7 +83,10 @@ def transcribe(path: Path, client, stt_model: str, *, debug: bool = False) -> Tu
                 model=stt_model,
                 file=f_en,
                 language="en",
-                prompt="Language: English. Domain: art, light, sea, destiny.",
+                prompt=(
+                    "Language: English. Domain: neuroscience, neuroaesthetics, "
+                    "contemporary art, universe, and neuroscientific AI."
+                ),
             )
         text_en = (tx_en.text or "").strip()
     except Exception:
