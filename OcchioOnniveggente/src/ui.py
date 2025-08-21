@@ -12,7 +12,7 @@ from __future__ import annotations
 import subprocess
 import sys
 import tkinter as tk
-from tkinter import ttk
+from tkinter import filedialog, messagebox, ttk
 from pathlib import Path
 
 import sounddevice as sd
@@ -60,6 +60,12 @@ class OracoloUI(tk.Tk):
         # Menu bar
         self.debug_var = tk.BooleanVar(value=bool(self.settings.get("debug", False)))
         menubar = tk.Menu(self)
+
+        docs_menu = tk.Menu(menubar, tearoff=0)
+        docs_menu.add_command(label="Aggiungi…", command=self._add_documents)
+        docs_menu.add_command(label="Rimuovi…", command=self._remove_documents)
+        menubar.add_cascade(label="Documenti", menu=docs_menu)
+
         settings_menu = tk.Menu(menubar, tearoff=0)
         settings_menu.add_checkbutton(
             label="Debug", variable=self.debug_var, command=self._update_debug
@@ -94,6 +100,44 @@ class OracoloUI(tk.Tk):
         """Launch the existing CLI main module in a new process."""
 
         subprocess.Popen([sys.executable, "-m", "src.main"])
+
+    def _add_documents(self) -> None:
+        """Add documents to the knowledge base via ingest script."""
+
+        paths = list(filedialog.askopenfilenames(parent=self))
+        if not paths:
+            directory = filedialog.askdirectory(parent=self)
+            if directory:
+                paths = [directory]
+        if not paths:
+            return
+
+        script = Path(__file__).resolve().parents[1] / "scripts" / "ingest_docs.py"
+        try:
+            subprocess.run([sys.executable, str(script), "--add", *paths], check=True)
+        except subprocess.CalledProcessError as exc:
+            messagebox.showerror("Errore", f"Impossibile aggiungere i documenti: {exc}")
+        else:
+            messagebox.showinfo("Successo", "Documenti aggiunti correttamente")
+
+    def _remove_documents(self) -> None:
+        """Remove documents from the knowledge base via ingest script."""
+
+        paths = list(filedialog.askopenfilenames(parent=self))
+        if not paths:
+            directory = filedialog.askdirectory(parent=self)
+            if directory:
+                paths = [directory]
+        if not paths:
+            return
+
+        script = Path(__file__).resolve().parents[1] / "scripts" / "ingest_docs.py"
+        try:
+            subprocess.run([sys.executable, str(script), "--remove", *paths], check=True)
+        except subprocess.CalledProcessError as exc:
+            messagebox.showerror("Errore", f"Impossibile rimuovere i documenti: {exc}")
+        else:
+            messagebox.showinfo("Successo", "Documenti rimossi correttamente")
 
     # ----- settings handling -------------------------------------------------
 
