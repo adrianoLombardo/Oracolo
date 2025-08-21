@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 
 
 class OpenAIConfig(BaseModel):
+    api_key: str = ""
     stt_model: str = "gpt-4o-mini-transcribe"
     llm_model: str = "gpt-5-mini"
     tts_model: str = "gpt-4o-mini-tts"
