@@ -1,14 +1,14 @@
 # src/main.py
-# -*- coding: utf-8 -*-
-from __future__ import annotations
 
 import os
 import sys
+import re
 import time
-import argparse
 import difflib
+import unicodedata
+import argparse
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterable
 
 import sounddevice as sd
 from dotenv import load_dotenv
@@ -18,29 +18,27 @@ from pydantic import ValidationError
 from src.config import Settings
 from src.filters import ProfanityFilter
 from src.audio import record_until_silence, play_and_pulse
-from src.hotword import listen_for_wakeword
 from src.lights import SacnLight, WledLight, color_from_text
 from src.oracle import transcribe, oracle_answer, synthesize, append_log
 
-# ---------- Console UTF-8 safe (Windows) ----------
-try:
-    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
-except Exception:
-    pass
-SPARK = "✨"
-try:
-    "✓".encode(sys.stdout.encoding or "utf-8")
-except Exception:
-    SPARK = "*"
 
-
-def pick_device(spec: Any, kind: str) -> Any:
-    """Ritorna indice device valido per 'kind' ('input'|'output') o None per default OS."""
+# --------------------------- console helpers --------------------------- #
+def _ensure_utf8_stdout() -> None:
     try:
-        devices = sd.query_devices()
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-defined]
     except Exception:
-        return None
+        pass
+
+
+def say(msg: str, quiet: bool = False) -> None:
+    if quiet:
+        return
+    print(msg, flush=True)
+
+
+# --------------------------- audio device pick ------------------------- #
+def pick_device(spec: Any, kind: str) -> Any:
+    devices = sd.query_devices()
 
     def _valid(info: dict) -> bool:
         ch_key = "max_input_channels" if kind == "input" else "max_output_channels"
@@ -54,7 +52,7 @@ def pick_device(spec: Any, kind: str) -> Any:
         except Exception:
             pass
     else:
-        if isinstance(spec, int) or str(spec).isdigit():
+        if isinstance(spec, int) or (isinstance(spec, str) and spec.isdigit()):
             idx = int(spec)
             if 0 <= idx < len(devices) and _valid(devices[idx]):
                 return idx
@@ -63,7 +61,6 @@ def pick_device(spec: Any, kind: str) -> Any:
             if spec_str in info.get("name", "").lower() and _valid(info):
                 return i
 
-    # fallback: primo device valido
     for i, info in enumerate(devices):
         if _valid(info):
             return i
@@ -74,16 +71,27 @@ def debug_print_devices() -> None:
     try:
         devices = sd.query_devices()
     except Exception as e:
-        print(f"⚠️ Unable to query audio devices: {e}", flush=True)
+        print(f"⚠️ Unable to query audio devices: {e}")
         return
     header = f"{'Idx':>3}  {'Device Name':<40}  {'In/Out'}"
-    print(header, flush=True)
-    print("-" * len(header), flush=True)
+    print(header)
+    print("-" * len(header))
     for idx, info in enumerate(devices):
         name = info.get("name", "")
         in_ch = info.get("max_input_channels", 0)
         out_ch = info.get("max_output_channels", 0)
-        print(f"{idx:>3}  {name:<40}  {in_ch}/{out_ch}", flush=True)
+        print(f"{idx:>3}  {name:<40}  {in_ch}/{out_ch}")
+
+
+# --------------------------- hotword (testuale) ------------------------ #
+def _strip_accents(s: str) -> str:
+    nf = unicodedata.normalize("NFD", s or "")
+    return "".join(ch for ch in nf if not unicodedata.combining(ch))
+
+
+def _normalize_lang(s: str) -> str:
+    return _strip_accents(s).lower()
+
 
 def _phrase_to_regex_tokens(phrase: str) -> re.Pattern:
     """
@@ -103,15 +111,16 @@ def _match_hotword(text: str, phrases: Iterable[str]) -> bool:
     """
     Match robusto:
     1) regex tollerante (spazi/punteggiatura/maiuscole/accenti)
-    2) fallback fuzzy: consente piccoli errori di STT ("oràcolo", "oraccolo", ecc.)
+    2) fallback fuzzy: consente piccoli errori (es. “oràcolo”, “oraccolo”)
     """
     norm = _normalize_lang(text or "")
+
     # 1) regex tollerante
     for p in phrases or []:
         if _phrase_to_regex_tokens(p).search(norm):
             return True
 
-    # 2) fuzzy fallback (senza simboli)
+    # 2) fuzzy: confronta stringhe senza simboli
     letters = re.sub(r"[\W_]+", "", norm)
     if not letters:
         return False
@@ -122,73 +131,72 @@ def _match_hotword(text: str, phrases: Iterable[str]) -> bool:
             continue
         if cand in letters:
             return True
-        # similarità globale; per frasi cortissime funziona bene
         ratio = difflib.SequenceMatcher(None, letters, cand).ratio()
-        if ratio >= 0.85:
+        if ratio >= 0.86:
             return True
 
     return False
 
 
+def oracle_greeting(lang: str) -> str:
+    if (lang or "").lower().startswith("en"):
+        return "I am awake. Ask, and I will answer from the shore of starlight."
+    return "Sono desto. Chiedi, e risponderò dalla riva della luce."
+
+
+# --------------------------- main ------------------------------------- #
 def main() -> None:
-    # ---- argomenti: autostart (niente prompt), quiet (meno stampe) ----
-    ap = argparse.ArgumentParser(description="Occhio Onniveggente · Oracolo")
-    ap.add_argument("--autostart", action="store_true",
-                    help="Esegue il loop senza richiedere INVIO (per UI/headless).")
-    ap.add_argument("--quiet", action="store_true",
-                    help="Riduce il logging a console.")
-    args = ap.parse_args()
+    _ensure_utf8_stdout()
+
+    parser = argparse.ArgumentParser(description="Occhio Onniveggente · Oracolo")
+    parser.add_argument("--autostart", action="store_true", help="Avvia direttamente senza prompt input()")
+    parser.add_argument("--quiet", action="store_true", help="Riduce i log a schermo")
+    args = parser.parse_args()
+
+    say("Occhio Onniveggente · Oracolo ✨", quiet=args.quiet)
 
     load_dotenv()
+    client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
     cfg_path = Path("settings.yaml")
     if cfg_path.exists():
         try:
             SET = Settings.model_validate_yaml(cfg_path)
         except ValidationError as e:
-            print("⚠️ Configurazione non valida:", e, flush=True)
-            print("Uso impostazioni di default.", flush=True)
+            print("⚠️ Configurazione non valida:", e)
+            print("Uso impostazioni di default.")
             SET = Settings()
     else:
-        print("⚠️ settings.yaml non trovato, uso impostazioni di default.", flush=True)
+        print("⚠️ settings.yaml non trovato, uso impostazioni di default.")
         SET = Settings()
 
-    DEBUG = SET.debug and not args.quiet
+    DEBUG = bool(SET.debug) and (not args.quiet)
 
-    # Audio config
+    # Audio
     AUDIO_CONF = SET.audio
     AUDIO_SR = AUDIO_CONF.sample_rate
     INPUT_WAV = Path(AUDIO_CONF.input_wav)
     OUTPUT_WAV = Path(AUDIO_CONF.output_wav)
-
     in_spec = AUDIO_CONF.input_device
     out_spec = AUDIO_CONF.output_device
     in_dev = pick_device(in_spec, "input")
     out_dev = pick_device(out_spec, "output")
-    try:
-        sd.default.device = (in_dev, out_dev)
-    except Exception:
-        pass
+    sd.default.device = (in_dev, out_dev)
     if DEBUG:
-        print(f"🎛️  Audio devices -> input={in_dev}  output={out_dev}", flush=True)
         debug_print_devices()
 
-    # OpenAI models / prompt
+    # OpenAI models
     STT_MODEL = SET.openai.stt_model
     LLM_MODEL = SET.openai.llm_model
     TTS_MODEL = SET.openai.tts_model
     TTS_VOICE = SET.openai.tts_voice
-    api_key = SET.openai.api_key or os.environ.get("OPENAI_API_KEY")
-    client = OpenAI(api_key=api_key)
     ORACLE_SYSTEM = SET.oracle_system
 
-    # Filtro / palette / luci
+    # Filters / palettes / lights
     FILTER_MODE = SET.filter.mode
     PALETTES = {k: v.model_dump() for k, v in SET.palette_keywords.items()}
     LIGHT_MODE = SET.lighting.mode
     LOG_PATH = Path("data/logs/dialoghi.csv")
-
-    history: list[tuple[str, str]] = []
 
     PROF = ProfanityFilter(
         Path("data/filters/it_blacklist.txt"),
@@ -199,122 +207,205 @@ def main() -> None:
     vad_conf = SET.vad.model_dump()
     lighting_conf = SET.lighting.model_dump()
 
+    # Luci
     if LIGHT_MODE == "sacn":
         light = SacnLight(lighting_conf)
     elif LIGHT_MODE == "wled":
         light = WledLight(lighting_conf)
     else:
-        print("⚠️ lighting.mode non valido, uso WLED di default", flush=True)
+        print("⚠️ lighting.mode non valido, uso WLED di default")
         light = WledLight(lighting_conf)
 
-    # Messaggi di avvio
-    if args.autostart or not sys.stdin.isatty():
-        print(f"Occhio Onniveggente · Oracolo {SPARK}  (modalità UI: nessun prompt)", flush=True)
-        autostart = True
-    else:
-        print(f"Occhio Onniveggente · Oracolo {SPARK}", flush=True)
-        autostart = False
+    # Wake config: default ON e lista di frasi
+    WAKE_IT = ["ciao oracolo", "ehi oracolo", "salve oracolo", "ciao, oracolo"]
+    WAKE_EN = ["hello oracle", "hey oracle", "hi oracle", "hello, oracle"]
+    WAKE_ENABLED = True
+    WAKE_SINGLE_TURN = True
+    IDLE_TIMEOUT = 60.0  # secondi di inattività prima di tornare a SLEEP
+
+    try:
+        if getattr(SET, "wake", None) is not None:
+            WAKE_ENABLED = bool(SET.wake.enabled)
+            WAKE_SINGLE_TURN = bool(SET.wake.single_turn)
+            if SET.wake.it_phrases:
+                WAKE_IT = list(SET.wake.it_phrases)
+            if SET.wake.en_phrases:
+                WAKE_EN = list(SET.wake.en_phrases)
+            if getattr(SET.wake, "idle_timeout", None):
+                try:
+                    IDLE_TIMEOUT = float(SET.wake.idle_timeout)
+                except Exception:
+                    pass
+    except Exception:
+        # se non c'è la sezione wake, rimaniamo con i default sopra
+        pass
+
+    last_lang = "it"  # lingua da usare quando STT è incerto
+
+    # --------------------------- STATE MACHINE --------------------------- #
+    state = "SLEEP"      # SLEEP -> attende hotword. ACTIVE -> dialogo attivo
+    active_deadline = 0  # timestamp (time.time()) di scadenza inattività
 
     try:
         while True:
-            if not autostart:
+            if not args.autostart:
                 try:
-                    cmd = input("\nPremi INVIO per fare una domanda (q per uscire)… ")
-                except (EOFError, KeyboardInterrupt):
-                    cmd = "q"
-                if cmd.strip().lower() == "q":
-                    break
-            else:
-                # in modalità UI/headless non chiediamo nulla:
-                # un breve respiro per non ciclare a vuoto
-                time.sleep(0.05)
+                    cmd = input("\nPremi INVIO per ascoltare (q per uscire)… ")
+                    if cmd.strip().lower() == "q":
+                        break
+                except EOFError:
+                    pass  # lanciato da UI con stdin chiuso
 
-            # 1) Attesa wakeword (se configurata)
-            if SET.wakeword:
-                listen_for_wakeword(SET.wakeword, in_dev)
+            # ---------------------- SLEEP: attendo hotword ---------------------- #
+            if WAKE_ENABLED and state == "SLEEP":
+                say("💤 In ascolto della parola chiave…  IT: «ciao oracolo» | EN: «hello oracle»", quiet=args.quiet)
 
-            # 2) Registrazione (VAD / dorme in silenzio)
-            ok = record_until_silence(
-                INPUT_WAV,
-                AUDIO_SR,
-                vad_conf,
-                recording_conf,
-                debug=DEBUG,
-                input_device_id=in_dev,
-            )
-            if not ok:
-                print("⚠️ Registrazione audio non riuscita, riprovo tra 2s…", flush=True)
-                time.sleep(2)
-                continue
-
-            # 3) Trascrizione + lingua
-            q, lang = transcribe(INPUT_WAV, client, STT_MODEL, debug=DEBUG)
-            if not q:
-                continue
-
-            if q.strip().lower() == "!reset":
-                history.clear()
-                print("🔄 Conversazione azzerata.", flush=True)
-                continue
-
-            # 4) Filtro input utente
-            if PROF.contains_profanity(q):
-                if FILTER_MODE == "block":
-                    print("🚫 Linguaggio offensivo/bestemmie non ammessi. Riformula in italiano o inglese.", flush=True)
+                ok = record_until_silence(
+                    INPUT_WAV,
+                    AUDIO_SR,
+                    vad_conf,
+                    recording_conf,
+                    debug=DEBUG and (not args.quiet),
+                    input_device_id=in_dev,
+                )
+                if not ok:
+                    # niente parlato → continua a dormire
                     continue
-                else:
-                    q = PROF.mask(q)
-                    print("⚠️ Testo filtrato:", q, flush=True)
 
-            # 5) Risposta oracolare (stessa lingua)
-            print("✨ Interrogo l’Oracolo…", flush=True)
-            a = oracle_answer(q, lang or "it", client, LLM_MODEL, ORACLE_SYSTEM, history)
+                text, lang = transcribe(INPUT_WAV, client, STT_MODEL, debug=DEBUG and (not args.quiet))
+                say(f"📝 Riconosciuto: {text}", quiet=args.quiet)
 
-            # 6) Filtro output oracolo
-            if PROF.contains_profanity(a):
-                if FILTER_MODE == "block":
-                    print("⚠️ La risposta conteneva termini non ammessi, riformulo…", flush=True)
-                    a = client.responses.create(
-                        model=LLM_MODEL,
-                        instructions=ORACLE_SYSTEM + " Evita qualsiasi offesa o blasfemia.",
-                        input=[{"role": "user", "content": "Riformula in modo poetico e non offensivo:\n" + a}],
-                    ).output_text.strip()
-                else:
-                    a = PROF.mask(a)
+                if lang in ("it", "en"):
+                    last_lang = lang
 
-            history.append((q, a))
+                is_it = _match_hotword(text, WAKE_IT)
+                is_en = _match_hotword(text, WAKE_EN)
+                if not (is_it or is_en):
+                    # non è hotword → resta a dormire
+                    if DEBUG:
+                        say("…hotword non riconosciuta, continuo l'attesa.", quiet=False)
+                    continue
 
-            # 7) Log
-            try:
+                # hotword OK → saluta e passa ad ACTIVE
+                wake_lang = "it" if is_it and not is_en else "en" if is_en and not is_it else (last_lang or "it")
+                greet = oracle_greeting(wake_lang)
+                synthesize(greet, OUTPUT_WAV, client, TTS_MODEL, TTS_VOICE)
+                play_and_pulse(
+                    OUTPUT_WAV,
+                    light,
+                    AUDIO_SR,
+                    lighting_conf,
+                    output_device_id=out_dev,
+                )
+                state = "ACTIVE"
+                active_deadline = time.time() + IDLE_TIMEOUT
+                continue
+
+            # ---------------------- ACTIVE: dialogo attivo ---------------------- #
+            # Se hotword è disattivata a config, restiamo sempre "attivi".
+            if (not WAKE_ENABLED) or state == "ACTIVE":
+                # timeout inattività → torna a SLEEP
+                if WAKE_ENABLED and time.time() > active_deadline:
+                    say("🌘 Torno al silenzio. Di' «ciao oracolo» per riattivarmi.", quiet=args.quiet)
+                    state = "SLEEP"
+                    continue
+
+                # ascolto una domanda
+                say(
+                    "🎤 Parla pure (VAD energia, max %.1fs)…" % (SET.vad.max_ms / 1000.0),
+                    quiet=args.quiet,
+                )
+                ok = record_until_silence(
+                    INPUT_WAV,
+                    AUDIO_SR,
+                    vad_conf,
+                    recording_conf,
+                    debug=DEBUG and (not args.quiet),
+                    input_device_id=in_dev,
+                )
+
+                if not ok:
+                    # nessuna traccia valida → controlla timeout e riprova
+                    if WAKE_ENABLED and time.time() > active_deadline:
+                        say("🌘 Torno al silenzio. Di' «ciao oracolo» per riattivarmi.", quiet=args.quiet)
+                        state = "SLEEP"
+                    continue
+
+                q, qlang = transcribe(INPUT_WAV, client, STT_MODEL, debug=DEBUG and (not args.quiet))
+                say(f"📝 Domanda: {q}", quiet=args.quiet)
+                if not q:
+                    if WAKE_ENABLED and time.time() > active_deadline:
+                        say("🌘 Torno al silenzio. Di' «ciao oracolo» per riattivarmi.", quiet=args.quiet)
+                        state = "SLEEP"
+                    continue
+
+                eff_lang = qlang if qlang in ("it", "en") else last_lang
+
+                # filtro input
+                if PROF.contains_profanity(q):
+                    if FILTER_MODE == "block":
+                        say("🚫 Linguaggio offensivo/bestemmie non ammessi. Riformula in italiano o inglese.", quiet=args.quiet)
+                        # non estendere il timer se l'input è rifiutato
+                        continue
+                    else:
+                        q = PROF.mask(q)
+                        say("⚠️ Testo filtrato: " + q, quiet=args.quiet)
+
+                # risposta oracolare
+                a = oracle_answer(q, eff_lang, client, LLM_MODEL, ORACLE_SYSTEM)
+
+                # filtro output
+                if PROF.contains_profanity(a):
+                    if FILTER_MODE == "block":
+                        say("⚠️ La risposta conteneva termini non ammessi, riformulo…", quiet=args.quiet)
+                        a = client.responses.create(
+                            model=LLM_MODEL,
+                            instructions=ORACLE_SYSTEM + " Evita qualsiasi offesa o blasfemia.",
+                            input=[{"role": "user", "content": "Riformula in modo poetico e non offensivo:\n" + a}],
+                        ).output_text.strip()
+                    else:
+                        a = PROF.mask(a)
+
                 append_log(q, a, LOG_PATH)
-            except Exception:
-                pass
 
-            # 8) Colori base da testo
-            base = color_from_text(a, PALETTES)
-            if hasattr(light, "set_base_rgb"):
-                light.set_base_rgb(base)
-                light.idle()
+                # luce di base dal contenuto
+                base = color_from_text(a, {k: v for k, v in PALETTES.items()})
+                if hasattr(light, "set_base_rgb"):
+                    light.set_base_rgb(base)
+                    light.idle()
 
-            # 9) TTS → WAV
-            print("🎧 Sintesi vocale…", flush=True)
-            synthesize(a, OUTPUT_WAV, client, TTS_MODEL, TTS_VOICE)
+                # TTS + playback con pulse
+                synthesize(a, OUTPUT_WAV, client, TTS_MODEL, TTS_VOICE)
+                play_and_pulse(
+                    OUTPUT_WAV,
+                    light,
+                    AUDIO_SR,
+                    lighting_conf,
+                    output_device_id=out_dev,
+                )
 
-            # 10) Riproduzione + pulsazioni luci
-            play_and_pulse(
-                OUTPUT_WAV,
-                light,
-                AUDIO_SR,
-                lighting_conf,
-                output_device_id=out_dev,
-            )
+                # estendi timeout perché c'è stata attività
+                active_deadline = time.time() + IDLE_TIMEOUT
+
+                # se modalità "single turn", torna subito a SLEEP
+                if WAKE_ENABLED and WAKE_SINGLE_TURN:
+                    state = "SLEEP"
+                    say("🌘 Torno al silenzio. Di' «ciao oracolo» per riattivarmi.", quiet=args.quiet)
+                    continue
+
+                # altrimenti resta ACTIVE e continua ad ascoltare
+                continue
+
+            # Fallback: se per qualche motivo non rientra nei rami, vai a SLEEP
+            state = "SLEEP"
+
     finally:
         try:
             light.blackout()
             light.stop()
         except Exception:
             pass
-        print("👁️  Arrivederci.", flush=True)
+        print("👁️  Arrivederci.")
 
 
 if __name__ == "__main__":
