@@ -7,6 +7,7 @@ import time
 import difflib
 import unicodedata
 import argparse
+from src.retrieval import retrieve
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -289,6 +290,8 @@ def main() -> None:
                 # hotword OK → saluta e passa ad ACTIVE
                 wake_lang = "it" if is_it and not is_en else "en" if is_en and not is_it else (last_lang or "it")
                 greet = oracle_greeting(wake_lang)
+                # ▼▼ AGGIUNTA: log del saluto in viewport (anche se --quiet)
+                print(f"🔮 Oracolo: {greet}", flush=True)
                 synthesize(greet, OUTPUT_WAV, client, TTS_MODEL, TTS_VOICE)
                 play_and_pulse(
                     OUTPUT_WAV,
@@ -352,7 +355,23 @@ def main() -> None:
                         say("⚠️ Testo filtrato: " + q, quiet=args.quiet)
 
                 # risposta oracolare
-                a = oracle_answer(q, eff_lang, client, LLM_MODEL, ORACLE_SYSTEM)
+                # --- RAG: recupera contesto dai documenti indicizzati ---
+                try:
+                    DOCSTORE_PATH = getattr(SET, "docstore_path", "DataBase/index.json")
+                    TOPK = int(getattr(SET, "retrieval_top_k", 3))
+                except Exception:
+                    DOCSTORE_PATH = "DataBase/index.json"
+                    TOPK = 3
+
+                context = []
+                try:
+                    context = retrieve(q, DOCSTORE_PATH, top_k=TOPK)
+                except Exception:
+                    context = []
+
+                a = oracle_answer(q, eff_lang, client, LLM_MODEL, ORACLE_SYSTEM, context=context)
+                # ▼▼ AGGIUNTA: log della risposta in viewport (anche se --quiet)
+                print(f"🔮 Oracolo: {a}", flush=True)
 
                 # filtro output
                 if PROF.contains_profanity(a):
@@ -410,3 +429,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
