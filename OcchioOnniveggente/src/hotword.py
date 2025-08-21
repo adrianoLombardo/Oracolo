@@ -2,15 +2,15 @@ from __future__ import annotations
 
 """Utilities for hotword detection.
 
-This module provides a helper function :func:`listen_for_wakeword` that blocks
-until a configured wake word is detected using a wake word engine such as
-Porcupine or Snowboy.  If the required third party dependencies are not
-available, the function falls back to a no-op so that the application can still
-run without hotword support.
+This module exposes :func:`listen_for_wakeword` which blocks until the given
+wake word is detected on the microphone.  The implementation attempts to use
+`pvporcupine` (Picovoice Porcupine) together with ``pyaudio``.  When these
+optional dependencies are missing, the function falls back to a no-op so that
+missing packages do not crash the application.
 """
 
 from typing import Optional
-
+import struct
 
 
 def listen_for_wakeword(wakeword: str, device_id: Optional[int] = None) -> None:
@@ -20,17 +20,23 @@ def listen_for_wakeword(wakeword: str, device_id: Optional[int] = None) -> None:
     ----------
     wakeword:
         Name of the keyword model to detect.  This should match one of the
-        keywords supported by the underlying engine (e.g. "picovoice",
-        "porcupine", ...).
+        keywords supported by the underlying engine (e.g. ``"picovoice"`` or
+        ``"porcupine"``).
     device_id:
         Optional index of the input device to use.  ``None`` lets the backend
         choose the default system device.
 
     Notes
     -----
-    The function attempts to use `pvporcupine` (Picovoice Porcupine) for
-    detection.  If the dependency or ``pyaudio`` is missing, a warning is
+    If ``pvporcupine`` or ``pyaudio`` are not installed the function prints a
+    warning and returns immediately, effectively disabling wake-word detection.
+    """
 
+    try:
+        import pvporcupine  # type: ignore
+        import pyaudio  # type: ignore
+    except Exception:
+        print("⚠️ Hotword detection unavailable (missing dependencies).", flush=True)
         return
 
     porcupine = pvporcupine.create(keywords=[wakeword])

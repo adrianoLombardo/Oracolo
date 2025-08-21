@@ -17,7 +17,16 @@ from pydantic import ValidationError
 from src.config import Settings
 from src.filters import ProfanityFilter
 from src.audio import record_until_silence, play_and_pulse
-from src.hotword import listen_for_wakeword
+
+# Hotword detection is optional; if the module or its dependencies are missing
+# we fall back to a no-op to keep the application running.
+try:
+    from src.hotword import listen_for_wakeword
+except Exception:
+    def listen_for_wakeword(wakeword: str, device_id: Any = None) -> None:
+        """Fallback wake-word listener that simply logs a warning."""
+        print("⚠️ Hotword detection unavailable.", flush=True)
+
 from src.lights import SacnLight, WledLight, color_from_text
 from src.oracle import transcribe, oracle_answer, synthesize, append_log
 
