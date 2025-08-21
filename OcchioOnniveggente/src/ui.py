@@ -11,9 +11,11 @@ from __future__ import annotations
 
 import subprocess
 import sys
+import threading
 import tkinter as tk
-from tkinter import filedialog, messagebox, ttk
 from pathlib import Path
+from tkinter import filedialog, messagebox, scrolledtext, ttk
+from typing import TextIO
 
 import sounddevice as sd
 import yaml
@@ -96,10 +98,52 @@ class OracoloUI(tk.Tk):
         quit_btn = ttk.Button(self, text="Esci", command=self.destroy)
         quit_btn.pack(pady=10)
 
+        self.viewport = scrolledtext.ScrolledText(
+            self,
+            height=15,
+            bg=bg,
+            fg=fg,
+            insertbackground=fg,
+            state="disabled",
+        )
+        self.viewport.pack(fill="both", expand=True, padx=10, pady=(0, 10))
+
+        self.viewport_menu = tk.Menu(self, tearoff=0)
+        self.viewport_menu.add_command(label="Clear", command=self.clear_viewport)
+        self.viewport.bind("<Button-3>", self._show_viewport_menu)
+        self.bind_all("<Control-l>", lambda _e: self.clear_viewport())
+
     def start_oracolo(self) -> None:
         """Launch the existing CLI main module in a new process."""
 
-        subprocess.Popen([sys.executable, "-m", "src.main"])
+        proc = subprocess.Popen(
+            [sys.executable, "-m", "src.main"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+        if proc.stdout:
+            threading.Thread(
+                target=self._reader_thread, args=(proc.stdout,), daemon=True
+            ).start()
+
+    def _reader_thread(self, stream: TextIO) -> None:
+        for line in iter(stream.readline, ""):
+            self.log(line)
+
+    def log(self, message: str) -> None:
+        self.viewport.configure(state="normal")
+        self.viewport.insert(tk.END, message)
+        self.viewport.see(tk.END)
+        self.viewport.configure(state="disabled")
+
+    def clear_viewport(self) -> None:
+        self.viewport.configure(state="normal")
+        self.viewport.delete("1.0", tk.END)
+        self.viewport.configure(state="disabled")
+
+    def _show_viewport_menu(self, event: tk.Event) -> None:
+        self.viewport_menu.tk_popup(event.x_root, event.y_root)
 
     def _add_documents(self) -> None:
         """Add documents to the knowledge base via ingest script."""
