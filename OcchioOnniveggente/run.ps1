@@ -1,3 +1,4 @@
-# Attiva venv e avvia main.py
+# Attiva venv e avvia l'applicazione (offline di default)
 .\.venv\Scripts\Activate.ps1
-python .\src\main.py
+python .\src\__main__.py @args
+
