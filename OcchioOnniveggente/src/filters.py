@@ -36,6 +36,31 @@ def normalize(text: str) -> str:
     t = re.sub(r"\s+", " ", t)
     return t.strip()
 
+
+def normalize_with_map(text: str) -> tuple[str, list[int]]:
+    chars: list[str] = []
+    mapping: list[int] = []
+    for idx, ch in enumerate(text):
+        n = unidecode(ch).lower().translate(LEET)
+        for c in n:
+            chars.append(" " if c.isspace() else c)
+            mapping.append(idx)
+    norm = "".join(chars)
+    norm_chars: list[str] = []
+    norm_map: list[int] = []
+    prev_space = False
+    for c, i in zip(norm, mapping):
+        if c == " ":
+            if not prev_space:
+                norm_chars.append(" ")
+                norm_map.append(i)
+            prev_space = True
+        else:
+            norm_chars.append(c)
+            norm_map.append(i)
+            prev_space = False
+    return "".join(norm_chars), norm_map
+
 def load_blacklist(path: Path) -> List[str]:
     """
     Carica una blacklist (una voce per riga).
@@ -132,20 +157,18 @@ class ProfanityFilter:
         """
         masked = profanity.censor(text, self.mask_char)
 
-        def repl(m: re.Match) -> str:
-            # sostituisci intera sequenza con asterischi
-            return self.mask_char * len(m.group(0))
+        norm, idx_map = normalize_with_map(masked)
+        chars = list(masked)
 
-        # Applichiamo sui testi normalizzando le posizioni?
-        # Poiché normalizzare cambia gli indici, operiamo direttamente su 'masked'
-        # con pattern case-insensitive su testo non normalizzato.
-        # Per intercettare varianti con accenti/leet abbiamo già normalizzato
-        # in fase di contains_profanity; qui applichiamo comunque le stesse regex
-        # al testo originale (case-insensitive) per coprire i casi più comuni.
+        def apply_patterns(patterns: Iterable[re.Pattern]) -> None:
+            nonlocal chars
+            for p in patterns:
+                for m in p.finditer(norm):
+                    start = idx_map[m.start()]
+                    end = idx_map[m.end() - 1] + 1
+                    chars[start:end] = self.mask_char * (end - start)
 
-        for p in self.it_patterns:
-            masked = p.sub(repl, masked)
-        for p in self.en_patterns:
-            masked = p.sub(repl, masked)
+        apply_patterns(self.it_patterns)
+        apply_patterns(self.en_patterns)
 
-        return masked
+        return "".join(chars)
