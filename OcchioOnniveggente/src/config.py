@@ -71,6 +71,7 @@ class PaletteItem(BaseModel):
 
 class Settings(BaseModel):
     debug: bool = False
+    wakeword: Optional[str] = None
     openai: OpenAIConfig = OpenAIConfig()
     audio: AudioConfig = AudioConfig()
     recording: RecordingConfig = RecordingConfig()
