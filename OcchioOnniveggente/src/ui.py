@@ -23,8 +23,17 @@ from pathlib import Path
 import copy
 from typing import Any, Tuple
 
+import asyncio
+import json
+import queue
+
 import sounddevice as sd
 import yaml
+import numpy as np
+import websockets
+
+WS_URL = os.getenv("ORACOLO_WS_URL", "ws://localhost:8765")
+SR = 24_000
 
 # opzionale: miglior compatibilità PNG con fallback
 try:
@@ -100,6 +109,133 @@ def routed_save(base_now: dict, local_now: dict, merged_new: dict, root: Path) -
     )
 
 
+# ------------------------- Realtime WS client ---------------------------- #
+
+
+class RealtimeWSClient:
+    """Gestisce la connessione WebSocket realtime con audio bidirezionale."""
+
+    def __init__(
+        self,
+        url: str,
+        sr: int,
+        on_partial,
+        on_answer,
+    ) -> None:
+        self.url = url
+        self.sr = sr
+        self.on_partial = on_partial
+        self.on_answer = on_answer
+        self.send_q: "queue.Queue[bytes]" = queue.Queue()
+        self.audio_q: "queue.Queue[bytes]" = queue.Queue()
+        self.state: dict[str, Any] = {"tts_playing": False, "barge_sent": False}
+        self.loop: asyncio.AbstractEventLoop | None = None
+        self.thread: threading.Thread | None = None
+        self.ws = None
+        self.stop_event: asyncio.Event | None = None
+
+    # ------------------------- main runtime ------------------------- #
+    async def _mic_worker(self) -> None:
+        assert self.ws is not None and self.stop_event is not None
+        loop = asyncio.get_running_loop()
+
+        def callback(indata, frames, time_info, status) -> None:  # type: ignore[override]
+            data = bytes(indata)
+            self.send_q.put_nowait(data)
+            if self.state.get("tts_playing") and not self.state.get("barge_sent"):
+                samples = np.frombuffer(data, dtype=np.int16).astype(np.float32)
+                level = float(np.sqrt(np.mean(samples ** 2)))
+                if level > 500:
+                    self.state["barge_sent"] = True
+                    asyncio.run_coroutine_threadsafe(
+                        self.ws.send(json.dumps({"type": "barge_in"})), loop
+                    )
+
+        with sd.RawInputStream(
+            samplerate=self.sr, channels=1, dtype="int16", callback=callback
+        ):
+            while not self.stop_event.is_set():
+                await asyncio.sleep(0.1)
+
+    async def _sender(self) -> None:
+        assert self.ws is not None and self.stop_event is not None
+        while not self.stop_event.is_set():
+            data = await asyncio.get_running_loop().run_in_executor(None, self.send_q.get)
+            await self.ws.send(data)
+
+    async def _receiver(self) -> None:
+        assert self.ws is not None and self.stop_event is not None
+        async for msg in self.ws:
+            if isinstance(msg, bytes):
+                self.audio_q.put_nowait(msg)
+                continue
+            try:
+                data = json.loads(msg)
+            except json.JSONDecodeError:
+                continue
+            kind = data.get("type")
+            if kind == "partial":
+                self.on_partial(data.get("text", ""))
+            elif kind == "answer":
+                self.on_answer(data.get("text", ""))
+            if self.stop_event.is_set():
+                break
+
+    async def _player(self) -> None:
+        assert self.stop_event is not None
+
+        def callback(outdata, frames, time_info, status) -> None:  # type: ignore[override]
+            try:
+                chunk = self.audio_q.get_nowait()
+                outdata[:] = chunk
+                self.state["tts_playing"] = True
+            except queue.Empty:
+                outdata.fill(0)
+                self.state["tts_playing"] = False
+                self.state["barge_sent"] = False
+
+        with sd.RawOutputStream(
+            samplerate=self.sr, channels=1, dtype="int16", callback=callback
+        ):
+            while not self.stop_event.is_set():
+                await asyncio.sleep(0.1)
+
+    async def _run(self) -> None:
+        self.stop_event = asyncio.Event()
+        async with websockets.connect(self.url) as ws:
+            self.ws = ws
+            tasks = [
+                asyncio.create_task(self._mic_worker()),
+                asyncio.create_task(self._sender()),
+                asyncio.create_task(self._receiver()),
+                asyncio.create_task(self._player()),
+            ]
+            await self.stop_event.wait()
+            for t in tasks:
+                t.cancel()
+
+    def start(self) -> None:
+        if self.thread and self.thread.is_alive():
+            return
+        self.loop = asyncio.new_event_loop()
+        self.thread = threading.Thread(
+            target=self.loop.run_until_complete, args=(self._run(),), daemon=True
+        )
+        self.thread.start()
+
+    def stop(self) -> None:
+        if not self.loop:
+            return
+        if self.stop_event is not None:
+            self.loop.call_soon_threadsafe(self.stop_event.set)
+        if self.ws is not None:
+            asyncio.run_coroutine_threadsafe(self.ws.close(), self.loop)
+        if self.thread and self.thread.is_alive():
+            self.thread.join(timeout=1)
+        self.thread = None
+        self.loop = None
+
+
 # ------------------------------- UI class -------------------------------- #
 class OracoloUI(tk.Tk):
     """Interfaccia grafica per l'Oracolo."""
@@ -173,6 +309,9 @@ class OracoloUI(tk.Tk):
         self._reader_thread: threading.Thread | None = None
         self._stop_reader = threading.Event()
 
+        # client realtime WebSocket
+        self.ws_client: RealtimeWSClient | None = None
+
         # menu + layout
         self._build_menubar()
         self._build_layout()
@@ -221,8 +360,12 @@ class OracoloUI(tk.Tk):
         bar.pack(fill="x", padx=16, pady=(0, 8))
         self.start_btn = ttk.Button(bar, text="Avvia", command=self.start_oracolo)
         self.stop_btn = ttk.Button(bar, text="Ferma", command=self.stop_oracolo, state="disabled")
+        self.ws_start_btn = ttk.Button(bar, text="Avvia WS", command=self.start_realtime)
+        self.ws_stop_btn = ttk.Button(bar, text="Ferma WS", command=self.stop_realtime, state="disabled")
         self.start_btn.pack(side="left", padx=(0, 8))
         self.stop_btn.pack(side="left")
+        self.ws_start_btn.pack(side="left", padx=(8, 8))
+        self.ws_stop_btn.pack(side="left")
 
         self.status_var = tk.StringVar(value="🟡 In attesa")
         ttk.Label(bar, textvariable=self.status_var).pack(side="right")
@@ -646,6 +789,36 @@ class OracoloUI(tk.Tk):
                 pass
             self._reader_thread = None
 
+    # ----------------------- Realtime WS control ------------------------- #
+
+    def start_realtime(self) -> None:
+        if self.ws_client is not None:
+            messagebox.showinfo("Realtime", "Sessione già attiva.")
+            return
+        self.ws_client = RealtimeWSClient(
+            WS_URL,
+            SR,
+            on_partial=lambda text: self.after(0, self._append_log, f"… {text}\n"),
+            on_answer=lambda text: self.after(0, self._append_log, f"🔮 {text}\n"),
+        )
+        try:
+            self.ws_client.start()
+            self.ws_start_btn.configure(state="disabled")
+            self.ws_stop_btn.configure(state="normal")
+        except Exception as e:
+            messagebox.showerror("Realtime", f"Impossibile avviare il WS: {e}")
+            self.ws_client = None
+
+    def stop_realtime(self) -> None:
+        if self.ws_client is None:
+            return
+        try:
+            self.ws_client.stop()
+        finally:
+            self.ws_client = None
+            self.ws_start_btn.configure(state="normal")
+            self.ws_stop_btn.configure(state="disabled")
+
     def _poll_process(self) -> None:
         if self.proc is not None:
             if self.proc.poll() is None:
@@ -663,6 +836,7 @@ class OracoloUI(tk.Tk):
     def _on_close(self) -> None:
         try:
             self.stop_oracolo()
+            self.stop_realtime()
         finally:
             self.destroy()
 
