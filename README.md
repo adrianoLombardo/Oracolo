@@ -27,9 +27,7 @@ e modificare i parametri di illuminazione (Art-Net/sACN o WLED).
 
 ## Modalità realtime
 
-È disponibile un client WebSocket sperimentale che trasmette audio PCM dal
-microfono e riceve trascrizioni parziali e risposta TTS a flusso continuo. Dal
-repository "OcchioOnniveggente" eseguire:
+
 
 ```bash
 python -m src.realtime_oracolo
