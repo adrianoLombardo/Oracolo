@@ -29,6 +29,11 @@ class OracoloUI(tk.Tk):
         self.title("Occhio Onniveggente")
         self.option_add("*Font", ("Consolas", 12))
 
+        # Process management
+        self.proc: subprocess.Popen[str] | None = None
+        self._reader: threading.Thread | None = None
+        self._stop_event = threading.Event()
+
         # Futuristic dark theme
         bg = "#000000"
         fg = "#00ffcc"
@@ -113,7 +118,7 @@ class OracoloUI(tk.Tk):
         start_btn.pack(pady=10)
 
         quit_btn = ttk.Button(
-            self, text="Esci", command=self.destroy, style="Cmd.TButton"
+            self, text="Esci", command=self.close, style="Cmd.TButton"
         )
         quit_btn.pack(pady=10)
 
@@ -132,23 +137,51 @@ class OracoloUI(tk.Tk):
         self.viewport.bind("<Button-3>", self._show_viewport_menu)
         self.bind_all("<Control-l>", lambda _e: self.clear_viewport())
 
+        # Ensure cleanup on window close
+        self.protocol("WM_DELETE_WINDOW", self.close)
+
     def start_oracolo(self) -> None:
         """Launch the existing CLI main module in a new process."""
+        if self.proc and self.proc.poll() is None:
+            return
 
-        proc = subprocess.Popen(
+        self._stop_event.clear()
+        self.proc = subprocess.Popen(
             [sys.executable, "-m", "src.main"],
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
+            bufsize=1,
         )
-        if proc.stdout:
-            threading.Thread(
-                target=self._reader_thread, args=(proc.stdout,), daemon=True
-            ).start()
+        if self.proc.stdout:
+            self._reader = threading.Thread(
+                target=self._reader_thread, args=(self.proc.stdout,), daemon=True
+            )
+            self._reader.start()
 
     def _reader_thread(self, stream: TextIO) -> None:
         for line in iter(stream.readline, ""):
+            if self._stop_event.is_set():
+                break
             self.log(line)
+        stream.close()
+        self._reader = None
+        self.proc = None
+
+    def close(self) -> None:
+        """Terminate child process and close the UI."""
+
+        self._stop_event.set()
+        if self.proc and self.proc.poll() is None:
+            self.proc.terminate()
+            try:
+                self.proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                self.proc.kill()
+            self.proc = None
+        if self._reader and self._reader.is_alive():
+            self._reader.join(timeout=1)
+        self.destroy()
 
     def log(self, message: str) -> None:
         self.viewport.configure(state="normal")
