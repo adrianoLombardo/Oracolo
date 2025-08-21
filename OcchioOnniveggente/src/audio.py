@@ -97,45 +97,49 @@ def record_until_silence(
     if input_device_id is not None:
         stream_kwargs["device"] = input_device_id
 
-    with sd.InputStream(**stream_kwargs) as stream:
-        while total_ms < MAX_MS:
-            audio_block, _ = stream.read(frame_samples)
-            block = audio_block[:, 0]
-            total_ms += FRAME_MS
+    try:
+        with sd.InputStream(**stream_kwargs) as stream:
+            while total_ms < MAX_MS:
+                audio_block, _ = stream.read(frame_samples)
+                block = audio_block[:, 0]
+                total_ms += FRAME_MS
 
-            if not started and len(noise_rms_history) < noise_frames_needed:
-                noise_rms_history.append(rms(block))
+                if not started and len(noise_rms_history) < noise_frames_needed:
+                    noise_rms_history.append(rms(block))
 
-            noise_floor = np.median(noise_rms_history) if noise_rms_history else 0.003
-            start_thresh = max(noise_floor * START_MULT, BASE_START)
-            end_thresh = max(noise_floor * END_MULT, BASE_END)
+                noise_floor = np.median(noise_rms_history) if noise_rms_history else 0.003
+                start_thresh = max(noise_floor * START_MULT, BASE_START)
+                end_thresh = max(noise_floor * END_MULT, BASE_END)
 
-            level = rms(block)
-            if debug and total_ms % 300 == 0 and not started:
-                print(
-                    f"   [DBG] level={level:.4f} start_th={start_thresh:.4f} noise={noise_floor:.4f}"
-                )
+                level = rms(block)
+                if debug and total_ms % 300 == 0 and not started:
+                    print(
+                        f"   [DBG] level={level:.4f} start_th={start_thresh:.4f} noise={noise_floor:.4f}"
+                    )
 
-            if not started:
-                preroll.append(block.copy())
-                if level >= start_thresh:
-                    speech_streak += FRAME_MS
-                    if speech_streak >= START_MS:
-                        started = True
-                        if preroll:
-                            recorded_blocks.extend([b.copy() for b in preroll])
-                        recorded_blocks.append(block.copy())
+                if not started:
+                    preroll.append(block.copy())
+                    if level >= start_thresh:
+                        speech_streak += FRAME_MS
+                        if speech_streak >= START_MS:
+                            started = True
+                            if preroll:
+                                recorded_blocks.extend([b.copy() for b in preroll])
+                            recorded_blocks.append(block.copy())
+                            silence_streak = 0
+                    else:
+                        speech_streak = 0
+                else:
+                    recorded_blocks.append(block.copy())
+                    if level < end_thresh:
+                        silence_streak += FRAME_MS
+                        if silence_streak >= END_MS:
+                            break
+                    else:
                         silence_streak = 0
-                else:
-                    speech_streak = 0
-            else:
-                recorded_blocks.append(block.copy())
-                if level < end_thresh:
-                    silence_streak += FRAME_MS
-                    if silence_streak >= END_MS:
-                        break
-                else:
-                    silence_streak = 0
+    except sd.PortAudioError as e:
+        print(f"⚠️ Microfono non disponibile: {e}")
+        return False
 
     if not recorded_blocks:
         print("😴 Silenzio rilevato. Resto in attesa.")
@@ -193,7 +197,11 @@ def play_and_pulse(
 
     t = threading.Thread(target=worker, daemon=True)
     t.start()
-    sd.play(y, sr, blocking=True, device=output_device_id)
-    stop = True
-    t.join()
+    try:
+        sd.play(y, sr, blocking=True, device=output_device_id)
+    except sd.PortAudioError as e:
+        print(f"⚠️ Impossibile riprodurre audio: {e}")
+    finally:
+        stop = True
+        t.join()
 

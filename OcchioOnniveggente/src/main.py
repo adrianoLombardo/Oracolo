@@ -190,7 +190,8 @@ def main() -> None:
                 input_device_id=in_dev,
             )
             if not ok:
-                # nessun parlato: in UI restiamo dormienti
+                print("⚠️ Registrazione audio non riuscita, riprovo tra 2s…", flush=True)
+                time.sleep(2)
                 continue
 
             # 2) Trascrizione + lingua
