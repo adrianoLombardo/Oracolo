@@ -10,7 +10,7 @@
 from __future__ import annotations
 import re
 from pathlib import Path
-from typing import Iterable, List
+from typing import Iterable, List, Tuple
 from unidecode import unidecode
 from better_profanity import profanity
 
@@ -35,6 +35,41 @@ def normalize(text: str) -> str:
     t = t.translate(LEET)
     t = re.sub(r"\s+", " ", t)
     return t.strip()
+
+
+def normalize_with_mapping(text: str) -> Tuple[str, List[int]]:
+    """Normalize text like :func:`normalize` but also return an index map.
+
+    The returned tuple is ``(normalized_text, mapping)`` where ``mapping`` maps
+    each character index of ``normalized_text`` back to the corresponding index
+    in the original ``text``.
+    """
+    out_chars: List[str] = []
+    mapping: List[int] = []
+    prev_space = True  # to mimic ``strip`` + collapse of leading spaces
+
+    for i, ch in enumerate(text):
+        # Apply the same normalisation steps char by char
+        for n_ch in unidecode(ch):
+            n_ch = n_ch.lower()
+            n_ch = n_ch.translate(LEET)
+
+            if n_ch.isspace():
+                if not prev_space:
+                    out_chars.append(" ")
+                    mapping.append(i)
+                prev_space = True
+            else:
+                out_chars.append(n_ch)
+                mapping.append(i)
+                prev_space = False
+
+    # Remove trailing space if present (``strip`` behaviour)
+    if out_chars and out_chars[-1] == " ":
+        out_chars.pop()
+        mapping.pop()
+
+    return "".join(out_chars), mapping
 
 def load_blacklist(path: Path) -> List[str]:
     """
@@ -132,20 +167,17 @@ class ProfanityFilter:
         """
         masked = profanity.censor(text, self.mask_char)
 
-        def repl(m: re.Match) -> str:
-            # sostituisci intera sequenza con asterischi
-            return self.mask_char * len(m.group(0))
+        norm, mapping = normalize_with_mapping(masked)
+        masked_chars = list(masked)
 
-        # Applichiamo sui testi normalizzando le posizioni?
-        # Poiché normalizzare cambia gli indici, operiamo direttamente su 'masked'
-        # con pattern case-insensitive su testo non normalizzato.
-        # Per intercettare varianti con accenti/leet abbiamo già normalizzato
-        # in fase di contains_profanity; qui applichiamo comunque le stesse regex
-        # al testo originale (case-insensitive) per coprire i casi più comuni.
+        def apply(pattern: re.Pattern) -> None:
+            for m in pattern.finditer(norm):
+                start, end = m.span()
+                s = mapping[start]
+                e = mapping[end - 1] + 1
+                masked_chars[s:e] = self.mask_char * (e - s)
 
-        for p in self.it_patterns:
-            masked = p.sub(repl, masked)
-        for p in self.en_patterns:
-            masked = p.sub(repl, masked)
+        for p in self.it_patterns + self.en_patterns:
+            apply(p)
 
-        return masked
+        return "".join(masked_chars)
