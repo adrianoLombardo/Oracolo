@@ -11,17 +11,6 @@ run without hotword support.
 
 from typing import Optional
 
-import struct
-
-_warned = False
-try:  # pragma: no cover - optional dependency
-    import pvporcupine
-    import pyaudio
-    _PORCUPINE_AVAILABLE = True
-except Exception:  # pragma: no cover - handled gracefully
-    pvporcupine = None  # type: ignore
-    pyaudio = None  # type: ignore
-    _PORCUPINE_AVAILABLE = False
 
 
 def listen_for_wakeword(wakeword: str, device_id: Optional[int] = None) -> None:
@@ -41,17 +30,7 @@ def listen_for_wakeword(wakeword: str, device_id: Optional[int] = None) -> None:
     -----
     The function attempts to use `pvporcupine` (Picovoice Porcupine) for
     detection.  If the dependency or ``pyaudio`` is missing, a warning is
-    printed (only once) and the function returns immediately without waiting.
-    """
 
-    global _warned
-    if not _PORCUPINE_AVAILABLE:
-        if not _warned:
-            print(
-                "⚠️ Wakeword engine not available (install pvporcupine and pyaudio), continuing without hotword.",
-                flush=True,
-            )
-            _warned = True
         return
 
     porcupine = pvporcupine.create(keywords=[wakeword])

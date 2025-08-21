@@ -95,7 +95,6 @@ def main() -> None:
     args = ap.parse_args()
 
     load_dotenv()
-    client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
     cfg_path = Path("settings.yaml")
     if cfg_path.exists():
@@ -134,6 +133,8 @@ def main() -> None:
     LLM_MODEL = SET.openai.llm_model
     TTS_MODEL = SET.openai.tts_model
     TTS_VOICE = SET.openai.tts_voice
+    api_key = SET.openai.api_key or os.environ.get("OPENAI_API_KEY")
+    client = OpenAI(api_key=api_key)
     ORACLE_SYSTEM = SET.oracle_system
 
     # Filtro / palette / luci

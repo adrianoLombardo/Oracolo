@@ -202,6 +202,7 @@ class OracoloUI(tk.Tk):
         settings_menu.add_command(label="Audio…", command=self._open_audio_dialog)
         settings_menu.add_command(label="Recording…", command=self._open_recording_dialog)
         settings_menu.add_command(label="Luci…", command=self._open_lighting_dialog)
+        settings_menu.add_command(label="OpenAI…", command=self._open_openai_dialog)
         settings_menu.add_separator()
         settings_menu.add_command(label="Salva", command=self.save_settings)
         menubar.add_cascade(label="Impostazioni", menu=settings_menu)
@@ -465,6 +466,38 @@ class OracoloUI(tk.Tk):
             win.destroy()
 
         ttk.Button(win, text="OK", command=on_ok).grid(row=r, column=0, columnspan=2, pady=10)
+
+    def _open_openai_dialog(self) -> None:
+        win = tk.Toplevel(self); win.title("OpenAI"); win.configure(bg=self._bg)
+
+        openai_conf = self.settings.setdefault("openai", {})
+        api_var = tk.StringVar(value=openai_conf.get("api_key", ""))
+        stt_var = tk.StringVar(value=openai_conf.get("stt_model", ""))
+        llm_var = tk.StringVar(value=openai_conf.get("llm_model", ""))
+        tts_model_var = tk.StringVar(value=openai_conf.get("tts_model", ""))
+        tts_voice_var = tk.StringVar(value=openai_conf.get("tts_voice", ""))
+
+        rows = [
+            ("API key", api_var),
+            ("STT model", stt_var),
+            ("LLM model", llm_var),
+            ("TTS model", tts_model_var),
+            ("TTS voice", tts_voice_var),
+        ]
+        for i, (lab, var) in enumerate(rows):
+            tk.Label(win, text=lab, fg=self._fg, bg=self._bg).grid(row=i, column=0, padx=6, pady=6, sticky="e")
+            show = "*" if lab == "API key" else None
+            tk.Entry(win, textvariable=var, show=show, width=30).grid(row=i, column=1, padx=6, pady=6, sticky="w")
+
+        def on_ok() -> None:
+            openai_conf["api_key"] = api_var.get().strip()
+            openai_conf["stt_model"] = stt_var.get().strip()
+            openai_conf["llm_model"] = llm_var.get().strip()
+            openai_conf["tts_model"] = tts_model_var.get().strip()
+            openai_conf["tts_voice"] = tts_voice_var.get().strip()
+            win.destroy()
+
+        ttk.Button(win, text="OK", command=on_ok).grid(row=len(rows), column=0, columnspan=2, pady=10)
 
     def _open_lighting_dialog(self) -> None:
         win = tk.Toplevel(self); win.title("Luci"); win.configure(bg=self._bg)
