@@ -33,6 +33,26 @@ openai:
 Se ad esempio `audio.sample_rate` contiene una stringa (`"ventiquattromila"`) invece di un
 numero, Pydantic segnalerà `Input should be a valid integer` e userà `24000`.
 
+## DataBase dei documenti
+
+I testi consultati dall'Oracolo vanno inseriti nella cartella `DataBase/` alla radice del
+progetto. Dopo aver aggiunto o rimosso file, esegui lo script di ingestione per
+rigenerare l'indice:
+
+```bash
+python scripts/ingest_docs.py --add DataBase/nuovo_file.txt
+python scripts/ingest_docs.py --remove DataBase/vecchio_file.txt
+```
+
+Puoi anche indicizzare l'intera cartella in un'unica volta:
+
+```bash
+python scripts/ingest_docs.py --add DataBase
+```
+
+Rieseguendo lo script dopo ogni modifica l'indice viene aggiornato con i contenuti
+presenti in `DataBase/`.
+
 ## Test
 
 Per eseguire i test installa le dipendenze e lancia `pytest`:

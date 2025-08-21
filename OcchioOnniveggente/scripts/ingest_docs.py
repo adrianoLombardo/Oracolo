@@ -6,7 +6,15 @@ import logging
 from pathlib import Path
 from typing import Iterable, List
 
+from src.config import Settings
+
 logging.basicConfig(level=logging.INFO)
+
+
+try:
+    SET = Settings.model_validate_yaml(Path("settings.yaml"))
+except Exception:  # pragma: no cover - fallback to defaults
+    SET = Settings()
 
 
 def _gather_files(paths: Iterable[str]) -> List[Path]:
@@ -24,14 +32,14 @@ def _gather_files(paths: Iterable[str]) -> List[Path]:
     return files
 
 
-def _load_db():
+def _load_db(path: str) -> object:
     module = importlib.import_module("documentdb")
     DocumentDB = getattr(module, "DocumentDB")
-    return DocumentDB()
+    return DocumentDB(path)
 
 
-def _add(paths: Iterable[str]) -> None:
-    db = _load_db()
+def _add(paths: Iterable[str], docstore_path: str) -> None:
+    db = _load_db(docstore_path)
     files = _gather_files(paths)
     documents = []
     for file in files:
@@ -44,8 +52,8 @@ def _add(paths: Iterable[str]) -> None:
     logging.info("Indexed %d documents", len(documents))
 
 
-def _remove(paths: Iterable[str]) -> None:
-    db = _load_db()
+def _remove(paths: Iterable[str], docstore_path: str) -> None:
+    db = _load_db(docstore_path)
     files = _gather_files(paths)
     ids = [str(file) for file in files]
     if hasattr(db, "delete_documents"):
@@ -59,15 +67,20 @@ def _remove(paths: Iterable[str]) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Ingest or remove documents")
+    parser.add_argument(
+        "--path",
+        default=SET.docstore_path,
+        help="Path to document store (default: settings.yaml docstore_path)",
+    )
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--add", nargs="+", help="Paths of files or directories to index")
     group.add_argument("--remove", nargs="+", help="Paths of files or directories to remove")
     args = parser.parse_args()
 
     if args.add:
-        _add(args.add)
+        _add(args.add, args.path)
     elif args.remove:
-        _remove(args.remove)
+        _remove(args.remove, args.path)
 
 
 if __name__ == "__main__":
