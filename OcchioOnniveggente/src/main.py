@@ -12,6 +12,7 @@ from src.filters import ProfanityFilter
 from src.audio import record_until_silence, play_and_pulse
 from src.lights import SacnLight, WledLight, color_from_text
 from src.oracle import transcribe, oracle_answer, synthesize, append_log
+from src.ai.document_db import DocumentDB
 
 
 def pick_device(spec: Any, kind: str) -> Any:
@@ -97,6 +98,7 @@ def main() -> None:
     TTS_MODEL = SET.openai.tts_model
     TTS_VOICE = SET.openai.tts_voice
     ORACLE_SYSTEM = SET.oracle_system
+    db = DocumentDB(SET.docstore_path)
 
     FILTER_MODE = SET.filter.mode
     PALETTES = {k: v.model_dump() for k, v in SET.palette_keywords.items()}
@@ -151,7 +153,8 @@ def main() -> None:
                     q = PROF.mask(q)
                     print("⚠️ Testo filtrato:", q)
 
-            a = oracle_answer(q, lang or "it", client, LLM_MODEL, ORACLE_SYSTEM)
+            context = db.search(q, SET.retrieval_top_k)
+            a = oracle_answer(q, lang or "it", context, client, LLM_MODEL, ORACLE_SYSTEM)
 
             if PROF.contains_profanity(a):
                 if FILTER_MODE == "block":
