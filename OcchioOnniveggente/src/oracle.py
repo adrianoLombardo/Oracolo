@@ -1,16 +1,14 @@
-# src/oracle.py
 from __future__ import annotations
 
 import re
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Tuple, Any, Optional
+from typing import Tuple
 
 import openai
 from langdetect import DetectorFactory, detect
 
-# determinismo per langdetect
 DetectorFactory.seed = 42
 
 _IT_SW = {
@@ -44,24 +42,23 @@ def _score_lang(text: str, lang: str, *, debug: bool = False) -> float:
     score = coverage + bonus + length_bonus
     if debug:
         short = (text[:80] + "…") if len(text) > 80 else text
-        print(f"   [DBG] {lang.upper()} score={score:.3f} text='{short}'", flush=True)
+        print(f"   [DBG] {lang.upper()} score={score:.3f} text='{short}'")
     return score
 
 
 def transcribe(path: Path, client, stt_model: str, *, debug: bool = False) -> Tuple[str, str]:
-    """Trascrive il file audio (auto/IT/EN) e sceglie la lingua migliore."""
     def _call_transcription(**kwargs) -> str:
         for _ in range(3):
             try:
                 with open(path, "rb") as f:
                     tx = client.audio.transcriptions.create(model=stt_model, file=f, **kwargs)
-                return (getattr(tx, "text", "") or "").strip()
-            except (openai.APIError, openai.RateLimitError, openai.APIConnectionError, openai.BadRequestError, Exception) as e:
-                print(f"Errore OpenAI: {e}", flush=True)
+                return (tx.text or "").strip()
+            except openai.OpenAIError as e:
+                print(f"Errore OpenAI: {e}")
                 time.sleep(1)
         return ""
 
-    print("🧠 Trascrizione (auto)…", flush=True)
+    print("🧠 Trascrizione (auto)…")
     text_auto = _call_transcription(
         prompt=(
             "Language is either Italian or English. Focus on neuroscience, "
@@ -70,7 +67,7 @@ def transcribe(path: Path, client, stt_model: str, *, debug: bool = False) -> Tu
         )
     )
 
-    print("↻ Trascrizione forzata IT…", flush=True)
+    print("↻ Trascrizione forzata IT…")
     text_it = _call_transcription(
         language="it",
         prompt=(
@@ -79,7 +76,7 @@ def transcribe(path: Path, client, stt_model: str, *, debug: bool = False) -> Tu
         ),
     )
 
-    print("↻ Trascrizione forzata EN…", flush=True)
+    print("↻ Trascrizione forzata EN…")
     text_en = _call_transcription(
         language="en",
         prompt=(
@@ -101,111 +98,51 @@ def transcribe(path: Path, client, stt_model: str, *, debug: bool = False) -> Tu
         s_en += 0.05
 
     if s_it == 0 and s_en == 0:
-        print("⚠️ Per favore parla in italiano o inglese.", flush=True)
+        print("⚠️ Per favore parla in italiano o inglese.")
         return "", ""
     if s_it >= s_en:
-        print("🌐 Lingua rilevata: IT", flush=True)
+        print("🌐 Lingua rilevata: IT")
         return text_it, "it"
     else:
-        print("🌐 Lingua rilevata: EN", flush=True)
+        print("🌐 Lingua rilevata: EN")
         return text_en, "en"
 
 
-def _normalize_context(context: Any) -> str:
-    """
-    Accetta:
-      - stringa
-      - lista/tupla di stringhe
-      - lista/tupla di dict con chiave 'text' (o simili)
-    Ritorna un blocco testuale unico (tagliato a ~4000 char).
-    """
-    if not context:
-        return ""
-    chunks: list[str] = []
-    if isinstance(context, (list, tuple)):
-        for item in context:
-            if isinstance(item, str):
-                t = item.strip()
-            elif isinstance(item, dict):
-                t = str(item.get("text") or item.get("content") or "").strip()
-            else:
-                t = str(item).strip()
-            if t:
-                chunks.append(t)
-    elif isinstance(context, str):
-        chunks.append(context.strip())
-    else:
-        chunks.append(str(context).strip())
+def oracle_answer(
+    question: str,
+    lang_hint: str,
+    client,
+    llm_model: str,
+    oracle_system: str,
+    history: list[tuple[str, str]] | None = None,
+) -> str:
+    print("✨ Interrogo l’Oracolo…")
+    lang_clause = "Answer in English." if lang_hint == "en" else "Rispondi in italiano."
 
-    joined = "\n\n---\n\n".join(chunks)
-    return joined[:4000]
+    messages = []
+    for q_prev, a_prev in (history or []):
+        messages.append({"role": "user", "content": q_prev})
+        messages.append({"role": "assistant", "content": a_prev})
+    messages.append({"role": "user", "content": question})
 
-
-def _responses_create_safely(client, model: str, messages: list[dict], temperature: Optional[float]):
-    """Chiama Responses API; se 'temperature' non è supportato, ritenta senza."""
-    try:
-        kwargs = {"model": model, "input": messages}
-        if temperature is not None:
-            kwargs["temperature"] = temperature
-        return client.responses.create(**kwargs)
-    except openai.BadRequestError as e:
-        # se il modello non supporta 'temperature', ritenta senza
-        msg = str(e).lower()
-        if "temperature" in msg:
-            return client.responses.create(model=model, input=messages)
-        raise
-
-
-def _chat_create_safely(client, model: str, messages: list[dict], temperature: Optional[float]):
-    """Chiama chat.completions; se 'temperature' non è supportato, ritenta senza."""
-    try:
-        kwargs = {"model": model, "messages": messages}
-        if temperature is not None:
-            kwargs["temperature"] = temperature
-        return client.chat.completions.create(**kwargs)
-    except openai.BadRequestError as e:
-        msg = str(e).lower()
-        if "temperature" in msg:
-            return client.chat.completions.create(model=model, messages=messages)
-        raise
-
-
-def oracle_answer(question, lang, client, model, system, *, context=None, **kwargs):
-    """
-    Genera la risposta dell'Oracolo.
-    - Preferisce Responses API; fallback a chat.completions.
-    - 'context' può essere stringa o lista di frammenti.
-    - Se il modello non supporta 'temperature', la rimuove automaticamente.
-    """
-    ctx = _normalize_context(context)
-    sys_prompt = system if not ctx else f"{system}\n\n[Contesto]\n{ctx}"
-
-    messages = [
-        {"role": "system", "content": sys_prompt},
-        {"role": "user", "content": question},
-    ]
-
-    # Permetti di passare temperature via kwargs, ma gestisci l'errore
-    temperature = kwargs.get("temperature", None)
-
-    # Responses API
-    try:
-        if hasattr(client, "responses"):
-            resp = _responses_create_safely(client, model, messages, temperature)
-            text = (getattr(resp, "output_text", None) or "").strip()
-            if text:
-                return text
-    except (openai.APIError, openai.RateLimitError, openai.APIConnectionError, openai.BadRequestError) as e:
-        print(f"Errore OpenAI (responses): {e}", flush=True)
-
-    # Fallback a chat.completions
-    resp = _chat_create_safely(client, model, messages, temperature)
-    return resp.choices[0].message.content.strip()
+    for _ in range(3):
+        try:
+            resp = client.responses.create(
+                model=llm_model,
+                instructions=(oracle_system + " " + lang_clause),
+                input=messages,
+            )
+            ans = resp.output_text.strip()
+            print(f"🔮 Oracolo: {ans}")
+            return ans
+        except openai.OpenAIError as e:
+            print(f"Errore OpenAI: {e}")
+            time.sleep(1)
+    return ""
 
 
 def synthesize(text: str, out_path: Path, client, tts_model: str, tts_voice: str) -> None:
-    """TTS con streaming su file; fallback a MP3 se 'wav' non è supportato."""
-    print("🎧 Sintesi vocale…", flush=True)
+    print("🎧 Sintesi vocale…")
     out_path.parent.mkdir(parents=True, exist_ok=True)
     for _ in range(3):
         try:
@@ -213,34 +150,32 @@ def synthesize(text: str, out_path: Path, client, tts_model: str, tts_voice: str
                 model=tts_model, voice=tts_voice, input=text, response_format="wav"
             ) as resp:
                 resp.stream_to_file(out_path.as_posix())
-            print(f"✅ Audio → {out_path.name}", flush=True)
+            print(f"✅ Audio → {out_path.name}")
             return
         except TypeError:
-            # Alcuni modelli non accettano response_format: forza MP3
             with client.audio.speech.with_streaming_response.create(
                 model=tts_model, voice=tts_voice, input=text
             ) as resp:
                 if out_path.suffix.lower() != ".mp3":
                     out_path = out_path.with_suffix(".mp3")
                 resp.stream_to_file(out_path.as_posix())
-            print(f"✅ Audio → {out_path.name}", flush=True)
+            print(f"✅ Audio → {out_path.name}")
             return
-        except (openai.APIError, openai.RateLimitError, openai.APIConnectionError, openai.BadRequestError, Exception) as e:
-            print(f"Errore OpenAI: {e}", flush=True)
+        except openai.OpenAIError as e:
+            print(f"Errore OpenAI: {e}")
             time.sleep(1)
-    print("❌ Impossibile sintetizzare l'audio.", flush=True)
+    print("❌ Impossibile sintetizzare l'audio.")
 
 
 def append_log(q: str, a: str, log_path: Path) -> None:
-    """Appende domanda/risposta a CSV con timestamp."""
     log_path.parent.mkdir(parents=True, exist_ok=True)
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
     def clean(s: str) -> str:
-        return (s or "").replace('"', "'")
-
+        return s.replace('"', "'")
     line = f'"{ts}","{clean(q)}","{clean(a)}"\n'
     if not log_path.exists():
         log_path.write_text('"timestamp","question","answer"\n', encoding="utf-8")
     with log_path.open("a", encoding="utf-8") as f:
         f.write(line)
+
+
