@@ -27,11 +27,7 @@ e modificare i parametri di illuminazione (Art-Net/sACN o WLED).
 
 ## Modalità realtime
 
-L'interfaccia grafica offre i pulsanti **Avvia WS** e **Ferma WS** per aprire
-una sessione WebSocket verso il backend realtime. Il microfono viene trasmesso
-in tempo reale e nel log compaiono trascrizioni parziali e risposte TTS.
 
-È inoltre disponibile un client da riga di comando:
 
 ```bash
 python -m src.realtime_oracolo
