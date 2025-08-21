@@ -78,6 +78,8 @@ class Settings(BaseModel):
     lighting: LightingConfig = LightingConfig()
     palette_keywords: Dict[str, PaletteItem] = Field(default_factory=dict)
     oracle_system: str = ""
+    docstore_path: str = "data/docstore"
+    retrieval_top_k: int = 3
 
     @classmethod
     def model_validate_yaml(cls, path: Path) -> "Settings":
