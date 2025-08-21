@@ -3,6 +3,13 @@ from typing import Dict, List, Literal, Optional, Tuple
 
 import yaml
 from pydantic import BaseModel, Field
+class WakeConfig(BaseModel):
+    enabled: bool = True
+    single_turn: bool = True
+    idle_timeout: float = 60.0
+    it_phrases: List[str] = Field(default_factory=lambda: ["ciao oracolo", "ehi oracolo", "salve oracolo", "ciao, oracolo"])
+    en_phrases: List[str] = Field(default_factory=lambda: ["hello oracle", "hey oracle", "hi oracle", "hello, oracle"])
+
 
 
 class OpenAIConfig(BaseModel):
@@ -82,7 +89,8 @@ class Settings(BaseModel):
     oracle_system: str = ""
     docstore_path: str = "data/docstore"
     retrieval_top_k: int = 3
-
+    wake: Optional[WakeConfig] = WakeConfig()
+    
     @classmethod
     def model_validate_yaml(cls, path: Path) -> "Settings":
         """Load settings from a YAML file.
