@@ -53,6 +53,10 @@ python scripts/ingest_docs.py --add DataBase
 Rieseguendo lo script dopo ogni modifica l'indice viene aggiornato con i contenuti
 presenti in `DataBase/`.
 
+Lo script supporta soltanto le opzioni `--add` e `--remove`; eventuali
+argomenti supplementari (ad esempio `--model-dir` o `--video_dir`), eventualmente
+passati da interfacce o wrapper legacy, vengono semplicemente ignorati.
+
 ## Test
 
 Per eseguire i test installa le dipendenze e lancia `pytest`:
