@@ -75,7 +75,10 @@ def main() -> None:
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--add", nargs="+", help="Paths of files or directories to index")
     group.add_argument("--remove", nargs="+", help="Paths of files or directories to remove")
-    args = parser.parse_args()
+    # Tolleranza verso argomenti extra (es. UI legacy che passa --model-dir o simili)
+    args, unknown = parser.parse_known_args()
+    if unknown:
+        logging.warning("Ignoring unknown arguments: %s", " ".join(unknown))
 
     if args.add:
         _add(args.add, args.path)
