@@ -181,5 +181,22 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    import argparse
+    import asyncio
+
+    parser = argparse.ArgumentParser(description="Occhio Onniveggente")
+    parser.add_argument(
+        "--mode",
+        choices=["offline", "realtime"],
+        default="offline",
+        help="Seleziona la modalità (offline o realtime)",
+    )
+    args = parser.parse_args()
+
+    if args.mode == "realtime":
+        from src import realtime_oracolo
+
+        asyncio.run(realtime_oracolo.main())
+    else:
+        main()
 
