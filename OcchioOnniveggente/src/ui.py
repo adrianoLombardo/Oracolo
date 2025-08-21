@@ -49,6 +49,10 @@ class OracoloUI(tk.Tk):
             foreground=[("active", bg)],
         )
 
+        # Style for settings panels hosted in a notebook
+        style.configure("Settings.TFrame", background=bg)
+        style.configure("Settings.TNotebook", background=bg)
+
         # Load settings
         self.settings_path = Path(__file__).resolve().parents[1] / "settings.yaml"
         try:
@@ -95,6 +99,9 @@ class OracoloUI(tk.Tk):
 
         quit_btn = ttk.Button(self, text="Esci", command=self.destroy)
         quit_btn.pack(pady=10)
+
+        # Settings notebook (hidden by default)
+        self._build_settings_pane()
 
     def start_oracolo(self) -> None:
         """Launch the existing CLI main module in a new process."""
@@ -144,112 +151,162 @@ class OracoloUI(tk.Tk):
     def _update_debug(self) -> None:
         self.settings["debug"] = bool(self.debug_var.get())
 
-    def _open_audio_dialog(self) -> None:
-        """Dialog to select audio devices."""
+    def _build_settings_pane(self) -> None:
+        """Create the notebook hosting settings panels."""
 
-        win = tk.Toplevel(self)
-        win.title("Dispositivi audio")
-        win.configure(bg=self._bg)
+        self.settings_pane = ttk.Frame(self, style="Settings.TFrame")
+        self.settings_notebook = ttk.Notebook(
+            self.settings_pane, style="Settings.TNotebook"
+        )
+        self.settings_notebook.pack(fill="both", expand=True)
+
+        self._build_audio_frame()
+        self._build_lighting_frame()
+
+        # Hide initially
+        self.settings_pane.pack_forget()
+
+    def _build_audio_frame(self) -> None:
+        """Create the audio settings panel."""
+
+        self.audio_frame = ttk.Frame(
+            self.settings_notebook, style="Settings.TFrame"
+        )
+        self.settings_notebook.add(self.audio_frame, text="Audio")
 
         devices = sd.query_devices()
         names = [d["name"] for d in devices]
 
         audio = self.settings.setdefault("audio", {})
-        in_var = tk.StringVar(value=audio.get("input_device") or "")
-        out_var = tk.StringVar(value=audio.get("output_device") or "")
+        self.audio_in_var = tk.StringVar(value=audio.get("input_device") or "")
+        self.audio_out_var = tk.StringVar(value=audio.get("output_device") or "")
 
-        tk.Label(win, text="Input", fg=self._fg, bg=self._bg).grid(
+        tk.Label(self.audio_frame, text="Input", fg=self._fg, bg=self._bg).grid(
             row=0, column=0, padx=5, pady=5, sticky="e"
         )
-        tk.OptionMenu(win, in_var, "", *names).grid(row=0, column=1, padx=5, pady=5)
+        tk.OptionMenu(
+            self.audio_frame, self.audio_in_var, self.audio_in_var.get(), "", *names
+        ).grid(row=0, column=1, padx=5, pady=5)
 
-        tk.Label(win, text="Output", fg=self._fg, bg=self._bg).grid(
+        tk.Label(self.audio_frame, text="Output", fg=self._fg, bg=self._bg).grid(
             row=1, column=0, padx=5, pady=5, sticky="e"
         )
-        tk.OptionMenu(win, out_var, "", *names).grid(row=1, column=1, padx=5, pady=5)
+        tk.OptionMenu(
+            self.audio_frame, self.audio_out_var, self.audio_out_var.get(), "", *names
+        ).grid(row=1, column=1, padx=5, pady=5)
 
-        def on_ok() -> None:
-            audio["input_device"] = in_var.get() or None
-            audio["output_device"] = out_var.get() or None
-            win.destroy()
+        self.audio_in_var.trace_add("write", lambda *_: self._apply_audio_settings())
+        self.audio_out_var.trace_add("write", lambda *_: self._apply_audio_settings())
 
-        ttk.Button(win, text="OK", command=on_ok).grid(
-            row=2, column=0, columnspan=2, pady=10
+    def _build_lighting_frame(self) -> None:
+        """Create the lighting settings panel."""
+
+        self.lighting_frame = ttk.Frame(
+            self.settings_notebook, style="Settings.TFrame"
         )
-
-    def _open_lighting_dialog(self) -> None:
-        """Dialog to configure lighting/DMX settings."""
-
-        win = tk.Toplevel(self)
-        win.title("Luci")
-        win.configure(bg=self._bg)
+        self.settings_notebook.add(self.lighting_frame, text="Luci")
 
         lighting = self.settings.setdefault("lighting", {})
-        mode_var = tk.StringVar(value=lighting.get("mode", "sacn"))
+        self.lighting_mode_var = tk.StringVar(value=lighting.get("mode", "sacn"))
 
-        tk.Label(win, text="Modalità", fg=self._fg, bg=self._bg).grid(
+        tk.Label(self.lighting_frame, text="Modalità", fg=self._fg, bg=self._bg).grid(
             row=0, column=0, padx=5, pady=5, sticky="e"
         )
-        tk.OptionMenu(win, mode_var, "sacn", "wled").grid(
-            row=0, column=1, padx=5, pady=5
-        )
+        tk.OptionMenu(
+            self.lighting_frame, self.lighting_mode_var, self.lighting_mode_var.get(),
+            "sacn", "wled"
+        ).grid(row=0, column=1, padx=5, pady=5)
 
-        sacn_frame = tk.Frame(win, bg=self._bg)
         sacn_conf = lighting.setdefault("sacn", {})
-        sacn_ip = tk.StringVar(value=sacn_conf.get("destination_ip", ""))
-        sacn_uni = tk.StringVar(value=str(sacn_conf.get("universe", 1)))
-        tk.Label(sacn_frame, text="IP", fg=self._fg, bg=self._bg).grid(
+        self.sacn_frame = tk.Frame(self.lighting_frame, bg=self._bg)
+        self.sacn_ip_var = tk.StringVar(value=sacn_conf.get("destination_ip", ""))
+        self.sacn_uni_var = tk.StringVar(value=str(sacn_conf.get("universe", 1)))
+        tk.Label(self.sacn_frame, text="IP", fg=self._fg, bg=self._bg).grid(
             row=0, column=0, padx=5, pady=5, sticky="e"
         )
-        tk.Entry(sacn_frame, textvariable=sacn_ip).grid(
+        tk.Entry(self.sacn_frame, textvariable=self.sacn_ip_var).grid(
             row=0, column=1, padx=5, pady=5
         )
-        tk.Label(sacn_frame, text="Universe", fg=self._fg, bg=self._bg).grid(
+        tk.Label(self.sacn_frame, text="Universe", fg=self._fg, bg=self._bg).grid(
             row=1, column=0, padx=5, pady=5, sticky="e"
         )
-        tk.Entry(sacn_frame, textvariable=sacn_uni).grid(
+        tk.Entry(self.sacn_frame, textvariable=self.sacn_uni_var).grid(
             row=1, column=1, padx=5, pady=5
         )
 
-        wled_frame = tk.Frame(win, bg=self._bg)
         wled_conf = lighting.setdefault("wled", {})
-        wled_host = tk.StringVar(value=wled_conf.get("host", ""))
-        tk.Label(wled_frame, text="Host", fg=self._fg, bg=self._bg).grid(
+        self.wled_frame = tk.Frame(self.lighting_frame, bg=self._bg)
+        self.wled_host_var = tk.StringVar(value=wled_conf.get("host", ""))
+        tk.Label(self.wled_frame, text="Host", fg=self._fg, bg=self._bg).grid(
             row=0, column=0, padx=5, pady=5, sticky="e"
         )
-        tk.Entry(wled_frame, textvariable=wled_host).grid(
+        tk.Entry(self.wled_frame, textvariable=self.wled_host_var).grid(
             row=0, column=1, padx=5, pady=5
         )
 
         def update_mode(*_args: object) -> None:
-            sacn_frame.grid_remove()
-            wled_frame.grid_remove()
-            if mode_var.get() == "sacn":
-                sacn_frame.grid(row=1, column=0, columnspan=2, pady=5)
+            self.sacn_frame.grid_remove()
+            self.wled_frame.grid_remove()
+            if self.lighting_mode_var.get() == "sacn":
+                self.sacn_frame.grid(row=1, column=0, columnspan=2, pady=5)
             else:
-                wled_frame.grid(row=1, column=0, columnspan=2, pady=5)
+                self.wled_frame.grid(row=1, column=0, columnspan=2, pady=5)
 
-        mode_var.trace_add("write", update_mode)
+        self.lighting_mode_var.trace_add("write", update_mode)
         update_mode()
 
-        def on_ok() -> None:
-            lighting["mode"] = mode_var.get()
-            sacn_conf["destination_ip"] = sacn_ip.get()
-            try:
-                sacn_conf["universe"] = int(sacn_uni.get())
-            except ValueError:
-                sacn_conf["universe"] = 1
-            wled_conf["host"] = wled_host.get()
-            win.destroy()
+        for var in (
+            self.lighting_mode_var,
+            self.sacn_ip_var,
+            self.sacn_uni_var,
+            self.wled_host_var,
+        ):
+            var.trace_add("write", lambda *_: self._apply_lighting_settings())
 
-        ttk.Button(win, text="OK", command=on_ok).grid(
-            row=2, column=0, columnspan=2, pady=10
-        )
+    def _toggle_panel(self, frame: ttk.Frame) -> None:
+        """Show the settings frame or hide the pane if already selected."""
+
+        if not self.settings_pane.winfo_ismapped():
+            self.settings_pane.pack(fill="x", padx=10, pady=10)
+            self.settings_notebook.select(frame)
+        elif self.settings_notebook.select() == str(frame):
+            self.settings_pane.pack_forget()
+        else:
+            self.settings_notebook.select(frame)
+
+    def _open_audio_dialog(self) -> None:
+        """Toggle visibility of the audio settings panel."""
+
+        self._toggle_panel(self.audio_frame)
+
+    def _open_lighting_dialog(self) -> None:
+        """Toggle visibility of the lighting settings panel."""
+
+        self._toggle_panel(self.lighting_frame)
+
+    def _apply_audio_settings(self) -> None:
+        audio = self.settings.setdefault("audio", {})
+        audio["input_device"] = self.audio_in_var.get() or None
+        audio["output_device"] = self.audio_out_var.get() or None
+
+    def _apply_lighting_settings(self) -> None:
+        lighting = self.settings.setdefault("lighting", {})
+        lighting["mode"] = self.lighting_mode_var.get()
+        sacn_conf = lighting.setdefault("sacn", {})
+        sacn_conf["destination_ip"] = self.sacn_ip_var.get()
+        try:
+            sacn_conf["universe"] = int(self.sacn_uni_var.get())
+        except ValueError:
+            sacn_conf["universe"] = 1
+        wled_conf = lighting.setdefault("wled", {})
+        wled_conf["host"] = self.wled_host_var.get()
 
     def save_settings(self) -> None:
         """Persist settings back to ``settings.yaml``."""
 
         self._update_debug()
+        self._apply_audio_settings()
+        self._apply_lighting_settings()
         with self.settings_path.open("w", encoding="utf-8") as fh:
             yaml.safe_dump(self.settings, fh, allow_unicode=True)
 
