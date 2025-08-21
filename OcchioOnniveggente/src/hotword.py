@@ -12,6 +12,7 @@ run without hotword support.
 from typing import Optional
 
 
+
 def listen_for_wakeword(wakeword: str, device_id: Optional[int] = None) -> None:
     """Block until *wakeword* is detected on the microphone.
 
@@ -29,17 +30,7 @@ def listen_for_wakeword(wakeword: str, device_id: Optional[int] = None) -> None:
     -----
     The function attempts to use `pvporcupine` (Picovoice Porcupine) for
     detection.  If the dependency or ``pyaudio`` is missing, a warning is
-    printed and the function returns immediately without waiting.
-    """
 
-    try:
-        import struct
-        import pvporcupine
-        import pyaudio
-    except Exception:
-        # Hotword detection is optional; gracefully skip if dependencies
-        # are not available in the runtime environment.
-        print("⚠️ Wakeword engine not available, continuing without hotword.", flush=True)
         return
 
     porcupine = pvporcupine.create(keywords=[wakeword])
