@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import re
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Tuple
 
+import openai
 from langdetect import DetectorFactory, detect
 
 DetectorFactory.seed = 42
@@ -45,52 +47,43 @@ def _score_lang(text: str, lang: str, *, debug: bool = False) -> float:
 
 
 def transcribe(path: Path, client, stt_model: str, *, debug: bool = False) -> Tuple[str, str]:
-    try:
-        with open(path, "rb") as f:
-            print("🧠 Trascrizione (auto)…")
-            tx_auto = client.audio.transcriptions.create(
-                model=stt_model,
-                file=f,
-                prompt=(
-                    "Language is either Italian or English. Focus on neuroscience, "
-                    "neuroaesthetics, contemporary art, the universe, and "
-                    "neuroscientific AI. Ignore any other language."
-                ),
-            )
-        text_auto = (tx_auto.text or "").strip()
-    except Exception:
-        text_auto = ""
-    try:
-        with open(path, "rb") as f_it:
-            print("↻ Trascrizione forzata IT…")
-            tx_it = client.audio.transcriptions.create(
-                model=stt_model,
-                file=f_it,
-                language="it",
-                prompt=(
-                    "Lingua: italiano. Dominio: neuroscienze, neuroestetica, "
-                    "arte contemporanea, universo e IA neuroscientifica."
-                ),
-            )
-        text_it = (tx_it.text or "").strip()
-    except Exception:
-        text_it = ""
+    def _call_transcription(**kwargs) -> str:
+        for _ in range(3):
+            try:
+                with open(path, "rb") as f:
+                    tx = client.audio.transcriptions.create(model=stt_model, file=f, **kwargs)
+                return (tx.text or "").strip()
+            except openai.OpenAIError as e:
+                print(f"Errore OpenAI: {e}")
+                time.sleep(1)
+        return ""
 
-    try:
-        with open(path, "rb") as f_en:
-            print("↻ Trascrizione forzata EN…")
-            tx_en = client.audio.transcriptions.create(
-                model=stt_model,
-                file=f_en,
-                language="en",
-                prompt=(
-                    "Language: English. Domain: neuroscience, neuroaesthetics, "
-                    "contemporary art, universe, and neuroscientific AI."
-                ),
-            )
-        text_en = (tx_en.text or "").strip()
-    except Exception:
-        text_en = ""
+    print("🧠 Trascrizione (auto)…")
+    text_auto = _call_transcription(
+        prompt=(
+            "Language is either Italian or English. Focus on neuroscience, "
+            "neuroaesthetics, contemporary art, the universe, and "
+            "neuroscientific AI. Ignore any other language."
+        )
+    )
+
+    print("↻ Trascrizione forzata IT…")
+    text_it = _call_transcription(
+        language="it",
+        prompt=(
+            "Lingua: italiano. Dominio: neuroscienze, neuroestetica, "
+            "arte contemporanea, universo e IA neuroscientifica."
+        ),
+    )
+
+    print("↻ Trascrizione forzata EN…")
+    text_en = _call_transcription(
+        language="en",
+        prompt=(
+            "Language: English. Domain: neuroscience, neuroaesthetics, "
+            "contemporary art, universe, and neuroscientific AI."
+        ),
+    )
 
     s_it = _score_lang(text_it, "it", debug=debug)
     s_en = _score_lang(text_en, "en", debug=debug)
@@ -118,32 +111,46 @@ def transcribe(path: Path, client, stt_model: str, *, debug: bool = False) -> Tu
 def oracle_answer(question: str, lang_hint: str, client, llm_model: str, oracle_system: str) -> str:
     print("✨ Interrogo l’Oracolo…")
     lang_clause = "Answer in English." if lang_hint == "en" else "Rispondi in italiano."
-    resp = client.responses.create(
-        model=llm_model,
-        instructions=(oracle_system + " " + lang_clause),
-        input=[{"role": "user", "content": question}],
-    )
-    ans = resp.output_text.strip()
-    print(f"🔮 Oracolo: {ans}")
-    return ans
+    for _ in range(3):
+        try:
+            resp = client.responses.create(
+                model=llm_model,
+                instructions=(oracle_system + " " + lang_clause),
+                input=[{"role": "user", "content": question}],
+            )
+            ans = resp.output_text.strip()
+            print(f"🔮 Oracolo: {ans}")
+            return ans
+        except openai.OpenAIError as e:
+            print(f"Errore OpenAI: {e}")
+            time.sleep(1)
+    return ""
 
 
 def synthesize(text: str, out_path: Path, client, tts_model: str, tts_voice: str) -> None:
     print("🎧 Sintesi vocale…")
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        with client.audio.speech.with_streaming_response.create(
-            model=tts_model, voice=tts_voice, input=text, response_format="wav"
-        ) as resp:
-            resp.stream_to_file(out_path.as_posix())
-    except TypeError:
-        with client.audio.speech.with_streaming_response.create(
-            model=tts_model, voice=tts_voice, input=text
-        ) as resp:
-            if out_path.suffix.lower() != ".mp3":
-                out_path = out_path.with_suffix(".mp3")
-            resp.stream_to_file(out_path.as_posix())
-    print(f"✅ Audio → {out_path.name}")
+    for _ in range(3):
+        try:
+            with client.audio.speech.with_streaming_response.create(
+                model=tts_model, voice=tts_voice, input=text, response_format="wav"
+            ) as resp:
+                resp.stream_to_file(out_path.as_posix())
+            print(f"✅ Audio → {out_path.name}")
+            return
+        except TypeError:
+            with client.audio.speech.with_streaming_response.create(
+                model=tts_model, voice=tts_voice, input=text
+            ) as resp:
+                if out_path.suffix.lower() != ".mp3":
+                    out_path = out_path.with_suffix(".mp3")
+                resp.stream_to_file(out_path.as_posix())
+            print(f"✅ Audio → {out_path.name}")
+            return
+        except openai.OpenAIError as e:
+            print(f"Errore OpenAI: {e}")
+            time.sleep(1)
+    print("❌ Impossibile sintetizzare l'audio.")
 
 
 def append_log(q: str, a: str, log_path: Path) -> None:
