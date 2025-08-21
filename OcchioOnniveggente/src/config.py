@@ -78,6 +78,23 @@ class Settings(BaseModel):
     lighting: LightingConfig = LightingConfig()
     palette_keywords: Dict[str, PaletteItem] = Field(default_factory=dict)
     oracle_system: str = ""
+    allowed_topics: List[str] = Field(
+        default_factory=lambda: [
+            "neuroscienze",
+            "neuroestetica",
+            "arte contemporanea",
+            "universo",
+            "IA applicata alle neuroscienze",
+        ]
+    )
+    reject_answer_it: str = (
+        "Mi dispiace, posso rispondere solo a domande su neuroscienze, "
+        "neuroestetica, arte contemporanea, universo e IA applicata alle neuroscienze."
+    )
+    reject_answer_en: str = (
+        "I'm sorry, I can only answer questions about neuroscience, "
+        "neuroaesthetics, contemporary art, the universe, and AI applied to neuroscience."
+    )
 
     @classmethod
     def model_validate_yaml(cls, path: Path) -> "Settings":

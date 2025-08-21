@@ -115,12 +115,24 @@ def transcribe(path: Path, client, stt_model: str, *, debug: bool = False) -> Tu
         return text_en, "en"
 
 
-def oracle_answer(question: str, lang_hint: str, client, llm_model: str, oracle_system: str) -> str:
+def oracle_answer(
+    question: str,
+    lang_hint: str,
+    client,
+    llm_model: str,
+    oracle_system: str,
+    allowed_topics: list[str],
+    reject_answer_it: str,
+    reject_answer_en: str,
+) -> str:
     print("✨ Interrogo l’Oracolo…")
     lang_clause = "Answer in English." if lang_hint == "en" else "Rispondi in italiano."
+    reject = reject_answer_en if lang_hint == "en" else reject_answer_it
+    instructions = oracle_system.format(allowed_topics=", ".join(allowed_topics))
+    instructions += f" Il messaggio di rifiuto è: {reject}"
     resp = client.responses.create(
         model=llm_model,
-        instructions=(oracle_system + " " + lang_clause),
+        instructions=(instructions + " " + lang_clause),
         input=[{"role": "user", "content": question}],
     )
     ans = resp.output_text.strip()

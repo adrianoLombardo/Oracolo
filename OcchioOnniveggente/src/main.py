@@ -97,6 +97,9 @@ def main() -> None:
     TTS_MODEL = SET.openai.tts_model
     TTS_VOICE = SET.openai.tts_voice
     ORACLE_SYSTEM = SET.oracle_system
+    ALLOWED_TOPICS = SET.allowed_topics
+    REJECT_IT = SET.reject_answer_it
+    REJECT_EN = SET.reject_answer_en
 
     FILTER_MODE = SET.filter.mode
     PALETTES = {k: v.model_dump() for k, v in SET.palette_keywords.items()}
@@ -141,6 +144,10 @@ def main() -> None:
             if not q:
                 continue
 
+            if not any(t.lower() in q.lower() for t in ALLOWED_TOPICS):
+                print(REJECT_EN if (lang or "it") == "en" else REJECT_IT)
+                continue
+
             if PROF.contains_profanity(q):
                 if FILTER_MODE == "block":
                     print(
@@ -151,7 +158,16 @@ def main() -> None:
                     q = PROF.mask(q)
                     print("⚠️ Testo filtrato:", q)
 
-            a = oracle_answer(q, lang or "it", client, LLM_MODEL, ORACLE_SYSTEM)
+            a = oracle_answer(
+                q,
+                lang or "it",
+                client,
+                LLM_MODEL,
+                ORACLE_SYSTEM,
+                ALLOWED_TOPICS,
+                REJECT_IT,
+                REJECT_EN,
+            )
 
             if PROF.contains_profanity(a):
                 if FILTER_MODE == "block":
