@@ -6,7 +6,7 @@ UI Tkinter per Occhio Onniveggente.
 - Salvataggio "split": debug e audio.(input/output)_device -> settings.local.yaml,
   tutto il resto -> settings.yaml.
 - Menu Documenti: Aggiungi / Rimuovi / Aggiorna indice.
-- Avvio/Stop di src.main in modalità --autostart con log in tempo reale.
+- Avvio/Stop offline (src.main) e Realtime WS con log in tempo reale.
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ from tkinter import filedialog, messagebox, ttk
 from tkinter import scrolledtext
 from pathlib import Path
 import copy
-from typing import Any, Tuple
+from typing import Any
 
 import asyncio
 import json
@@ -35,7 +35,6 @@ import websockets
 WS_URL = os.getenv("ORACOLO_WS_URL", "ws://localhost:8765")
 SR = 24_000
 
-# opzionale: miglior compatibilità PNG con fallback
 try:
     from PIL import Image, ImageTk  # pip install pillow
 except Exception:
@@ -58,7 +57,6 @@ def deep_copy(d: dict) -> dict:
 
 
 def load_settings_pair(root: Path) -> tuple[dict, dict, dict]:
-    """Ritorna (base, local, merged)."""
     base_p = root / "settings.yaml"
     local_p = root / "settings.local.yaml"
 
@@ -75,12 +73,6 @@ def load_settings_pair(root: Path) -> tuple[dict, dict, dict]:
 
 
 def routed_save(base_now: dict, local_now: dict, merged_new: dict, root: Path) -> None:
-    """
-    Salva split:
-      - In settings.local.yaml: debug, audio.input_device, audio.output_device
-      - In settings.yaml: tutto il resto
-    Mantiene eventuali altre chiavi locali preesistenti.
-    """
     local_out = deep_copy(local_now)
     local_out.setdefault("audio", {})
     local_out["debug"] = bool(merged_new.get("debug", local_out.get("debug", False)))
@@ -110,18 +102,10 @@ def routed_save(base_now: dict, local_now: dict, merged_new: dict, root: Path) -
 
 
 # ------------------------- Realtime WS client ---------------------------- #
-
-
 class RealtimeWSClient:
     """Gestisce la connessione WebSocket realtime con audio bidirezionale."""
 
-    def __init__(
-        self,
-        url: str,
-        sr: int,
-        on_partial,
-        on_answer,
-    ) -> None:
+    def __init__(self, url: str, sr: int, on_partial, on_answer) -> None:
         self.url = url
         self.sr = sr
         self.on_partial = on_partial
@@ -134,7 +118,6 @@ class RealtimeWSClient:
         self.ws = None
         self.stop_event: asyncio.Event | None = None
 
-    # ------------------------- main runtime ------------------------- #
     async def _mic_worker(self) -> None:
         assert self.ws is not None and self.stop_event is not None
         loop = asyncio.get_running_loop()
@@ -151,35 +134,41 @@ class RealtimeWSClient:
                         self.ws.send(json.dumps({"type": "barge_in"})), loop
                     )
 
-        with sd.RawInputStream(
-            samplerate=self.sr, channels=1, dtype="int16", callback=callback
-        ):
+        with sd.RawInputStream(samplerate=self.sr, channels=1, dtype="int16", callback=callback):
             while not self.stop_event.is_set():
                 await asyncio.sleep(0.1)
 
     async def _sender(self) -> None:
         assert self.ws is not None and self.stop_event is not None
-        while not self.stop_event.is_set():
-            data = await asyncio.get_running_loop().run_in_executor(None, self.send_q.get)
-            await self.ws.send(data)
+        try:
+            while not self.stop_event.is_set():
+                data = await asyncio.get_running_loop().run_in_executor(None, self.send_q.get)
+                await self.ws.send(data)
+        except (websockets.ConnectionClosed, asyncio.CancelledError):
+            return
 
     async def _receiver(self) -> None:
         assert self.ws is not None and self.stop_event is not None
-        async for msg in self.ws:
-            if isinstance(msg, bytes):
-                self.audio_q.put_nowait(msg)
-                continue
-            try:
-                data = json.loads(msg)
-            except json.JSONDecodeError:
-                continue
-            kind = data.get("type")
-            if kind == "partial":
-                self.on_partial(data.get("text", ""))
-            elif kind == "answer":
-                self.on_answer(data.get("text", ""))
-            if self.stop_event.is_set():
-                break
+        try:
+            async for msg in self.ws:
+                if isinstance(msg, bytes):
+                    self.audio_q.put_nowait(msg)
+                    continue
+                try:
+                    data = json.loads(msg)
+                except json.JSONDecodeError:
+                    continue
+                kind = data.get("type")
+                if kind == "ready":
+                    continue
+                if kind == "partial":
+                    self.on_partial(data.get("text", ""))
+                elif kind == "answer":
+                    self.on_answer(data.get("text", ""))
+                if self.stop_event.is_set():
+                    break
+        except (websockets.ConnectionClosed, asyncio.CancelledError):
+            return
 
     async def _player(self) -> None:
         assert self.stop_event is not None
@@ -187,23 +176,27 @@ class RealtimeWSClient:
         def callback(outdata, frames, time_info, status) -> None:  # type: ignore[override]
             try:
                 chunk = self.audio_q.get_nowait()
-                outdata[:] = chunk
+                n = len(outdata)
+                if len(chunk) >= n:
+                    outdata[:] = chunk[:n]
+                else:
+                    outdata[:len(chunk)] = chunk
+                    outdata[len(chunk):] = b"\x00" * (n - len(chunk))
                 self.state["tts_playing"] = True
             except queue.Empty:
-                outdata.fill(0)
+                outdata[:] = b"\x00" * len(outdata)
                 self.state["tts_playing"] = False
                 self.state["barge_sent"] = False
 
-        with sd.RawOutputStream(
-            samplerate=self.sr, channels=1, dtype="int16", callback=callback
-        ):
+        with sd.RawOutputStream(samplerate=self.sr, channels=1, dtype="int16", callback=callback):
             while not self.stop_event.is_set():
                 await asyncio.sleep(0.1)
 
     async def _run(self) -> None:
         self.stop_event = asyncio.Event()
-        async with websockets.connect(self.url) as ws:
+        async with websockets.connect(self.url, ping_interval=20, ping_timeout=20) as ws:
             self.ws = ws
+        codex/review-project-files-and-websocket-scripts-ag8z2e
             print(
                 f"🔌 Realtime WS → {self.url}  (sr={self.sr}, in={sd.default.device[0]}, out={sd.default.device[1]})",
                 flush=True,
@@ -212,12 +205,29 @@ class RealtimeWSClient:
             try:
                 ready_raw = await ws.recv()
                 if json.loads(ready_raw).get("type") != "ready":
+
+            # handshake
+            await ws.send(json.dumps({"type": "hello", "sr": self.sr, "format": "pcm_s16le", "channels": 1}))
+            try:
+                ready_raw = await asyncio.wait_for(ws.recv(), timeout=10)
+                data = json.loads(ready_raw) if isinstance(ready_raw, str) else {}
+                if data.get("type") != "ready":
+         main
                     print("Handshake non valido", flush=True)
                     return
             except Exception:
                 print("Handshake non valido", flush=True)
                 return
+        codex/review-project-files-and-websocket-scripts-ag8z2e
             print("✅ pronto a ricevere audio", flush=True)
+
+
+            print(
+                f"🔌 Realtime WS → {self.url}  (sr={self.sr}, in={sd.default.device[0]}, out={sd.default.device[1]})",
+                flush=True,
+            )
+
+        main
             tasks = [
                 asyncio.create_task(self._mic_worker()),
                 asyncio.create_task(self._sender()),
@@ -232,9 +242,7 @@ class RealtimeWSClient:
         if self.thread and self.thread.is_alive():
             return
         self.loop = asyncio.new_event_loop()
-        self.thread = threading.Thread(
-            target=self.loop.run_until_complete, args=(self._run(),), daemon=True
-        )
+        self.thread = threading.Thread(target=self.loop.run_until_complete, args=(self._run(),), daemon=True)
         self.thread.start()
 
     def stop(self) -> None:
@@ -259,14 +267,13 @@ class OracoloUI(tk.Tk):
         self.root_dir = Path(__file__).resolve().parents[1]
         self.title("Occhio Onniveggente")
 
-        # --- Icona finestra con fallback robusto (PNG via Tk -> PNG via Pillow -> ICO su Windows) ---
+        # icona
         try:
             logo_png = self.root_dir / "img" / "logo.png"
             if logo_png.exists():
                 try:
                     self.iconphoto(False, tk.PhotoImage(file=str(logo_png)))
                 except tk.TclError:
-                    # fallback via Pillow se disponibile
                     if Image is not None and ImageTk is not None:
                         try:
                             img = Image.open(str(logo_png))
@@ -274,7 +281,6 @@ class OracoloUI(tk.Tk):
                             self.iconphoto(False, icon)
                         except Exception:
                             pass
-            # Prova ICO su Windows se PNG non impostato
             logo_ico = self.root_dir / "img" / "logo.ico"
             if sys.platform.startswith("win") and logo_ico.exists():
                 try:
@@ -282,12 +288,11 @@ class OracoloUI(tk.Tk):
                 except Exception:
                     pass
         except Exception:
-            # mai far crashare l'UI per l'icona
             pass
 
         self.geometry("900x600")
 
-        # tema scuro
+        # tema
         self._bg = "#0f0f0f"
         self._fg = "#00ffe1"
         self._mid = "#161616"
@@ -295,52 +300,32 @@ class OracoloUI(tk.Tk):
 
         style = ttk.Style(self)
         style.theme_use("clam")
-        style.configure(
-            "TButton",
-            background="#1e1e1e",
-            foreground=self._fg,
-            borderwidth=1,
-            focusthickness=3,
-            focuscolor="none",
-            padding=8,
-        )
-        style.map(
-            "TButton",
-            background=[("active", self._fg)],
-            foreground=[("active", self._bg)],
-        )
+        style.configure("TButton", background="#1e1e1e", foreground=self._fg, borderwidth=1, padding=8)
+        style.map("TButton", background=[("active", self._fg)], foreground=[("active", self._bg)])
         style.configure("TLabel", background=self._bg, foreground=self._fg)
         style.configure("TFrame", background=self._bg)
 
-        # root del progetto: .../src/ui.py -> parents[1] = root
         self.root_dir = Path(__file__).resolve().parents[1]
-
-        # carica settings + overlay
         self.base_settings, self.local_settings, self.settings = load_settings_pair(self.root_dir)
 
-        # stato processo + thread logs
+        # processi
         self.proc: subprocess.Popen | None = None
         self._reader_thread: threading.Thread | None = None
         self._stop_reader = threading.Event()
 
-        # client realtime WebSocket
+        # client WS
         self.ws_client: RealtimeWSClient | None = None
 
-        # menu + layout
         self._build_menubar()
         self._build_layout()
 
-        # polling stato processo
         self.after(500, self._poll_process)
-
-        # chiusura sicura
         self.protocol("WM_DELETE_WINDOW", self._on_close)
 
     # --------------------------- Menubar & dialogs ------------------------ #
     def _build_menubar(self) -> None:
         menubar = tk.Menu(self)
 
-        # Documenti (Aggiungi/Rimuovi/Aggiorna indice)
         docs_menu = tk.Menu(menubar, tearoff=0)
         docs_menu.add_command(label="Aggiungi…", command=self._add_documents)
         docs_menu.add_command(label="Rimuovi…", command=self._remove_documents)
@@ -348,7 +333,6 @@ class OracoloUI(tk.Tk):
         docs_menu.add_command(label="Aggiorna indice…", command=self._reindex_documents)
         menubar.add_cascade(label="Documenti", menu=docs_menu)
 
-        # Impostazioni
         settings_menu = tk.Menu(menubar, tearoff=0)
         self.debug_var = tk.BooleanVar(value=bool(self.settings.get("debug", False)))
         settings_menu.add_checkbutton(label="Debug", variable=self.debug_var, command=self._update_debug)
@@ -364,12 +348,10 @@ class OracoloUI(tk.Tk):
 
     # --------------------------- Layout / Widgets ------------------------- #
     def _build_layout(self) -> None:
-        # Header
         header = ttk.Frame(self)
         header.pack(fill="x", padx=16, pady=(12, 8))
         ttk.Label(header, text="Occhio Onniveggente", font=("Helvetica", 18, "bold")).pack(side="left")
 
-        # Barra controlli
         bar = ttk.Frame(self)
         bar.pack(fill="x", padx=16, pady=(0, 8))
         self.start_btn = ttk.Button(bar, text="Avvia", command=self.start_oracolo)
@@ -384,7 +366,6 @@ class OracoloUI(tk.Tk):
         self.status_var = tk.StringVar(value="🟡 In attesa")
         ttk.Label(bar, textvariable=self.status_var).pack(side="right")
 
-        # Viewport log
         log_frame = ttk.Frame(self)
         log_frame.pack(fill="both", expand=True, padx=16, pady=(0, 12))
 
@@ -401,7 +382,6 @@ class OracoloUI(tk.Tk):
         )
         self.log.pack(fill="both", expand=True)
 
-        # Footer
         footer = ttk.Frame(self)
         footer.pack(fill="x", padx=16, pady=(0, 12))
         ttk.Button(footer, text="Esci", command=self._on_close).pack(side="right")
@@ -436,12 +416,7 @@ class OracoloUI(tk.Tk):
             messagebox.showwarning("Documento", "Script di ingest non trovato (scripts/ingest_docs.py).")
             return
         try:
-            # ▶︎ usa il modulo
-            subprocess.run(
-                [sys.executable, "-m", "scripts.ingest_docs", "--add", *paths],
-                check=True,
-                cwd=self.root_dir,
-            )
+            subprocess.run([sys.executable, "-m", "scripts.ingest_docs", "--add", *paths], check=True, cwd=self.root_dir)
             messagebox.showinfo("Successo", "Documenti aggiunti.")
         except subprocess.CalledProcessError as exc:
             messagebox.showerror("Errore", f"Ingest fallito: {exc}")
@@ -459,36 +434,20 @@ class OracoloUI(tk.Tk):
             messagebox.showwarning("Documento", "Script di ingest non trovato (scripts/ingest_docs.py).")
             return
         try:
-            # ▶︎ usa il modulo
-            subprocess.run(
-                [sys.executable, "-m", "scripts.ingest_docs", "--remove", *paths],
-                check=True,
-                cwd=self.root_dir,
-            )
+            subprocess.run([sys.executable, "-m", "scripts.ingest_docs", "--remove", *paths], check=True, cwd=self.root_dir)
             messagebox.showinfo("Successo", "Documenti rimossi.")
         except subprocess.CalledProcessError as exc:
             messagebox.showerror("Errore", f"Rimozione fallita: {exc}")
 
     def _reindex_documents(self) -> None:
-        """Rigenera l'indice della knowledge base (coerente col README: 'Aggiorna indice')."""
         script = self._find_ingest_script()
         if not script:
             messagebox.showwarning("Indice", "Script di ingest non trovato (scripts/ingest_docs.py).")
             return
-
-        tried = (
-            ["--reindex"],
-            ["--rebuild"],
-            ["--refresh"],
-        )
+        tried = (["--reindex"], ["--rebuild"], ["--refresh"])
         for args in tried:
             try:
-                # ▶︎ usa il modulo
-                subprocess.run(
-                    [sys.executable, "-m", "scripts.ingest_docs", *args],
-                    check=True,
-                    cwd=self.root_dir,
-                )
+                subprocess.run([sys.executable, "-m", "scripts.ingest_docs", *args], check=True, cwd=self.root_dir)
                 messagebox.showinfo("Indice", f"Indice aggiornato ({' '.join(args)}).")
                 return
             except subprocess.CalledProcessError:
@@ -717,7 +676,7 @@ class OracoloUI(tk.Tk):
         except Exception as e:
             messagebox.showerror("Impostazioni", f"Errore nel salvataggio: {e}")
 
-    # --------------------------- Start / Stop + logs ----------------------- #
+    # --------------------------- Start / Stop offline ---------------------- #
     def start_oracolo(self) -> None:
         if self.proc and self.proc.poll() is None:
             messagebox.showinfo("Oracolo", "È già in esecuzione.")
@@ -729,7 +688,6 @@ class OracoloUI(tk.Tk):
             env["PYTHONIOENCODING"] = "utf-8"
             env["PYTHONUTF8"] = "1"
 
-            # se debug è False, possiamo attivare --quiet
             use_quiet = not bool(self.settings.get("debug", False))
 
             args = [sys.executable, "-u", "-m", "src.main", "--autostart"]
@@ -739,7 +697,7 @@ class OracoloUI(tk.Tk):
             self.proc = subprocess.Popen(
                 args,
                 cwd=self.root_dir,
-                stdin=subprocess.DEVNULL,            # ⬅️ nessun input (evita blocchi su input())
+                stdin=subprocess.DEVNULL,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
@@ -749,7 +707,7 @@ class OracoloUI(tk.Tk):
                 creationflags=subprocess.CREATE_NO_WINDOW if sys.platform.startswith("win") else 0,
                 env=env,
             )
-            self.status_var.set("🟢 In esecuzione")
+            self.status_var.set("🟢 In esecuzione (offline)")
             self.start_btn.configure(state="disabled")
             self.stop_btn.configure(state="normal")
 
@@ -804,11 +762,21 @@ class OracoloUI(tk.Tk):
             self._reader_thread = None
 
     # ----------------------- Realtime WS control ------------------------- #
-
     def start_realtime(self) -> None:
         if self.ws_client is not None:
             messagebox.showinfo("Realtime", "Sessione già attiva.")
             return
+
+        # applica dispositivi audio da settings come default
+        audio = self.settings.get("audio", {})
+        in_dev = audio.get("input_device", None)
+        out_dev = audio.get("output_device", None)
+        sd.default.device = (in_dev, out_dev)
+
+        self._append_log(
+            f"🔌 Realtime WS → {WS_URL}  (sr={SR}, in={sd.default.device[0]}, out={sd.default.device[1]})\n"
+        )
+
         self.ws_client = RealtimeWSClient(
             WS_URL,
             SR,
@@ -819,6 +787,7 @@ class OracoloUI(tk.Tk):
             self.ws_client.start()
             self.ws_start_btn.configure(state="disabled")
             self.ws_stop_btn.configure(state="normal")
+            self.status_var.set("🟢 In esecuzione (realtime)")
         except Exception as e:
             messagebox.showerror("Realtime", f"Impossibile avviare il WS: {e}")
             self.ws_client = None
@@ -832,16 +801,21 @@ class OracoloUI(tk.Tk):
             self.ws_client = None
             self.ws_start_btn.configure(state="normal")
             self.ws_stop_btn.configure(state="disabled")
+            # Se l'offline non è attivo, torna idle
+            if not (self.proc and self.proc.poll() is None):
+                self.status_var.set("🟡 In attesa")
 
     def _poll_process(self) -> None:
         if self.proc is not None:
             if self.proc.poll() is None:
-                if self.status_var.get() != "🟢 In esecuzione":
-                    self.status_var.set("🟢 In esecuzione")
+                if self.status_var.get() != "🟢 In esecuzione (offline)":
+                    self.status_var.set("🟢 In esecuzione (offline)")
                 self.start_btn.configure(state="disabled")
                 self.stop_btn.configure(state="normal")
             else:
-                self.status_var.set("🟡 In attesa")
+                # non toccare lo stato se realtime è attivo
+                if self.ws_client is None:
+                    self.status_var.set("🟡 In attesa")
                 self.start_btn.configure(state="normal")
                 self.stop_btn.configure(state="disabled")
         self.after(500, self._poll_process)
@@ -855,7 +829,6 @@ class OracoloUI(tk.Tk):
             self.destroy()
 
 
-# ----------------------------- entry point -------------------------------- #
 def main() -> None:
     app = OracoloUI()
     app.mainloop()
@@ -863,3 +836,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

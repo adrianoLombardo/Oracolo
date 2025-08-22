@@ -6,7 +6,11 @@ import sys
 import time
 import wave
 from pathlib import Path
+codex/review-project-files-and-websocket-scripts-ag8z2e
 
+
+from typing import Any, Optional
+ main
 
 import numpy as np
 import websockets
@@ -138,8 +142,11 @@ class RTSession:
             await self.send_partial("…silenzio…")
             return
 
+        codex/review-project-files-and-websocket-scripts-ag8z2e
         print(f"🗣️ {text.strip()}", flush=True)
 
+
+        main
         now = time.time()
         if now > self.active_until:
             self.active_until = 0.0
@@ -200,11 +207,18 @@ async def handler(ws):
         except json.JSONDecodeError:
             await ws.close(code=1002, reason="invalid hello")
             return
+        codex/review-project-files-and-websocket-scripts-ag8z2e
         if hello.get("type") not in (None, "hello"):
             await ws.close(code=1002, reason="missing hello type")
             return
         sess.client_sr = int(hello.get("sr", SET.audio.sample_rate))
         print(f"🤝 handshake sr={sess.client_sr}", flush=True)
+
+        if hello.get("type") != "hello":
+            await ws.close(code=1002, reason="missing hello type")
+            return
+        sess.client_sr = int(hello.get("sr", SET.audio.sample_rate))
+        main
 
         await sess.send_json({"type": "ready"})
         await sess.send_partial("Sto capendo...")
