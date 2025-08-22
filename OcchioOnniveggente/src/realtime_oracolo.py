@@ -104,6 +104,12 @@ async def main(url: str = WS_URL, sr: int = SR) -> None:
     state: dict[str, Any] = {"tts_playing": False, "barge_sent": False}
 
     async with websockets.connect(url) as ws:
+        # Invio di un messaggio iniziale di "hello" con il sample rate
+        # previsto dal client. Il server si aspetta questo handshake prima
+        # di ricevere qualsiasi frame audio; senza di esso la connessione
+        # viene chiusa immediatamente.
+        await ws.send(json.dumps({"sr": sr}))
+
         tasks = [
             asyncio.create_task(_mic_worker(ws, send_q, sr=sr, state=state)),
             asyncio.create_task(_sender(ws, send_q)),
