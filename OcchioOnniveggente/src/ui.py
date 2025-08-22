@@ -204,6 +204,19 @@ class RealtimeWSClient:
         self.stop_event = asyncio.Event()
         async with websockets.connect(self.url) as ws:
             self.ws = ws
+            print(
+                f"🔌 Realtime WS → {self.url}  (sr={self.sr}, in={sd.default.device[0]}, out={sd.default.device[1]})",
+                flush=True,
+            )
+            await ws.send(json.dumps({"type": "hello", "sr": self.sr}))
+            try:
+                ready_raw = await ws.recv()
+                if json.loads(ready_raw).get("type") != "ready":
+                    print("Handshake non valido", flush=True)
+                    return
+            except Exception:
+                print("Handshake non valido", flush=True)
+                return
             tasks = [
                 asyncio.create_task(self._mic_worker()),
                 asyncio.create_task(self._sender()),

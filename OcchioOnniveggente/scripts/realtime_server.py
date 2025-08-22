@@ -144,10 +144,19 @@ async def handler(ws):
     try:
         hello_raw = await ws.recv()
         if isinstance(hello_raw, (bytes, bytearray)):
+            await ws.close(code=1002, reason="expected text hello")
             return
-        hello = json.loads(hello_raw)
+        try:
+            hello = json.loads(hello_raw)
+        except json.JSONDecodeError:
+            await ws.close(code=1002, reason="invalid hello")
+            return
+        if hello.get("type") != "hello":
+            await ws.close(code=1002, reason="missing hello type")
+            return
         sess.client_sr = int(hello.get("sr", SET.audio.sample_rate))
 
+        await sess.send_json({"type": "ready"})
         await sess.send_partial("Sto capendo...")
 
         bytes_per_ms = max(int(sess.client_sr * 2 / 1000), 1)

@@ -104,6 +104,18 @@ async def main(url: str = WS_URL, sr: int = SR) -> None:
     state: dict[str, Any] = {"tts_playing": False, "barge_sent": False}
 
     async with websockets.connect(url) as ws:
+        # Invio handshake "hello" con il sample rate. Il client attende
+        # l'ack "ready" prima di iniziare a streammare audio.
+        await ws.send(json.dumps({"type": "hello", "sr": sr}))
+        try:
+            ready_raw = await ws.recv()
+            if json.loads(ready_raw).get("type") != "ready":
+                print("Handshake non valido", flush=True)
+                return
+        except Exception:
+            print("Handshake non valido", flush=True)
+            return
+
         tasks = [
             asyncio.create_task(_mic_worker(ws, send_q, sr=sr, state=state)),
             asyncio.create_task(_sender(ws, send_q)),
