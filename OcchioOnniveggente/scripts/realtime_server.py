@@ -3,9 +3,10 @@ import asyncio
 import json
 import os
 import sys
+import time
 import wave
 from pathlib import Path
-from typing import Any, Optional
+
 
 import numpy as np
 import websockets
@@ -16,11 +17,13 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from src.config import Settings
+from src.hotword import strip_hotword_prefix
 from src.oracle import transcribe, oracle_answer, synthesize
 from src.retrieval import retrieve
 
 CHUNK_MS = 20
-START_LEVEL = 600
+# soglia più permissiva per captare parlato anche con microfoni poco sensibili
+START_LEVEL = 300
 END_SIL_MS = 700
 MAX_UTT_MS = 15_000
 
@@ -54,6 +57,14 @@ class RTSession:
         self.tmp = ROOT / "data" / "temp"
         self.in_wav = self.tmp / "rt_input.wav"
         self.out_wav = self.tmp / "rt_answer.wav"
+
+        self.active_until = 0.0
+        self.wake_phrases = []
+        if setts.wake:
+            self.wake_phrases = list(getattr(setts.wake, "it_phrases", [])) + list(
+                getattr(setts.wake, "en_phrases", [])
+            )
+        self.idle_timeout = float(getattr(setts.wake, "idle_timeout", 60.0))
 
     async def send_json(self, obj: dict) -> None:
         try:
@@ -99,6 +110,7 @@ class RTSession:
 
         if self.state == "idle":
             if level >= START_LEVEL:
+                print("🎤 rilevato parlato", flush=True)
                 self.state = "talking"
                 self.ms_in_state = 0
                 self.ms_since_voice = 0
@@ -119,22 +131,59 @@ class RTSession:
         load_dotenv()
         client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
-        text, lang = transcribe(self.in_wav, client, self.SET.openai.stt_model, debug=self.SET.debug)
+        text, lang = transcribe(
+            self.in_wav, client, self.SET.openai.stt_model, debug=self.SET.debug
+        )
         if not text.strip():
             await self.send_partial("…silenzio…")
             return
 
+        print(f"🗣️ {text.strip()}", flush=True)
+
+        now = time.time()
+        if now > self.active_until:
+            self.active_until = 0.0
+
+        if self.active_until == 0.0:
+            matched, remainder = strip_hotword_prefix(text, self.wake_phrases)
+            if not matched:
+                await self.send_partial("…attendo 'ciao oracolo' o 'hello oracle'.")
+                return
+            text = remainder
+            if not text.strip():
+                await self.send_partial("Dimmi pure…")
+                self.active_until = now + self.idle_timeout
+                return
+
+        self.active_until = now + self.idle_timeout
+
         # RAG
         try:
-            ctx = retrieve(text, getattr(self.SET, "docstore_path", "DataBase/index.json"),
-                           top_k=int(getattr(self.SET, "retrieval_top_k", 3)))
+            ctx = retrieve(
+                text,
+                getattr(self.SET, "docstore_path", "DataBase/index.json"),
+                top_k=int(getattr(self.SET, "retrieval_top_k", 3)),
+            )
         except Exception:
             ctx = []
 
-        ans = oracle_answer(text, lang, client, self.SET.openai.llm_model, self.SET.oracle_system, context=ctx)
+        ans = oracle_answer(
+            text,
+            lang,
+            client,
+            self.SET.openai.llm_model,
+            self.SET.oracle_system,
+            context=ctx,
+        )
         await self.send_answer(ans)
 
-        synthesize(ans, self.out_wav, client, self.SET.openai.tts_model, self.SET.openai.tts_voice)
+        synthesize(
+            ans,
+            self.out_wav,
+            client,
+            self.SET.openai.tts_model,
+            self.SET.openai.tts_voice,
+        )
         await self.stream_file(self.out_wav, chunk_bytes=960)
 
 async def handler(ws):
@@ -144,10 +193,20 @@ async def handler(ws):
     try:
         hello_raw = await ws.recv()
         if isinstance(hello_raw, (bytes, bytearray)):
+            await ws.close(code=1002, reason="expected text hello")
             return
-        hello = json.loads(hello_raw)
+        try:
+            hello = json.loads(hello_raw)
+        except json.JSONDecodeError:
+            await ws.close(code=1002, reason="invalid hello")
+            return
+        if hello.get("type") not in (None, "hello"):
+            await ws.close(code=1002, reason="missing hello type")
+            return
         sess.client_sr = int(hello.get("sr", SET.audio.sample_rate))
+        print(f"🤝 handshake sr={sess.client_sr}", flush=True)
 
+        await sess.send_json({"type": "ready"})
         await sess.send_partial("Sto capendo...")
 
         bytes_per_ms = max(int(sess.client_sr * 2 / 1000), 1)
