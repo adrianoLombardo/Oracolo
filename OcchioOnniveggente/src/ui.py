@@ -204,6 +204,11 @@ class RealtimeWSClient:
         self.stop_event = asyncio.Event()
         async with websockets.connect(self.url) as ws:
             self.ws = ws
+            print(
+                f"🔌 Realtime WS → {self.url}  (sr={self.sr}, in={sd.default.device[0]}, out={sd.default.device[1]})",
+                flush=True,
+            )
+            await ws.send(json.dumps({"sr": self.sr}))
             tasks = [
                 asyncio.create_task(self._mic_worker()),
                 asyncio.create_task(self._sender()),
