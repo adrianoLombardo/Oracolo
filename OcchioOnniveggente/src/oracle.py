@@ -114,22 +114,34 @@ def oracle_answer(
     client,
     llm_model: str,
     oracle_system: str,
+    *,
+    context: list[dict] | None = None,
     history: list[tuple[str, str]] | None = None,
 ) -> str:
     print("✨ Interrogo l’Oracolo…")
     lang_clause = "Answer in English." if lang_hint == "en" else "Rispondi in italiano."
 
     messages = []
+    if context:
+        ctx_txt = "\n\n".join(str(c.get("text", "")) for c in context if c.get("text"))
+        if ctx_txt:
+            messages.append({"role": "system", "content": f"Contesto:\n{ctx_txt}"})
     for q_prev, a_prev in (history or []):
         messages.append({"role": "user", "content": q_prev})
         messages.append({"role": "assistant", "content": a_prev})
     messages.append({"role": "user", "content": question})
 
+    sys_prompt = (
+        oracle_system
+        + " Se la domanda non riguarda neuroscienze, neuroestetica, arte contemporanea o l'universo, rispondi: 'Domanda non pertinente'. "
+        + lang_clause
+    )
+
     for _ in range(3):
         try:
             resp = client.responses.create(
                 model=llm_model,
-                instructions=(oracle_system + " " + lang_clause),
+                instructions=sys_prompt,
                 input=messages,
             )
             ans = resp.output_text.strip()
