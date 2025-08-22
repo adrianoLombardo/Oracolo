@@ -104,8 +104,11 @@ async def main(url: str = WS_URL, sr: int = SR) -> None:
     state: dict[str, Any] = {"tts_playing": False, "barge_sent": False}
 
     async with websockets.connect(url) as ws:
-        # Invio handshake "hello" con il sample rate. Il client attende
-        # l'ack "ready" prima di iniziare a streammare audio.
+        # Log utili per capire dove stiamo collegandoci
+        print(f"🔌 Realtime WS → {url}  (sr={sr})", flush=True)
+
+        # Invio handshake iniziale con il sample rate. Il server risponde
+        # con "ready"; se manca chiudiamo la sessione.
         await ws.send(json.dumps({"type": "hello", "sr": sr}))
         try:
             ready_raw = await ws.recv()
