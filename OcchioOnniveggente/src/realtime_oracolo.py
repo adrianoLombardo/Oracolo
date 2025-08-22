@@ -104,11 +104,28 @@ async def main(url: str = WS_URL, sr: int = SR) -> None:
     state: dict[str, Any] = {"tts_playing": False, "barge_sent": False}
 
     async with websockets.connect(url) as ws:
+    codex/review-project-files-and-websocket-scripts-fpf2bw
+        # Log utili per capire dove stiamo collegandoci
+        print(f"🔌 Realtime WS → {url}  (sr={sr})", flush=True)
+
+        # Invio handshake iniziale con il sample rate. Il server risponde
+        # con "ready"; se manca chiudiamo la sessione.
+        await ws.send(json.dumps({"type": "hello", "sr": sr}))
+        try:
+            ready_raw = await ws.recv()
+            if json.loads(ready_raw).get("type") != "ready":
+                print("Handshake non valido", flush=True)
+                return
+        except Exception:
+            print("Handshake non valido", flush=True)
+            return
+=======
         # Invio di un messaggio iniziale di "hello" con il sample rate
         # previsto dal client. Il server si aspetta questo handshake prima
         # di ricevere qualsiasi frame audio; senza di esso la connessione
         # viene chiusa immediatamente.
         await ws.send(json.dumps({"sr": sr}))
+ main
 
         tasks = [
             asyncio.create_task(_mic_worker(ws, send_q, sr=sr, state=state)),
