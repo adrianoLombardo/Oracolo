@@ -208,6 +208,7 @@ class RealtimeWSClient:
                 f"🔌 Realtime WS → {self.url}  (sr={self.sr}, in={sd.default.device[0]}, out={sd.default.device[1]})",
                 flush=True,
             )
+codex/review-project-files-and-websocket-scripts-fpf2bw
             await ws.send(json.dumps({"type": "hello", "sr": self.sr}))
             try:
                 ready_raw = await ws.recv()
@@ -217,6 +218,9 @@ class RealtimeWSClient:
             except Exception:
                 print("Handshake non valido", flush=True)
                 return
+=======
+            await ws.send(json.dumps({"sr": self.sr}))
+     main
             tasks = [
                 asyncio.create_task(self._mic_worker()),
                 asyncio.create_task(self._sender()),
