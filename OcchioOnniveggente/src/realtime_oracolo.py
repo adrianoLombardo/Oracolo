@@ -108,6 +108,20 @@ async def _run(url: str, sr: int) -> None:
     audio_q: "queue.Queue[bytes]" = queue.Queue()
     state: dict[str, Any] = {"tts_playing": False, "barge_sent": False}
 
+       codex/review-project-files-and-websocket-scripts-ag8z2e
+    async with websockets.connect(url) as ws:
+        # Log utili per capire dove stiamo collegandoci
+        print(f"🔌 Realtime WS → {url}  (sr={sr})", flush=True)
+
+        # Invio handshake iniziale con il sample rate. Il server risponde
+        # con "ready"; se manca chiudiamo la sessione.
+        await ws.send(json.dumps({"type": "hello", "sr": sr}))
+        try:
+            ready_raw = await ws.recv()
+            if json.loads(ready_raw).get("type") != "ready":
+                print("Handshake non valido", flush=True)
+                return
+
     async with websockets.connect(url, ping_interval=20, ping_timeout=20) as ws:
         # Handshake: annuncia parametri audio e attendi 'ready'
         await ws.send(json.dumps({"type": "hello", "sr": sr, "format": "pcm_s16le", "channels": 1}))
@@ -118,14 +132,19 @@ async def _run(url: str, sr: int) -> None:
             data = json.loads(ready_raw) if isinstance(ready_raw, str) else {}
             if data.get("type") != "ready":
                 raise RuntimeError("Handshake non valido")
+        main
         except Exception:
             print("Handshake non valido", flush=True)
             return
+
+        codex/review-project-files-and-websocket-scripts-ag8z2e
+        print("✅ pronto a ricevere audio", flush=True)
 
         print(
             f"🔌 Realtime WS → {url}  (sr={sr}, in={sd.default.device[0]}, out={sd.default.device[1]})",
             flush=True,
         )
+        main
 
         tasks = [
             asyncio.create_task(_mic_worker(ws, send_q, sr=sr, state=state)),

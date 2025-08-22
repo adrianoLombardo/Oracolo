@@ -196,23 +196,38 @@ class RealtimeWSClient:
         self.stop_event = asyncio.Event()
         async with websockets.connect(self.url, ping_interval=20, ping_timeout=20) as ws:
             self.ws = ws
+        codex/review-project-files-and-websocket-scripts-ag8z2e
+            print(
+                f"🔌 Realtime WS → {self.url}  (sr={self.sr}, in={sd.default.device[0]}, out={sd.default.device[1]})",
+                flush=True,
+            )
+            await ws.send(json.dumps({"type": "hello", "sr": self.sr}))
+            try:
+                ready_raw = await ws.recv()
+                if json.loads(ready_raw).get("type") != "ready":
+
             # handshake
             await ws.send(json.dumps({"type": "hello", "sr": self.sr, "format": "pcm_s16le", "channels": 1}))
             try:
                 ready_raw = await asyncio.wait_for(ws.recv(), timeout=10)
                 data = json.loads(ready_raw) if isinstance(ready_raw, str) else {}
                 if data.get("type") != "ready":
+         main
                     print("Handshake non valido", flush=True)
                     return
             except Exception:
                 print("Handshake non valido", flush=True)
                 return
+        codex/review-project-files-and-websocket-scripts-ag8z2e
+            print("✅ pronto a ricevere audio", flush=True)
+
 
             print(
                 f"🔌 Realtime WS → {self.url}  (sr={self.sr}, in={sd.default.device[0]}, out={sd.default.device[1]})",
                 flush=True,
             )
 
+        main
             tasks = [
                 asyncio.create_task(self._mic_worker()),
                 asyncio.create_task(self._sender()),

@@ -6,7 +6,11 @@ import sys
 import time
 import wave
 from pathlib import Path
+codex/review-project-files-and-websocket-scripts-ag8z2e
+
+
 from typing import Any, Optional
+ main
 
 import numpy as np
 import websockets
@@ -22,7 +26,8 @@ from src.oracle import transcribe, oracle_answer, synthesize
 from src.retrieval import retrieve
 
 CHUNK_MS = 20
-START_LEVEL = 600
+# soglia più permissiva per captare parlato anche con microfoni poco sensibili
+START_LEVEL = 300
 END_SIL_MS = 700
 MAX_UTT_MS = 15_000
 
@@ -109,6 +114,7 @@ class RTSession:
 
         if self.state == "idle":
             if level >= START_LEVEL:
+                print("🎤 rilevato parlato", flush=True)
                 self.state = "talking"
                 self.ms_in_state = 0
                 self.ms_since_voice = 0
@@ -136,6 +142,11 @@ class RTSession:
             await self.send_partial("…silenzio…")
             return
 
+        codex/review-project-files-and-websocket-scripts-ag8z2e
+        print(f"🗣️ {text.strip()}", flush=True)
+
+
+        main
         now = time.time()
         if now > self.active_until:
             self.active_until = 0.0
@@ -196,10 +207,18 @@ async def handler(ws):
         except json.JSONDecodeError:
             await ws.close(code=1002, reason="invalid hello")
             return
+        codex/review-project-files-and-websocket-scripts-ag8z2e
+        if hello.get("type") not in (None, "hello"):
+            await ws.close(code=1002, reason="missing hello type")
+            return
+        sess.client_sr = int(hello.get("sr", SET.audio.sample_rate))
+        print(f"🤝 handshake sr={sess.client_sr}", flush=True)
+
         if hello.get("type") != "hello":
             await ws.close(code=1002, reason="missing hello type")
             return
         sess.client_sr = int(hello.get("sr", SET.audio.sample_rate))
+        main
 
         await sess.send_json({"type": "ready"})
         await sess.send_partial("Sto capendo...")
