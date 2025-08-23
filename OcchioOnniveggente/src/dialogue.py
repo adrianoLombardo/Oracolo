@@ -13,6 +13,7 @@ class DialogState(Enum):
     LISTENING = auto()
     THINKING = auto()
     SPEAKING = auto()
+    INTERRUPTED = auto()
 
 
 @dataclass
@@ -32,7 +33,12 @@ class DialogueManager:
     def transition(self, new_state: DialogState) -> None:
         """Transition to a new state and refresh deadline when appropriate."""
         self.state = new_state
-        if new_state in (DialogState.AWAKE, DialogState.LISTENING, DialogState.SPEAKING):
+        if new_state in (
+            DialogState.AWAKE,
+            DialogState.LISTENING,
+            DialogState.SPEAKING,
+            DialogState.INTERRUPTED,
+        ):
             self.refresh_deadline()
 
     def start_processing(self) -> int:

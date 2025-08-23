@@ -284,6 +284,7 @@ def main() -> None:
     pending_answer = ""
     pending_sources: list[dict[str, str]] = []
     processing_turn = 0
+    countdown_last = -1
 
     if not WAKE_ENABLED:
         dlg.state = DialogState.LISTENING
@@ -306,6 +307,7 @@ def main() -> None:
             if not args.autostart:
                 try:
                     cmd = input("\nPremi INVIO per ascoltare (q per uscire)… ")
+                    dlg.refresh_deadline()
                     if cmd.strip().lower() == "q":
                         break
                 except EOFError:
@@ -313,10 +315,19 @@ def main() -> None:
 
             now = time.time()
 
+            if dlg.state != DialogState.SLEEP:
+                remain = int(dlg.active_deadline - now)
+                if remain != countdown_last and not args.quiet:
+                    print(f"\r⏳ Inattività: {max(remain,0):02d}s", end="", flush=True)
+                    countdown_last = remain
+
             # timeout inattività globale
             if WAKE_ENABLED and dlg.timed_out(now):
                 say("🌘 Torno al silenzio. Di' «ciao oracolo» per riattivarmi.", quiet=args.quiet)
                 dlg.transition(DialogState.SLEEP)
+                countdown_last = -1
+                if not args.quiet:
+                    print()
                 continue
 
             # ---------------------- SLEEP: attendo hotword ---------------------- #
@@ -395,11 +406,11 @@ def main() -> None:
                 )
                 if not ok:
                     continue
+                dlg.refresh_deadline()
                 q, qlang = transcribe(INPUT_WAV, client, STT_MODEL, debug=DEBUG and (not args.quiet))
                 say(f"📝 Domanda: {q}", quiet=args.quiet)
                 if not q:
                     continue
-                dlg.refresh_deadline()
                 if session_lang not in ("it", "en"):
                     session_lang = qlang if qlang in ("it", "en") else "it"
                 eff_lang = session_lang
@@ -537,20 +548,32 @@ def main() -> None:
                     output_device_id=out_dev,
                     duck_event=evt,
                 )
+                interrupted = evt.is_set()
                 evt.set()
                 mon.join()
-                dlg.refresh_deadline()
                 dlg.end_processing()
                 processing_turn = dlg.turn_id
+                if interrupted:
+                    dlg.transition(DialogState.INTERRUPTED)
+                    say("⚠️ Interrotto.", quiet=args.quiet)
+                    dlg.transition(DialogState.LISTENING)
+                    continue
+                dlg.refresh_deadline()
                 if WAKE_ENABLED and WAKE_SINGLE_TURN:
                     dlg.transition(DialogState.SLEEP)
                     say("🌘 Torno al silenzio. Di' «ciao oracolo» per riattivarmi.", quiet=args.quiet)
+                    countdown_last = -1
+                    if not args.quiet:
+                        print()
                 else:
                     dlg.transition(DialogState.LISTENING)
                 continue
 
             # fallback
             dlg.transition(DialogState.SLEEP)
+            countdown_last = -1
+            if not args.quiet:
+                print()
 
     finally:
         try:
