@@ -13,6 +13,10 @@ openai:
   # Voce TTS
   tts_voice: alloy
 
+  # ⬇️ NUOVO: modello di embedding per controllo pertinenza/RAG
+  # (usato da src/domain.py se abilitato)
+  embed_model: text-embedding-3-small   # opzionale; se mancante, niente embeddings
+
 audio:
   # Audio I/O e file temporanei
   sample_rate: 24000
@@ -80,30 +84,61 @@ palette_keywords:
   radice: { rgb: [150, 80, 50],   style: "ground" }
 
 # Voce dell'Oracolo (prompt di sistema)
-
 oracle_system: >
   Parla come un antico oracolo cosmico. Rispondi in italiano o in inglese seguendo la lingua dell’utente,
   in 2-5 frasi poetiche e visionarie, usando metafore di luce, stelle, mare, destino e l'universo.
   Intreccia richiami a neuroscienze, neuroestetica e arte contemporanea, evocando l'IA applicata alle neuroscienze.
   Evita istruzioni tecniche; offri immagini ed enigmi, con tono solenne ma empatico.
-  
-wake:
-  enabled: true          # attiva la modalità “ciao oracolo / hello oracle”
-  single_turn: false     # dopo il saluto resta attivo per altre domande
-  idle_timeout: 60       # dopo 60s di inattività torna in SLEEP
 
+# Hotword / risveglio
+wake:
+  enabled: true           # usa la hotword; se metti false parla sempre (sconsigliato)
+  single_turn: true       # dopo 1 risposta torna a SLEEP; metti false per dialogo continuo
+  idle_timeout: 60        # secondi di inattività prima di tornare a SLEEP
+
+  # Frasi riconosciute (tolleranti a maiuscole, punteggiatura, piccoli errori STT)
   it_phrases:
     - "ciao oracolo"
     - "ehi oracolo"
     - "salve oracolo"
     - "ciao, oracolo"
-
   en_phrases:
     - "hello oracle"
     - "hey oracle"
     - "hi oracle"
     - "hello, oracle"
 
+# ⬇️ NUOVO: impostazioni per RAG/pertinenza dominio
+domain:
+  # Lista parole-chiave del tuo dominio (usate per keyword-overlap)
+  keywords:
+    - neuroscienze
+    - neuroestetica
+    - arte contemporanea
+    - cervello
+    - sinapsi
+    - intelligenza artificiale
+    - IA
+    - universo
+    - stelle
+    - luce
+    - destino
+  kw_min_overlap: 0.08      # soglia minima di overlap parole-chiave
+  use_embeddings: true       # se true, usa anche similarità tramite embeddings
+  emb_min_sim: 0.22          # soglia minima di similarità coseno (0..1)
 
+# ⬇️ NUOVO: parametri per client Realtime/WebSocket (usati da realtime_oracolo.py / UI)
+realtime:
+  ws_url: "ws://127.0.0.1:8765"  # URL del server WS
+  sample_rate: 24000
+  # Se lasci null, usa i device di default di sistema (vedi anche "audio")
+  input_device: null
+  output_device: null
+  barge_rms_threshold: 500.0     # soglia RMS per barge-in (parlo sopra al TTS)
+  ping_interval: 20              # opzionale, se il server richiede ping WS
+  ping_timeout: 20
+
+# RAG: dove sono i documenti indicizzati e quanti frammenti prendere
 docstore_path: DataBase/index.json
 retrieval_top_k: 3
+
