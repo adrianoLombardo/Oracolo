@@ -1,8 +1,9 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 import time, json
+import numpy as np
 
 
 @dataclass
@@ -11,6 +12,8 @@ class ChatState:
     persist_jsonl: Optional[Path] = None
     session_id: str = str(int(time.time()))
     history: List[Dict[str, str]] = field(default_factory=list)
+    topic_emb: Optional[np.ndarray] = field(default=None, repr=False)
+    topic_text: Optional[str] = None
 
     def reset(self) -> None:
         self.history.clear()
@@ -43,3 +46,42 @@ class ChatState:
         self.persist_jsonl.parent.mkdir(parents=True, exist_ok=True)
         with self.persist_jsonl.open("a", encoding="utf-8") as f:
             f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+
+    # ----------------- topic tracking -----------------
+    def update_topic(
+        self,
+        text: str,
+        client: Any,
+        emb_model: str,
+        threshold: float = 0.65,
+    ) -> bool:
+        """Aggiorna l'argomento corrente.
+
+        Ritorna True se è stato rilevato un cambio di tema rispetto al
+        topic precedente.
+        """
+        if not text or client is None or not emb_model:
+            return False
+        try:
+            resp = client.embeddings.create(model=emb_model, input=[text])  # type: ignore[attr-defined]
+            vec = np.array(resp.data[0].embedding, dtype=np.float32)
+        except Exception:
+            # se embedding fallisce, aggiorna solo il testo
+            if self.topic_text is None:
+                self.topic_text = text
+            return False
+
+        if self.topic_emb is None:
+            self.topic_emb = vec
+            self.topic_text = text
+            return False
+
+        sim = float(np.dot(self.topic_emb, vec) / (np.linalg.norm(self.topic_emb) * np.linalg.norm(vec) + 1e-9))
+        changed = sim < threshold
+        if changed:
+            self.topic_text = text
+            self.topic_emb = vec
+        else:
+            # aggiorna embedding medio per seguire l'evoluzione del tema
+            self.topic_emb = (self.topic_emb + vec) / 2.0
+        return changed
