@@ -18,7 +18,7 @@ class OpenAIConfig(BaseModel):
     llm_model: str = "gpt-5-mini"
     tts_model: str = "gpt-4o-mini-tts"
     tts_voice: str = "alloy"
-    embed_model: str = "text-embedding-3-small"
+    embed_model: str = "text-embedding-3-large"
 
 
 class AudioConfig(BaseModel):
@@ -80,13 +80,34 @@ class PaletteItem(BaseModel):
 
 class DomainConfig(BaseModel):
     enabled: bool = True
+    topic: str = ""
     keywords: List[str] = Field(default_factory=list)
     kw_min_overlap: float = 0.04
     emb_min_sim: float = 0.22
     rag_min_hits: int = 1
-    weights: Dict[str, float] = Field(default_factory=lambda: {"kw": 0.4, "emb": 0.3, "rag": 0.3})
+    weights: Dict[str, float] = Field(
+        default_factory=lambda: {"kw": 0.45, "emb": 0.25, "rag": 0.30}
+    )
     accept_threshold: float = 0.5
     clarify_margin: float = 0.15
+
+
+class RetrievalConfig(BaseModel):
+    hybrid: bool = True
+    rerank: bool = True
+    max_chunks: int = 6
+    chunk_strategy: Literal["semantic", "fixed_overlap"] = "semantic"
+
+
+class ChatConfig(BaseModel):
+    inactivity_timeout_s: int = 60
+    remember_turns: int = 8
+    pinned: List[str] = Field(default_factory=list)
+
+
+class RealtimeConfig(BaseModel):
+    barge_in_threshold: float = 0.55
+    ducking_db: float = -12.0
 
 
 class Settings(BaseModel):
@@ -106,6 +127,9 @@ class Settings(BaseModel):
     retrieval_top_k: int = 3
     wake: Optional[WakeConfig] = WakeConfig()
     domain: DomainConfig = DomainConfig()
+    retrieval: RetrievalConfig = RetrievalConfig()
+    chat: ChatConfig = ChatConfig()
+    realtime: RealtimeConfig = RealtimeConfig()
     
     @classmethod
     def model_validate_yaml(cls, path: Path) -> "Settings":
