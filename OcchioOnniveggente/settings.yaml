@@ -111,6 +111,7 @@ wake:
 # ⬇️ NUOVO: impostazioni per RAG/pertinenza dominio
 domain:
   # Lista parole-chiave del tuo dominio (usate per keyword-overlap)
+  enabled: true
   keywords:
     - neuroscienze
     - neuroestetica
@@ -123,8 +124,12 @@ domain:
     - stelle
     - luce
     - destino
-  kw_min_overlap: 0.08      # soglia minima di overlap parole-chiave
-  use_embeddings: true       # se true, usa anche similarità tramite embeddings
+  weights:
+    kw: 0.4
+    emb: 0.3
+    rag: 0.3
+  accept_threshold: 0.5      # soglia per accettare la domanda
+  clarify_margin: 0.15       # margine per chiedere chiarimenti
   emb_min_sim: 0.22          # soglia minima di similarità coseno (0..1)
 
 # ⬇️ NUOVO: parametri per client Realtime/WebSocket (usati da realtime_oracolo.py / UI)

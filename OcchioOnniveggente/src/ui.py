@@ -25,6 +25,8 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, scrolledtext, ttk
 from typing import Any
 
+from src.retrieval import retrieve
+
 import asyncio
 import numpy as np
 import sounddevice as sd
@@ -360,6 +362,8 @@ class OracoloUI(tk.Tk):
         settings_menu.add_command(label="Recording…", command=self._open_recording_dialog)
         settings_menu.add_command(label="Luci…", command=self._open_lighting_dialog)
         settings_menu.add_command(label="OpenAI…", command=self._open_openai_dialog)
+        settings_menu.add_command(label="Dominio…", command=self._open_domain_dialog)
+        settings_menu.add_command(label="Conoscenza…", command=self._open_knowledge_dialog)
         settings_menu.add_separator()
         settings_menu.add_command(label="Salva", command=self.save_settings)
         menubar.add_cascade(label="Impostazioni", menu=settings_menu)
@@ -689,6 +693,103 @@ class OracoloUI(tk.Tk):
             win.destroy()
 
         ttk.Button(win, text="OK", command=on_ok).grid(row=len(rows), column=0, columnspan=2, pady=10)
+
+    def _open_domain_dialog(self) -> None:
+        win = tk.Toplevel(self)
+        win.title("Dominio")
+        win.configure(bg=self._bg)
+
+        dom = self.settings.setdefault("domain", {})
+        kw_var = tk.StringVar(value=", ".join(dom.get("keywords", [])))
+        rigid_var = tk.StringVar(value=str(dom.get("accept_threshold", 0.5)))
+        tk.Label(win, text="Keyword (separate da virgola)", fg=self._fg, bg=self._bg).grid(
+            row=0, column=0, padx=6, pady=6, sticky="e"
+        )
+        tk.Entry(win, textvariable=kw_var, width=40).grid(row=0, column=1, padx=6, pady=6, sticky="w")
+
+        tk.Label(win, text="Prompt", fg=self._fg, bg=self._bg).grid(
+            row=1, column=0, padx=6, pady=6, sticky="ne"
+        )
+        prompt_box = scrolledtext.ScrolledText(win, width=40, height=6)
+        prompt_box.insert("1.0", self.settings.get("oracle_system", ""))
+        prompt_box.grid(row=1, column=1, padx=6, pady=6, sticky="w")
+
+        tk.Label(win, text="Rigidità", fg=self._fg, bg=self._bg).grid(
+            row=2, column=0, padx=6, pady=6, sticky="e"
+        )
+        tk.Entry(win, textvariable=rigid_var, width=8).grid(row=2, column=1, padx=6, pady=6, sticky="w")
+
+        def on_ok() -> None:
+            dom["keywords"] = [k.strip() for k in kw_var.get().split(",") if k.strip()]
+            try:
+                dom["accept_threshold"] = float(rigid_var.get())
+            except Exception:
+                pass
+            self.settings["oracle_system"] = prompt_box.get("1.0", "end").strip()
+            win.destroy()
+
+        ttk.Button(win, text="OK", command=on_ok).grid(row=3, column=0, columnspan=2, pady=10)
+
+    def _open_knowledge_dialog(self) -> None:
+        win = tk.Toplevel(self)
+        win.title("Conoscenza")
+        win.configure(bg=self._bg)
+
+        doc_var = tk.StringVar(value=self.settings.get("docstore_path", ""))
+        topk_var = tk.StringVar(value=str(self.settings.get("retrieval_top_k", 3)))
+        query_var = tk.StringVar()
+
+        tk.Label(win, text="Indice", fg=self._fg, bg=self._bg).grid(row=0, column=0, padx=6, pady=6, sticky="e")
+        tk.Entry(win, textvariable=doc_var, width=40).grid(row=0, column=1, padx=6, pady=6, sticky="w")
+
+        def browse() -> None:
+            p = filedialog.askopenfilename(
+                title="Indice", filetypes=[("JSON", "*.json"), ("Tutti", "*.*")]
+            )
+            if p:
+                doc_var.set(p)
+
+        ttk.Button(win, text="Sfoglia", command=browse).grid(row=0, column=2, padx=6, pady=6)
+
+        tk.Label(win, text="Top-K", fg=self._fg, bg=self._bg).grid(row=1, column=0, padx=6, pady=6, sticky="e")
+        tk.Entry(win, textvariable=topk_var, width=6).grid(row=1, column=1, padx=6, pady=6, sticky="w")
+
+        tk.Label(win, text="Test query", fg=self._fg, bg=self._bg).grid(row=2, column=0, padx=6, pady=6, sticky="e")
+        tk.Entry(win, textvariable=query_var, width=40).grid(row=2, column=1, padx=6, pady=6, sticky="w")
+
+        result_box = scrolledtext.ScrolledText(win, width=50, height=8)
+        result_box.grid(row=3, column=0, columnspan=3, padx=6, pady=6)
+
+        def run_test() -> None:
+            result_box.delete("1.0", "end")
+            try:
+                k = int(topk_var.get() or 3)
+            except Exception:
+                k = 3
+            try:
+                res = retrieve(query_var.get(), doc_var.get(), top_k=k)
+            except Exception as e:
+                result_box.insert("end", f"Errore: {e}\n")
+                return
+            for item in res:
+                text = str(item.get("text", "")).replace("\n", " ")[:200]
+                title = str(item.get("title", ""))
+                if title:
+                    result_box.insert("end", f"- {title}: {text}\n")
+                else:
+                    result_box.insert("end", f"- {text}\n")
+
+        ttk.Button(win, text="Prova", command=run_test).grid(row=2, column=2, padx=6, pady=6)
+
+        def on_ok() -> None:
+            self.settings["docstore_path"] = doc_var.get().strip()
+            try:
+                self.settings["retrieval_top_k"] = int(topk_var.get())
+            except Exception:
+                pass
+            win.destroy()
+
+        ttk.Button(win, text="OK", command=on_ok).grid(row=4, column=0, columnspan=3, pady=10)
 
     def _open_lighting_dialog(self) -> None:
         win = tk.Toplevel(self)
