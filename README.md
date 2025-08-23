@@ -151,6 +151,10 @@ python scripts/ingest_docs.py --reindex
 ```
 
 Il percorso dell'indice è configurabile con `docstore_path` in `settings.yaml`.
+Il recupero ora combina **BM25 + embedding** e, se configurato, applica un
+mini **cross-encoder** per il reranking. Prima della ricerca la query può
+essere riscritta automaticamente in 1–2 varianti (IT/EN) per migliorarne la
+pertinenza.
 
 Nell'interfaccia grafica sono disponibili le nuove finestre **Dominio…** e
 **Conoscenza…**: la prima consente di definire parole chiave, prompt
