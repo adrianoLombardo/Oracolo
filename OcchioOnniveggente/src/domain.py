@@ -21,6 +21,10 @@ from __future__ import annotations
 
 import math
 import re
+
+from pathlib import Path
+
+        main
 from typing import Iterable, List, Tuple
 
 import openai
@@ -135,11 +139,28 @@ def validate_question(
     ):
         return False, []
 
+
+    if docstore_path:
+        p = Path(docstore_path)
+        if p.exists() and p.is_file():
+            try:
+                ctx = retrieve(question, p, top_k=top_k)
+            except Exception:
+                ctx = []
+            if not ctx:
+                return False, []
+            best = float(ctx[0].get("score", 0.0))
+            if best < retr_threshold:
+                return False, []
+            return True, ctx
+
+    return True, []
+
     if not docstore_path:
         return True, []
 
     try:
-        ctx = retrieve(question, docstore_path, top_k=top_k)
+        
     except Exception:
         ctx = []
 
@@ -150,5 +171,6 @@ def validate_question(
     if best < retr_threshold:
         return False, []
 
-    return True, ctx
+    return True, 
+       main
 
