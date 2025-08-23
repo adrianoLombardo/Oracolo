@@ -152,6 +152,8 @@ def validate_question(
     accept_threshold = 0.5
     clarify_margin = 0.15
     emb_min_sim = 0.22  # conservato per compatibilità (non usato come soglia dura qui)
+    dom_topic = ""
+    always_accept_wake = True
 
     if dom:
         # enabled (default True)
@@ -201,15 +203,61 @@ def validate_question(
                 clarify_margin = float(val)  # type: ignore[arg-type]
             elif var_name == "emb_min_sim":
                 emb_min_sim = float(val)  # type: ignore[arg-type]
+        # topic
+        try:
+            dom_topic = str(getattr(dom, "topic", "") or "")
+        except Exception:
+            try:
+                dom_topic = str(dom.get("topic", "") or "")
+            except Exception:
+                dom_topic = ""
+        # always_accept_wake
+        try:
+            always_accept_wake = bool(getattr(dom, "always_accept_wake", True))
+        except Exception:
+            try:
+                always_accept_wake = bool(dom.get("always_accept_wake", True))  # type: ignore[attr-defined]
+            except Exception:
+                always_accept_wake = True
+
+    use_topic = dom_topic or topic
+
+    # frasi di saluto/wake words
+    wake_phrases: list[str] = []
+    try:
+        w = getattr(settings, "wake", None)
+    except Exception:
+        try:
+            w = (settings or {}).get("wake")  # type: ignore[attr-defined]
+        except Exception:
+            w = None
+    if w:
+        for lst in ("it_phrases", "en_phrases"):
+            try:
+                wake_phrases.extend(getattr(w, lst, []) or [])
+            except Exception:
+                try:
+                    wake_phrases.extend(w.get(lst, []) or [])  # type: ignore[attr-defined]
+                except Exception:
+                    pass
+
+    if always_accept_wake and wake_phrases:
+        cleaned = re.sub(r"[\W_]+", "", q_norm)
+        for phr in wake_phrases:
+            if re.sub(r"[\W_]+", "", _norm(phr)) == cleaned:
+                ctx = _try_retrieve(
+                    question, settings, docstore_path, top_k, use_topic, client, emb_model or embed_model
+                )
+                return True, ctx, False, "wake"
 
     # Se il filtro non è abilitato → sempre OK
     if not enabled:
-        ctx = _try_retrieve(question, settings, docstore_path, top_k, topic, client, emb_model or embed_model)
+        ctx = _try_retrieve(question, settings, docstore_path, top_k, use_topic, client, emb_model or embed_model)
         return True, ctx, False, "disabled"
 
     # Se NON ci sono keywords → non filtriamo (sempre OK)
     if not keywords:
-        ctx = _try_retrieve(question, settings, docstore_path, top_k, topic, client, emb_model or embed_model)
+        ctx = _try_retrieve(question, settings, docstore_path, top_k, use_topic, client, emb_model or embed_model)
         return True, ctx, False, "no keywords"
 
     # ---- Boost terms (accettazione immediata se compaiono) ----
@@ -221,7 +269,7 @@ def validate_question(
         "cosmo", "universo", "stella", "stelle", "mare",
     ]
     if any(bt in q_norm for bt in boost_terms):
-        ctx = _try_retrieve(question, settings, docstore_path, top_k, topic, client, emb_model or embed_model)
+        ctx = _try_retrieve(question, settings, docstore_path, top_k, use_topic, client, emb_model or embed_model)
         return True, ctx, False, "boost"
 
     # ---- Overlap parole chiave ----
@@ -237,7 +285,7 @@ def validate_question(
         weights["kw"] = min(1.0, weights.get("kw", 0.4) + 0.1)
 
     # ---- Retrieval ----
-    ctx = _try_retrieve(question, settings, docstore_path, top_k, topic, client, emb_model or embed_model)
+    ctx = _try_retrieve(question, settings, docstore_path, top_k, use_topic, client, emb_model or embed_model)
     rag_hits = len(ctx)
     rag_score = rag_hits / float(top_k or 1)
 
