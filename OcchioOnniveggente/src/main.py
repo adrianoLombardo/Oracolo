@@ -507,8 +507,11 @@ def main() -> None:
                     print("📚 Fonti:")
                     for i, src in enumerate(pending_sources, 1):
                         title = src.get("title") or src.get("id", "")
-                        snippet = (src.get("text", "").splitlines() or [""])[0][:80]
-                        print(f"[{i}] {title}: {snippet}")
+                        sid = src.get("id", "")
+                        score = src.get("score", 0.0)
+                        snippet = src.get("text", "").replace("\n", " ")[:200]
+                        print(f"[{i}] {title} ({sid}, score={score:.2f})")
+                        print(f"    {snippet}")
                 base = color_from_text(pending_answer, {k: v for k, v in PALETTES.items()})
                 if hasattr(light, "set_base_rgb"):
                     light.set_base_rgb(base)

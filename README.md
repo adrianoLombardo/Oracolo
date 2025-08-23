@@ -132,6 +132,11 @@ impostare il `top-k` e testare le query di recupero. Queste opzioni rendono
 l'Oracolo adattabile a mostre, conferenze e installazioni, semplificando la
 gestione dei documenti e migliorando la pertinenza delle risposte.
 
+È possibile importare rapidamente nuovi file trascinandoli nella finestra
+**Conoscenza…**, e durante le risposte viene mostrata un'anteprima dei
+documenti/chunk utilizzati. Inoltre i profili di dominio possono essere
+salvati e ricaricati come preset con un clic.
+
 ---
 
 ## 6. Test
