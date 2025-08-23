@@ -24,6 +24,7 @@ from src.lights import SacnLight, WledLight, color_from_text
 from src.oracle import transcribe, oracle_answer, synthesize, append_log
 from src.domain import validate_question
 from src.chat import ChatState
+from src.dialogue import DialogueManager, DialogState
 
 
 # --------------------------- console helpers --------------------------- #
@@ -268,9 +269,7 @@ def main() -> None:
     session_lang = "it"  # lingua bloccata per la sessione
 
     # --------------------------- STATE MACHINE --------------------------- #
-    state = "SLEEP"
-    active_deadline = 0.0
-    is_processing = False
+    dlg = DialogueManager(IDLE_TIMEOUT)
     wake_lang = "it"
     pending_q = ""
     pending_lang = ""
@@ -278,9 +277,10 @@ def main() -> None:
     pending_history = None
     pending_answer = ""
     pending_sources: list[dict[str, str]] = []
+    processing_turn = 0
 
     if not WAKE_ENABLED:
-        state = "LISTENING"
+        dlg.state = DialogState.LISTENING
 
     def _monitor_barge(evt: threading.Event, sr: int, thresh: float, device: Any | None) -> None:
         frame = int(sr * 0.03)
@@ -308,13 +308,15 @@ def main() -> None:
             now = time.time()
 
             # timeout inattività globale
-            if WAKE_ENABLED and state != "SLEEP" and now > active_deadline:
+            if WAKE_ENABLED and dlg.timed_out(now):
                 say("🌘 Torno al silenzio. Di' «ciao oracolo» per riattivarmi.", quiet=args.quiet)
-                state = "SLEEP"
+                dlg.transition(DialogState.SLEEP)
                 continue
 
             # ---------------------- SLEEP: attendo hotword ---------------------- #
-            if WAKE_ENABLED and state == "SLEEP":
+            if WAKE_ENABLED and dlg.state == DialogState.SLEEP:
+                if dlg.is_processing:
+                    continue
                 say("💤 In ascolto della parola chiave…  IT: «ciao oracolo» | EN: «hello oracle»", quiet=args.quiet)
                 ok = record_until_silence(
                     INPUT_WAV,
@@ -337,11 +339,11 @@ def main() -> None:
                         say("…hotword non riconosciuta, continuo l'attesa.", quiet=False)
                     continue
                 wake_lang = "it" if is_it and not is_en else "en" if is_en and not is_it else (session_lang or "it")
-                state = "AWAKE"
+                dlg.transition(DialogState.AWAKE)
                 continue
 
             # ---------------------- AWAKE: saluta ---------------------- #
-            if state == "AWAKE":
+            if dlg.state == DialogState.AWAKE:
                 greet = oracle_greeting(wake_lang)
                 print(f"🔮 Oracolo: {greet}", flush=True)
                 synthesize(greet, OUTPUT_WAV, client, TTS_MODEL, TTS_VOICE)
@@ -364,13 +366,15 @@ def main() -> None:
                 mon.join()
                 if CHAT_ENABLED and CHAT_RESET_ON_WAKE:
                     chat.reset()
-                active_deadline = time.time() + IDLE_TIMEOUT
+                dlg.refresh_deadline()
                 session_lang = wake_lang
-                state = "LISTENING"
+                dlg.transition(DialogState.LISTENING)
                 continue
 
             # ---------------------- LISTENING: attesa domanda ---------------------- #
-            if state == "LISTENING":
+            if dlg.state == DialogState.LISTENING:
+                if dlg.is_processing:
+                    continue
                 say(
                     "🎤 Parla pure (VAD energia, max %.1fs)…" % (SET.vad.max_ms / 1000.0),
                     quiet=args.quiet,
@@ -389,7 +393,7 @@ def main() -> None:
                 say(f"📝 Domanda: {q}", quiet=args.quiet)
                 if not q:
                     continue
-                active_deadline = time.time() + IDLE_TIMEOUT
+                dlg.refresh_deadline()
                 if session_lang not in ("it", "en"):
                     session_lang = qlang if qlang in ("it", "en") else "it"
                 eff_lang = session_lang
@@ -420,12 +424,12 @@ def main() -> None:
                 else:
                     pending_topic = None
                     pending_history = None
-                is_processing = True
-                state = "THINKING"
+                processing_turn = dlg.start_processing()
+                dlg.transition(DialogState.THINKING)
                 continue
 
             # ---------------------- THINKING: genera risposta ---------------------- #
-            if state == "THINKING":
+            if dlg.state == DialogState.THINKING:
                 try:
                     DOCSTORE_PATH = getattr(SET, "docstore_path", "DataBase/index.json")
                     TOPK = int(getattr(SET, "retrieval_top_k", 3))
@@ -445,8 +449,8 @@ def main() -> None:
                     say(f"[VAL] {reason}", quiet=False)
                 if not ok and clarify:
                     say("🤔 Puoi chiarire meglio la tua domanda?", quiet=args.quiet)
-                    is_processing = False
-                    state = "LISTENING"
+                    dlg.end_processing()
+                    dlg.transition(DialogState.LISTENING)
                     continue
                 if not ok:
                     pending_answer = "Domanda non pertinente"
@@ -467,11 +471,13 @@ def main() -> None:
                     )
                     if CHAT_ENABLED:
                         chat.push_assistant(pending_answer)
-                state = "SPEAKING"
+                if dlg.turn_id != processing_turn:
+                    continue
+                dlg.transition(DialogState.SPEAKING)
                 continue
 
             # ---------------------- SPEAKING: TTS risposta ---------------------- #
-            if state == "SPEAKING":
+            if dlg.state == DialogState.SPEAKING:
                 print(f"🔮 Oracolo: {pending_answer}", flush=True)
                 if PROF.contains_profanity(pending_answer):
                     if FILTER_MODE == "block":
@@ -506,17 +512,18 @@ def main() -> None:
                 )
                 evt.set()
                 mon.join()
-                active_deadline = time.time() + IDLE_TIMEOUT
-                is_processing = False
+                dlg.refresh_deadline()
+                dlg.end_processing()
+                processing_turn = dlg.turn_id
                 if WAKE_ENABLED and WAKE_SINGLE_TURN:
-                    state = "SLEEP"
+                    dlg.transition(DialogState.SLEEP)
                     say("🌘 Torno al silenzio. Di' «ciao oracolo» per riattivarmi.", quiet=args.quiet)
                 else:
-                    state = "LISTENING"
+                    dlg.transition(DialogState.LISTENING)
                 continue
 
             # fallback
-            state = "SLEEP"
+            dlg.transition(DialogState.SLEEP)
 
     finally:
         try:
