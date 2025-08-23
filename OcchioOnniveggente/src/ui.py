@@ -115,6 +115,7 @@ class RealtimeWSClient:
     def __init__(self, url: str, sr: int, on_partial, on_answer) -> None:
         self.url = url
         self.sr = sr
+        self.frame_samples = int(self.sr * 0.02)
         self.on_partial = on_partial
         self.on_answer = on_answer
         self.send_q: "queue.Queue[bytes]" = queue.Queue()
@@ -141,7 +142,13 @@ class RealtimeWSClient:
                         self.ws.send(json.dumps({"type": "barge_in"})), loop
                     )
 
-        with sd.RawInputStream(samplerate=self.sr, channels=1, dtype="int16", callback=callback):
+        with sd.RawInputStream(
+            samplerate=self.sr,
+            blocksize=self.frame_samples,
+            channels=1,
+            dtype="int16",
+            callback=callback,
+        ):
             while not self.stop_event.is_set():
                 await asyncio.sleep(0.1)
 
@@ -187,7 +194,13 @@ class RealtimeWSClient:
                 self.state["tts_playing"] = False
                 self.state["barge_sent"] = False
 
-        with sd.RawOutputStream(samplerate=self.sr, channels=1, dtype="int16", callback=callback):
+        with sd.RawOutputStream(
+            samplerate=self.sr,
+            blocksize=self.frame_samples,
+            channels=1,
+            dtype="int16",
+            callback=callback,
+        ):
             while not self.stop_event.is_set():
                 await asyncio.sleep(0.1)
 
@@ -301,6 +314,16 @@ class OracoloUI(tk.Tk):
         # settings
         self.base_settings, self.local_settings, self.settings = load_settings_pair(self.root_dir)
 
+        # quick toggles state
+        self.lang_map = {"Auto": "auto", "IT": "it", "EN": "en"}
+        self.mode_map = {"Dettagliata": "detailed", "Concisa": "concise"}
+        self.lang_choice = tk.StringVar(value="Auto")
+        default_mode = (
+            "Dettagliata" if self.settings.get("answer_mode", "detailed") == "detailed" else "Concisa"
+        )
+        self.mode_choice = tk.StringVar(value=default_mode)
+        self.style_var = tk.BooleanVar(value=True)
+
         # process & logs
         self.proc: subprocess.Popen | None = None
         self._reader_thread: threading.Thread | None = None
@@ -362,6 +385,16 @@ class OracoloUI(tk.Tk):
 
         self.status_var = tk.StringVar(value="🟡 In attesa")
         ttk.Label(bar, textvariable=self.status_var).pack(side="right")
+
+        opts = ttk.Frame(self)
+        opts.pack(fill="x", padx=16, pady=(0, 8))
+        ttk.Checkbutton(opts, text="Stile poetico", variable=self.style_var).pack(side="left")
+        ttk.Label(opts, text="Lingua:").pack(side="left", padx=(8, 4))
+        self.lang_cb = ttk.Combobox(opts, textvariable=self.lang_choice, values=list(self.lang_map.keys()), state="readonly", width=7)
+        self.lang_cb.pack(side="left")
+        ttk.Label(opts, text="Risposta:").pack(side="left", padx=(8, 4))
+        self.mode_cb = ttk.Combobox(opts, textvariable=self.mode_choice, values=list(self.mode_map.keys()), state="readonly", width=11)
+        self.mode_cb.pack(side="left")
 
         log_frame = ttk.Frame(self)
         log_frame.pack(fill="both", expand=True, padx=16, pady=(0, 12))
@@ -740,6 +773,11 @@ class OracoloUI(tk.Tk):
             env["PYTHONUNBUFFERED"] = "1"
             env["PYTHONIOENCODING"] = "utf-8"
             env["PYTHONUTF8"] = "1"
+
+            env["ORACOLO_STYLE"] = "poetic" if self.style_var.get() else "plain"
+            env["ORACOLO_LANG"] = self.lang_map.get(self.lang_choice.get(), "auto")
+            env["ORACOLO_ANSWER_MODE"] = self.mode_map.get(self.mode_choice.get(), "detailed")
+            self.settings["answer_mode"] = env["ORACOLO_ANSWER_MODE"]
 
             use_quiet = not bool(self.settings.get("debug", False))
 
