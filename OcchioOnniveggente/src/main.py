@@ -442,7 +442,7 @@ def main() -> None:
                 except Exception:
                     DOCSTORE_PATH = "DataBase/index.json"
                     TOPK = 3
-                ok, context, clarify, reason = validate_question(
+                ok, context, clarify, reason, suggestion = validate_question(
                     pending_q,
                     client=client,
                     emb_model=EMB_MODEL,
@@ -453,6 +453,11 @@ def main() -> None:
                 )
                 if DEBUG:
                     say(f"[VAL] {reason}", quiet=False)
+                if not ok and clarify and suggestion and suggestion != pending_topic:
+                    say(f"Vuoi cambiare argomento in: {suggestion}?", quiet=args.quiet)
+                    dlg.end_processing()
+                    dlg.transition(DialogState.LISTENING)
+                    continue
                 if not ok and clarify:
                     say("🤔 Puoi chiarire meglio la tua domanda?", quiet=args.quiet)
                     dlg.end_processing()
