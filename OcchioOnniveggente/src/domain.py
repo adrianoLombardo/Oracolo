@@ -165,12 +165,20 @@ def validate_question(
 
     # Se il filtro non è abilitato → sempre OK
     if not enabled:
+        codex/improve-oracolo-chatbot-functionality-9nddjz
         ctx = _try_retrieve(question, settings, docstore_path, top_k, topic)
+
+        ctx = _try_retrieve(question, settings, docstore_path, top_k)
+        main
         return True, ctx, False
 
     # Se NON ci sono keywords → non filtriamo (sempre OK)
     if not keywords:
+        codex/improve-oracolo-chatbot-functionality-9nddjz
         ctx = _try_retrieve(question, settings, docstore_path, top_k, topic)
+
+        ctx = _try_retrieve(question, settings, docstore_path, top_k)
+        main
         return True, ctx, False
 
     # ---- Boost terms (accettazione immediata se compaiono) ----
@@ -182,7 +190,11 @@ def validate_question(
         "cosmo", "universo", "stella", "stelle", "mare"
     ]
     if any(bt in q_norm for bt in boost_terms):
+        codex/improve-oracolo-chatbot-functionality-9nddjz
         ctx = _try_retrieve(question, settings, docstore_path, top_k, topic)
+
+        ctx = _try_retrieve(question, settings, docstore_path, top_k)
+        main
         return True, ctx, False
 
     # ---- Overlap parole chiave ----

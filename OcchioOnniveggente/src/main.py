@@ -266,6 +266,7 @@ def main() -> None:
     last_lang = "it"  # lingua da usare quando STT è incerto
 
     # --------------------------- STATE MACHINE --------------------------- #
+        codex/improve-oracolo-chatbot-functionality-9nddjz
     state = "SLEEP"
     active_deadline = 0.0
     is_processing = False
@@ -291,6 +292,11 @@ def main() -> None:
                         break
         except Exception:
             pass
+
+    state = "SLEEP"      # SLEEP -> attende hotword. ACTIVE -> dialogo attivo
+    active_deadline = 0  # timestamp (time.time()) di scadenza inattività
+    processing_turn = False
+        main
 
     try:
         while True:
@@ -365,8 +371,25 @@ def main() -> None:
                 state = "LISTENING"
                 continue
 
+        codex/improve-oracolo-chatbot-functionality-9nddjz
             # ---------------------- LISTENING: attesa domanda ---------------------- #
             if state == "LISTENING":
+
+            # ---------------------- ACTIVE: dialogo attivo ---------------------- #
+            # Se hotword è disattivata a config, restiamo sempre "attivi".
+            if (not WAKE_ENABLED) or state == "ACTIVE":
+                # timeout inattività → torna a SLEEP
+                if WAKE_ENABLED and time.time() > active_deadline:
+                    say("🌘 Torno al silenzio. Di' «ciao oracolo» per riattivarmi.", quiet=args.quiet)
+                    state = "SLEEP"
+                    continue
+
+                if processing_turn:
+                    # stiamo ancora elaborando il turno precedente
+                    continue
+
+                # ascolto una domanda
+       main
                 say(
                     "🎤 Parla pure (VAD energia, max %.1fs)…" % (SET.vad.max_ms / 1000.0),
                     quiet=args.quiet,
@@ -385,7 +408,13 @@ def main() -> None:
                 say(f"📝 Domanda: {q}", quiet=args.quiet)
                 if not q:
                     continue
+        codex/improve-oracolo-chatbot-functionality-9nddjz
                 active_deadline = time.time() + IDLE_TIMEOUT
+
+                # rinnova timer appena rilevato parlato valido
+                active_deadline = time.time() + IDLE_TIMEOUT
+
+        main
                 eff_lang = qlang if qlang in ("it", "en") else last_lang
                 if PROF.contains_profanity(q):
                     if FILTER_MODE == "block":
@@ -418,33 +447,66 @@ def main() -> None:
                 except Exception:
                     DOCSTORE_PATH = "DataBase/index.json"
                     TOPK = 3
+        codex/improve-oracolo-chatbot-functionality-9nddjz
                 ok, context, clarify = validate_question(
                     pending_q,
+
+
+                ok, context, clarify = validate_question(
+                    q,
+        main
                     client=client,
                     emb_model=EMB_MODEL,
                     docstore_path=DOCSTORE_PATH,
                     top_k=TOPK,
                     topic=pending_topic,
                 )
+        codex/improve-oracolo-chatbot-functionality-9nddjz
                 if not ok and clarify:
                     say("🤔 Puoi chiarire meglio la tua domanda?", quiet=args.quiet)
                     is_processing = False
                     state = "LISTENING"
                     continue
+
+
+                if not ok and clarify:
+                    say("🤔 Puoi chiarire meglio la tua domanda?", quiet=args.quiet)
+                    processing_turn = False
+                    continue
+
+        main
                 if not ok:
                     pending_answer = "Domanda non pertinente"
                     if CHAT_ENABLED:
                         chat.push_assistant(pending_answer)
                 else:
+       codex/improve-oracolo-chatbot-functionality-9nddjz
                     pending_answer = oracle_answer(
                         pending_q,
                         pending_lang,
+
+                    if CHAT_ENABLED:
+                        chat.push_user(q)
+                        chat.update_topic(q, client, EMB_MODEL)
+                        topic_txt = chat.topic_text
+                    else:
+                        topic_txt = None
+                    processing_turn = True
+                    a = oracle_answer(
+                        q,
+                        eff_lang,
+        main
                         client,
                         LLM_MODEL,
                         ORACLE_SYSTEM,
                         context=context,
+        codex/improve-oracolo-chatbot-functionality-9nddjz
                         history=pending_history,
                         topic=pending_topic,
+
+                        history=(chat.history if CHAT_ENABLED else None),
+                        topic=topic_txt,
+        main
                     )
                     if CHAT_ENABLED:
                         chat.push_assistant(pending_answer)
@@ -488,7 +550,13 @@ def main() -> None:
                 evt.set()
                 mon.join()
                 active_deadline = time.time() + IDLE_TIMEOUT
+        codex/improve-oracolo-chatbot-functionality-9nddjz
                 is_processing = False
+
+                processing_turn = False
+
+                # se modalità "single turn", torna subito a SLEEP
+        main
                 if WAKE_ENABLED and WAKE_SINGLE_TURN:
                     state = "SLEEP"
                     say("🌘 Torno al silenzio. Di' «ciao oracolo» per riattivarmi.", quiet=args.quiet)
