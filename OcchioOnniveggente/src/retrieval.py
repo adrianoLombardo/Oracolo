@@ -17,6 +17,14 @@ try:
 except Exception:
     fuzz = None
 
+# Reranker opzionale basato su mini cross-encoder
+try:
+    from sentence_transformers import CrossEncoder  # pip install sentence-transformers
+except Exception:  # pragma: no cover - libreria facoltativa
+    CrossEncoder = None
+
+_CROSS_ENCODER_CACHE: Dict[str, Any] = {}
+
 
 @dataclass
 class Chunk:
@@ -48,26 +56,53 @@ def _load_index(path: str | Path) -> List[Dict]:
     return []
 
 
-def _make_chunks(text: str, max_chars: int = 800, overlap: int = 80) -> List[str]:
-    sents = _simple_sentences(text)
+def _make_chunks(text: str, max_chars: int = 800, overlap_ratio: float = 0.1) -> List[str]:
+    """Split text into semantically coherent chunks.
+
+    La funzione prova prima a spezzare su paragrafi/titoli (doppie nuove
+    linee). Se un paragrafo supera ``max_chars`` viene ulteriormente spezzato
+    in frasi con un overlap dinamico proporzionale alla lunghezza del chunk
+    precedente.
+    """
+
+    if not text.strip():
+        return []
+
+    paras = [p.strip() for p in re.split(r"\n{2,}", text) if p.strip()]
     chunks: List[str] = []
     buf = ""
-    for s in sents:
+    for p in paras:
         if not buf:
-            buf = s
-        elif len(buf) + 1 + len(s) <= max_chars:
-            buf += " " + s
+            buf = p
+        elif len(buf) + 1 + len(p) <= max_chars:
+            buf += "\n" + p
         else:
             chunks.append(buf)
-            buf = (buf[-overlap:] + " " + s) if overlap and len(buf) > overlap else s
+            ov = int(len(buf) * overlap_ratio)
+            buf = (buf[-ov:] + "\n" + p) if ov > 0 else p
     if buf:
         chunks.append(buf)
-    if not chunks and text.strip():
-        raw = text.strip()
-        step = max_chars - overlap
-        for i in range(0, len(raw), step):
-            chunks.append(raw[i : i + max_chars])
-    return chunks
+
+    # Gestisci eventuali chunk ancora troppo lunghi spezzandoli in frasi
+    out: List[str] = []
+    for ch in chunks:
+        if len(ch) <= max_chars:
+            out.append(ch)
+            continue
+        sents = _simple_sentences(ch)
+        tmp = ""
+        for s in sents:
+            if not tmp:
+                tmp = s
+            elif len(tmp) + 1 + len(s) <= max_chars:
+                tmp += " " + s
+            else:
+                out.append(tmp)
+                ov = int(len(tmp) * overlap_ratio)
+                tmp = (tmp[-ov:] + " " + s) if ov > 0 else s
+        if tmp:
+            out.append(tmp)
+    return out
 
 
 def _cosine(a: np.ndarray, b: np.ndarray) -> float:
@@ -88,6 +123,29 @@ def _embed_texts(client: Any, model: str, texts: List[str]) -> List[np.ndarray]:
     return vecs
 
 
+def _rewrite_query(client: Any, model: str, query: str, n: int = 2) -> List[str]:
+    """Ottiene riformulazioni della query tramite un piccolo modello LLM."""
+    prompt = (
+        "Fornisci {n} riformulazioni concise della seguente query in italiano o inglese, una per riga.\nQuery: {q}"
+    ).format(n=n, q=query)
+    txt = ""
+    try:
+        # API 'responses' (OpenAI>=2024)
+        resp = client.responses.create(model=model, input=prompt)  # type: ignore[attr-defined]
+        txt = getattr(resp, "output_text", "")
+    except Exception:
+        try:
+            # compatibilità con chat.completions
+            resp = client.chat.completions.create(  # type: ignore[attr-defined]
+                model=model, messages=[{"role": "user", "content": prompt}]
+            )
+            txt = resp.choices[0].message.content  # type: ignore[index]
+        except Exception:
+            return []
+    lines = [l.strip("- •\t") for l in txt.splitlines() if l.strip()]
+    return lines[:n]
+
+
 def _score_fallback(query: str, chunks: List[Chunk], top_k: int) -> List[Tuple[Chunk, float]]:
     # Fallback super semplice: token overlap + (opz.) fuzzy
     qtok = set(_tokenize(query))
@@ -105,6 +163,26 @@ def _score_fallback(query: str, chunks: List[Chunk], top_k: int) -> List[Tuple[C
     return scored[:top_k]
 
 
+def _rerank_cross_encoder(
+    query: str, pairs: List[Tuple[Chunk, float]], model_name: str
+) -> List[Tuple[Chunk, float]]:
+    """Rerank usando un mini cross-encoder (se disponibile)."""
+    if CrossEncoder is None:
+        return pairs
+    try:  # cache per evitare reload del modello ad ogni chiamata
+        ce = _CROSS_ENCODER_CACHE.get(model_name)
+        if ce is None:
+            ce = CrossEncoder(model_name)
+            _CROSS_ENCODER_CACHE[model_name] = ce
+        texts = [c.text for c, _ in pairs]
+        scores = ce.predict([(query, t) for t in texts])
+        reranked = [(c, float(s)) for (c, _), s in zip(pairs, scores)]
+        reranked.sort(key=lambda x: x[1], reverse=True)
+        return reranked
+    except Exception:
+        return pairs
+
+
 def retrieve(
     query: str,
     docstore_path: str | Path,
@@ -113,8 +191,18 @@ def retrieve(
     topic: str | None = None,
     client: Any | None = None,
     embed_model: str | None = None,
+    rewrite_model: str | None = None,
+    rerank_model: str | None = None,
 ) -> List[Dict]:
     """Hybrid BM25 + embedding retrieval returning metadata for citations."""
+    if client is not None and rewrite_model:
+        try:
+            rewrites = _rewrite_query(client, rewrite_model, query)
+            if rewrites:
+                query = query + " " + " ".join(rewrites)
+        except Exception:
+            pass
+
     docs = _load_index(docstore_path)
     if topic:
         tnorm = str(topic).lower()
@@ -159,13 +247,18 @@ def retrieve(
                 for (ch, bm_sc), sim in zip(best, sims):
                     combo.append((ch, 0.5 * bm_sc + 0.5 * sim))
                 combo.sort(key=lambda x: x[1], reverse=True)
-                best = combo[:top_k]
+                best = combo[: max(top_k * 4, top_k)]
             else:
-                best = best[:top_k]
+                best = best[: max(top_k * 4, top_k)]
         except Exception:
-            best = best[:top_k]
+            best = best[: max(top_k * 4, top_k)]
     else:
-        best = best[:top_k]
+        best = best[: max(top_k * 4, top_k)]
+
+    if rerank_model:
+        best = _rerank_cross_encoder(query, best, rerank_model)
+
+    best = best[:top_k]
 
     out = []
     for ch, sc in best:

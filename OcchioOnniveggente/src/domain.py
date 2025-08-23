@@ -343,6 +343,8 @@ def _try_retrieve(
     if not docstore_path:
         return []
     try:
+        rewrite_model = getattr(settings, "retrieval_rewrite_model", None)
+        rerank_model = getattr(settings, "retrieval_rerank_model", None)
         raw_ctx = retrieve(
             question,
             docstore_path,
@@ -350,6 +352,8 @@ def _try_retrieve(
             topic=topic,
             client=client,
             embed_model=emb_model,
+            rewrite_model=rewrite_model,
+            rerank_model=rerank_model,
         )
     except Exception:
         raw_ctx = []
