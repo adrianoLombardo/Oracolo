@@ -94,15 +94,14 @@ class RTSession:
         await self.send_json({"type": "answer", "text": text})
 
     async def stream_file(self, path: Path, chunk_bytes: int = 960) -> None:
+        """Invia il contenuto di ``path`` in piccoli chunk al client."""
+
         if not path.exists():
             return
-        self.state = "tts"
-        self.barge = False
+
         try:
             with path.open("rb") as f:
                 while True:
-                    if self.barge:
-                        break
                     data = f.read(chunk_bytes)
                     if not data:
                         break
@@ -110,6 +109,37 @@ class RTSession:
                     await asyncio.sleep(0.01)
         except Exception:
             pass
+
+    async def stream_sentences(self, text: str, client: Any) -> None:
+        """Sintetizza ``text`` frase per frase, consentendo il barge-in
+        solo ai confini di frase.
+
+        Se ``self.barge`` viene impostato a ``True`` dal client durante la
+        riproduzione, la frase corrente viene terminata ma le successive non
+        vengono inviate.
+        """
+
+        import re
+
+        sentences = [s.strip() for s in re.split(r"(?<=[.!?]) +", text) if s.strip()]
+        if not sentences:
+            return
+
+        self.state = "tts"
+        self.barge = False
+
+        for sent in sentences:
+            synthesize(
+                sent,
+                self.out_wav,
+                client,
+                self.SET.openai.tts_model,
+                self.SET.openai.tts_voice,
+            )
+            await self.stream_file(self.out_wav, chunk_bytes=960)
+            if self.barge:
+                break
+
         self.state = "idle"
         self.barge = False
 
@@ -196,14 +226,7 @@ class RTSession:
             self.chat.push_assistant(ans)
         await self.send_answer(ans)
 
-        synthesize(
-            ans,
-            self.out_wav,
-            client,
-            self.SET.openai.tts_model,
-            self.SET.openai.tts_voice,
-        )
-        await self.stream_file(self.out_wav, chunk_bytes=960)
+        await self.stream_sentences(ans, client)
 
 async def handler(ws):
     SET = Settings.model_validate_yaml(ROOT / "settings.yaml")
