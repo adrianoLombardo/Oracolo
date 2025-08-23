@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import copy
 import json
+import csv
 import os
 import queue
 import subprocess
@@ -27,7 +28,7 @@ from typing import Any
 
 from src.retrieval import retrieve
 from src.chat import ChatState
-from src.oracle import oracle_answer
+from src.oracle import oracle_answer, synthesize
 
 import asyncio
 import numpy as np
@@ -406,7 +407,15 @@ class OracoloUI(tk.Tk):
         self.profile_var = tk.StringVar(value=self.profile_names[0] if self.profile_names else "")
         self.tts_muted = False
         self.last_answer = ""
+        self.last_sources: list[dict[str, str]] = []
         self.last_activity = time.time()
+
+        # sandbox and log state
+        self.sandbox_var = tk.BooleanVar(value=False)
+        self.log_filters = {c: tk.BooleanVar(value=True) for c in ["STT", "LLM", "TTS", "WS", "DOMAIN"]}
+        self.log_entries: list[tuple[str, str]] = []
+
+        self.profile_cb: ttk.Combobox | None = None
 
         # process & logs
         self.proc: subprocess.Popen | None = None
@@ -453,8 +462,21 @@ class OracoloUI(tk.Tk):
         settings_menu.add_command(label="Conoscenza…", command=self._open_knowledge_dialog)
         settings_menu.add_command(label="Wake…", command=self._open_wake_dialog)
         settings_menu.add_separator()
+        settings_menu.add_command(label="Importa profili…", command=self._import_profiles)
+        settings_menu.add_command(label="Esporta profili…", command=self._export_profiles)
+        settings_menu.add_separator()
         settings_menu.add_command(label="Salva", command=self.save_settings)
         menubar.add_cascade(label="Impostazioni", menu=settings_menu)
+
+        # Strumenti
+        tools_menu = tk.Menu(menubar, tearoff=0)
+        tools_menu.add_command(label="Prompt di sistema…", command=self._open_system_prompt_dialog)
+        tools_menu.add_checkbutton(label="Sandbox", variable=self.sandbox_var, command=self._update_sandbox)
+        tools_menu.add_command(label="Esporta conversazione…", command=self._export_chat)
+        tools_menu.add_command(label="Risposta in audio…", command=self._export_audio)
+        tools_menu.add_command(label="Limiti OpenAI…", command=self._open_quota_dialog)
+        tools_menu.add_command(label="Salva log…", command=self._export_log)
+        menubar.add_cascade(label="Strumenti", menu=tools_menu)
 
         self.config(menu=menubar)
 
@@ -468,6 +490,7 @@ class OracoloUI(tk.Tk):
             cb = ttk.Combobox(header, textvariable=self.profile_var, values=self.profile_names, state="readonly", width=12)
             cb.pack(side="left")
             cb.bind("<<ComboboxSelected>>", self._on_profile_change)
+            self.profile_cb = cb
 
         bar = ttk.Frame(self)
         bar.pack(fill="x", padx=16, pady=(0, 8))
@@ -562,11 +585,18 @@ class OracoloUI(tk.Tk):
         ttk.Button(btns, text="/mute TTS", command=self._mute_tts).pack(side="left", padx=(4, 0))
         ttk.Button(btns, text="/stop TTS", command=self._stop_tts).pack(side="left", padx=(4, 0))
         ttk.Button(btns, text="Copia risposta", command=self._copy_last).pack(side="left", padx=(4, 0))
+        ttk.Button(btns, text="Citazioni", command=self._copy_citations).pack(side="left", padx=(4, 0))
+        ttk.Button(btns, text="Audio", command=self._export_audio).pack(side="left", padx=(4, 0))
         ttk.Button(btns, text="Esporta", command=self._export_chat).pack(side="left", padx=(4, 0))
         ttk.Button(btns, text="Pin messaggio", command=self._pin_last).pack(side="left", padx=(4, 0))
 
         log_frame = ttk.Frame(notebook)
         notebook.add(log_frame, text="Log")
+        filt = ttk.Frame(log_frame)
+        filt.pack(fill="x")
+        for name, var in self.log_filters.items():
+            ttk.Checkbutton(filt, text=name, variable=var, command=self._refresh_log).pack(side="left")
+        ttk.Button(filt, text="Salva", command=self._export_log).pack(side="right")
         self.log = scrolledtext.ScrolledText(
             log_frame,
             wrap="word",
@@ -685,20 +715,24 @@ class OracoloUI(tk.Tk):
         self.last_activity = time.time()
         self._append_chat("user", text)
         self.chat_state.push_user(text)
+        self.last_sources = []
         try:
             client = OpenAI()
             style_prompt = self.settings.get("style_prompt", "") if self.style_var.get() else ""
             lang = self.lang_map.get(self.lang_choice.get(), "auto")
             mode = self.mode_map.get(self.mode_choice.get(), "detailed")
-            ctx = retrieve(
-                text,
-                self.settings.get("docstore_path", ""),
-                top_k=int(self.settings.get("retrieval_top_k", 3)),
-                topic=self.chat_state.topic_text,
-            )
+            if self.sandbox_var.get():
+                ctx = []
+            else:
+                ctx = retrieve(
+                    text,
+                    self.settings.get("docstore_path", ""),
+                    top_k=int(self.settings.get("retrieval_top_k", 3)),
+                    topic=self.chat_state.topic_text,
+                )
             pin_ctx = [{"id": f"pin{i}", "text": t} for i, t in enumerate(self.chat_state.pinned)]
             ctx = pin_ctx + ctx
-            ans, _ = oracle_answer(
+            ans, used_ctx = oracle_answer(
                 text,
                 lang,
                 client,
@@ -709,6 +743,7 @@ class OracoloUI(tk.Tk):
                 topic=self.chat_state.topic_text,
                 mode=mode,
             )
+            self.last_sources = used_ctx
         except Exception as e:
             ans = f"Errore: {e}"
         self.chat_state.push_assistant(ans)
@@ -732,14 +767,66 @@ class OracoloUI(tk.Tk):
             self.clipboard_append(self.last_answer)
 
     def _export_chat(self) -> None:
-        path = filedialog.asksaveasfilename(defaultextension=".txt", parent=self)
+        path = filedialog.asksaveasfilename(
+            defaultextension=".txt",
+            filetypes=[("Text", "*.txt"), ("Markdown", "*.md"), ("JSON", "*.json")],
+            parent=self,
+        )
         if not path:
             return
         text = self.chat_view.get("1.0", "end")
-        Path(path).write_text(text, encoding="utf-8")
+        if path.lower().endswith(".json"):
+            data = self.chat_state.history
+            Path(path).write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+        else:
+            Path(path).write_text(text, encoding="utf-8")
+
+    def _export_audio(self) -> None:
+        if not self.last_answer:
+            return
+        path = filedialog.asksaveasfilename(
+            defaultextension=".wav",
+            filetypes=[("WAV", "*.wav"), ("MP3", "*.mp3")],
+            parent=self,
+        )
+        if not path:
+            return
+        try:
+            client = OpenAI()
+            openai_conf = self.settings.get("openai", {})
+            tts_model = openai_conf.get("tts_model", "gpt-4o-mini-tts")
+            tts_voice = openai_conf.get("tts_voice", "alloy")
+            synthesize(self.last_answer, Path(path), client, tts_model, tts_voice)
+        except Exception as e:
+            messagebox.showerror("Audio", f"Errore esportando audio: {e}")
+
+    def _copy_citations(self) -> None:
+        if not self.last_sources:
+            return
+        cites = ", ".join(s.get("id", "") for s in self.last_sources)
+        self.clipboard_clear()
+        self.clipboard_append(cites)
+
+    def _export_log(self) -> None:
+        path = filedialog.asksaveasfilename(
+            defaultextension=".json",
+            filetypes=[("JSON", "*.json"), ("CSV", "*.csv")],
+            parent=self,
+        )
+        if not path:
+            return
+        if path.lower().endswith(".csv"):
+            with open(path, "w", encoding="utf-8", newline="") as f:
+                w = csv.writer(f)
+                w.writerow(["category", "text"])
+                for cat, txt in self.log_entries:
+                    w.writerow([cat, txt.strip()])
+        else:
+            data = [{"category": c, "text": t.strip()} for c, t in self.log_entries]
+            Path(path).write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
     def _test_voice(self) -> None:
-        self._append_log(f"Voce test: {self.tts_voice.get()}\n")
+        self._append_log(f"Voce test: {self.tts_voice.get()}\n", "TTS")
 
     def _poll_status(self) -> None:
         if self.ws_client is not None:
@@ -761,16 +848,117 @@ class OracoloUI(tk.Tk):
         self.after(1000, self._poll_idle)
 
     # --------------------------- Log helpers ------------------------------ #
-    def _append_log(self, text: str) -> None:
+    def _append_log(self, text: str, category: str = "MISC") -> None:
+        if self.sandbox_var.get():
+            return
+        cat = category.upper()
+        self.log_entries.append((cat, text))
+        if cat in self.log_filters and not self.log_filters[cat].get():
+            return
         self.log.configure(state="normal")
         self.log.insert("end", text)
         self.log.see("end")
         self.log.configure(state="disabled")
 
     def _clear_log(self) -> None:
+        self.log_entries.clear()
         self.log.configure(state="normal")
         self.log.delete("1.0", "end")
         self.log.configure(state="disabled")
+
+    def _refresh_log(self) -> None:
+        if self.sandbox_var.get():
+            return
+        self.log.configure(state="normal")
+        self.log.delete("1.0", "end")
+        for cat, txt in self.log_entries:
+            if cat in self.log_filters and not self.log_filters[cat].get():
+                continue
+            self.log.insert("end", txt)
+        self.log.see("end")
+        self.log.configure(state="disabled")
+
+    def _open_system_prompt_dialog(self) -> None:
+        win = tk.Toplevel(self)
+        win.title("Prompt di sistema")
+        txt = scrolledtext.ScrolledText(win, width=60, height=15)
+        txt.pack(padx=8, pady=8)
+        txt.insert("1.0", self.settings.get("style_prompt", ""))
+        presets = list(self.settings.get("profiles", {}).keys())
+        if presets:
+            var = tk.StringVar(value="")
+            combo = ttk.Combobox(win, textvariable=var, values=presets, state="readonly")
+            combo.pack(padx=8, pady=(0, 8))
+
+            def on_sel(event=None):
+                name = var.get()
+                prof = self.settings.get("profiles", {}).get(name, {})
+                sp = prof.get("oracle_system", "")
+                txt.delete("1.0", "end")
+                txt.insert("1.0", sp)
+
+            combo.bind("<<ComboboxSelected>>", on_sel)
+
+        btns = ttk.Frame(win)
+        btns.pack(pady=8)
+
+        def reset() -> None:
+            txt.delete("1.0", "end")
+
+        def save() -> None:
+            self.settings["style_prompt"] = txt.get("1.0", "end").strip()
+            win.destroy()
+
+        ttk.Button(btns, text="Ripristina", command=reset).pack(side="left", padx=4)
+        ttk.Button(btns, text="Salva", command=save).pack(side="left", padx=4)
+        ttk.Button(btns, text="Chiudi", command=win.destroy).pack(side="left", padx=4)
+
+    def _open_quota_dialog(self) -> None:
+        win = tk.Toplevel(self)
+        win.title("Limiti OpenAI")
+        try:
+            client = OpenAI()
+            model = self.settings.get("llm_model", "gpt-4o")
+            info = client.models.retrieve(model)
+            ttk.Label(win, text=f"Modello: {info.id}").pack(anchor="w", padx=8, pady=4)
+        except Exception as e:
+            ttk.Label(win, text=f"Errore: {e}").pack(anchor="w", padx=8, pady=4)
+        ttk.Button(win, text="Chiudi", command=win.destroy).pack(pady=8)
+
+    def _update_sandbox(self) -> None:
+        if self.sandbox_var.get():
+            self.tts_muted = True
+            self.chat_state.persist_jsonl = None
+        else:
+            self.tts_muted = False
+            pj = self.settings.get("chat", {}).get("persist_jsonl")
+            if pj:
+                self.chat_state.persist_jsonl = Path(pj)
+
+    def _import_profiles(self) -> None:
+        path = filedialog.askdirectory(parent=self)
+        if not path:
+            return
+        prof_dir = Path(path)
+        profiles = self.settings.setdefault("profiles", {})
+        for p in prof_dir.glob("*.yaml"):
+            profiles[p.stem] = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
+        self.profile_names = list(profiles.keys())
+        if self.profile_cb:
+            self.profile_cb["values"] = self.profile_names
+        if self.profile_names and self.profile_var.get() not in self.profile_names:
+            self.profile_var.set(self.profile_names[0])
+
+    def _export_profiles(self) -> None:
+        path = filedialog.askdirectory(parent=self)
+        if not path:
+            return
+        out_dir = Path(path)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        for name, conf in self.settings.get("profiles", {}).items():
+            (out_dir / f"{name}.yaml").write_text(
+                yaml.safe_dump(conf, sort_keys=False, allow_unicode=True), encoding="utf-8"
+            )
 
     # --------------------------- Document actions ------------------------- #
     def _find_ingest_script(self) -> Path | None:
@@ -1458,10 +1646,10 @@ class OracoloUI(tk.Tk):
                     break
                 time.sleep(0.05)
                 continue
-            self.after(0, self._append_log, line)
+            self.after(0, lambda line=line: self._append_log(line, "LLM"))
         rest = f.read()
         if rest:
-            self.after(0, self._append_log, rest)
+            self.after(0, lambda rest=rest: self._append_log(rest, "LLM"))
 
     def stop_oracolo(self) -> None:
         if not self.proc or self.proc.poll() is not None:
@@ -1493,7 +1681,7 @@ class OracoloUI(tk.Tk):
 
     # ----------------------- Realtime WS control ------------------------- #
     def _on_ws_event(self, ev: str) -> None:
-        self._append_log(f"[WS] {ev}\n")
+        self._append_log(f"[WS] {ev}\n", "WS")
         if ev == "connected":
             self.ws_latency.set("WS: handshake")
         elif ev == "disconnected":
@@ -1522,14 +1710,19 @@ class OracoloUI(tk.Tk):
         ping_timeout = int(rt_conf.get("ping_timeout", 20))
 
         self._append_log(
-            f"🔌 Realtime WS → {url}  (sr={sr}, in={sd.default.device[0]}, out={sd.default.device[1]})\n"
+            f"🔌 Realtime WS → {url}  (sr={sr}, in={sd.default.device[0]}, out={sd.default.device[1]})\n",
+            "WS",
         )
 
         self.ws_client = RealtimeWSClient(
             url,
             sr,
-            on_partial=lambda text: self.after(0, self._append_log, f"… {text}\n"),
-            on_answer=lambda text: self.after(0, self._append_log, f"🔮 {text}\n"),
+            on_partial=lambda text: self.after(
+                0, lambda t=text: self._append_log(f"… {t}\n", "STT")
+            ),
+            on_answer=lambda text: self.after(
+                0, lambda t=text: self._append_log(f"🔮 {t}\n", "LLM")
+            ),
             barge_threshold=barge,
             ping_interval=ping_interval,
             ping_timeout=ping_timeout,
