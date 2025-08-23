@@ -115,6 +115,7 @@ class RealtimeWSClient:
     def __init__(self, url: str, sr: int, on_partial, on_answer) -> None:
         self.url = url
         self.sr = sr
+        self.frame_samples = int(self.sr * 0.02)
         self.on_partial = on_partial
         self.on_answer = on_answer
         self.send_q: "queue.Queue[bytes]" = queue.Queue()
@@ -141,7 +142,13 @@ class RealtimeWSClient:
                         self.ws.send(json.dumps({"type": "barge_in"})), loop
                     )
 
-        with sd.RawInputStream(samplerate=self.sr, channels=1, dtype="int16", callback=callback):
+        with sd.RawInputStream(
+            samplerate=self.sr,
+            blocksize=self.frame_samples,
+            channels=1,
+            dtype="int16",
+            callback=callback,
+        ):
             while not self.stop_event.is_set():
                 await asyncio.sleep(0.1)
 
@@ -187,7 +194,13 @@ class RealtimeWSClient:
                 self.state["tts_playing"] = False
                 self.state["barge_sent"] = False
 
-        with sd.RawOutputStream(samplerate=self.sr, channels=1, dtype="int16", callback=callback):
+        with sd.RawOutputStream(
+            samplerate=self.sr,
+            blocksize=self.frame_samples,
+            channels=1,
+            dtype="int16",
+            callback=callback,
+        ):
             while not self.stop_event.is_set():
                 await asyncio.sleep(0.1)
 

@@ -495,7 +495,20 @@ def main() -> None:
                         ).output_text.strip()
                     else:
                         pending_answer = PROF.mask(pending_answer)
-                append_log(pending_q, pending_answer, LOG_PATH)
+                append_log(
+                    pending_q,
+                    pending_answer,
+                    LOG_PATH,
+                    lang=pending_lang,
+                    topic=pending_topic,
+                    sources=pending_sources,
+                )
+                if pending_sources:
+                    print("📚 Fonti:")
+                    for i, src in enumerate(pending_sources, 1):
+                        title = src.get("title") or src.get("id", "")
+                        snippet = (src.get("text", "").splitlines() or [""])[0][:80]
+                        print(f"[{i}] {title}: {snippet}")
                 base = color_from_text(pending_answer, {k: v for k, v in PALETTES.items()})
                 if hasattr(light, "set_base_rgb"):
                     light.set_base_rgb(base)

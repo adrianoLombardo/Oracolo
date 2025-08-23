@@ -197,14 +197,32 @@ def synthesize(text: str, out_path: Path, client, tts_model: str, tts_voice: str
     print("❌ Impossibile sintetizzare l'audio.")
 
 
-def append_log(q: str, a: str, log_path: Path) -> None:
+def append_log(
+    q: str,
+    a: str,
+    log_path: Path,
+    *,
+    lang: str = "",
+    topic: str | None = None,
+    sources: list[dict[str, str]] | None = None,
+) -> None:
+    """Append a structured CSV line with optional metadata."""
     log_path.parent.mkdir(parents=True, exist_ok=True)
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
     def clean(s: str) -> str:
         return s.replace('"', "'")
-    line = f'"{ts}","{clean(q)}","{clean(a)}"\n'
+
+    src_str = ";".join(f"{s.get('id','')}:{s.get('score',0):.2f}" for s in (sources or []))
+    line = (
+        f'"{ts}","{lang}","{clean(topic or '')}",'
+        f'"{clean(q)}","{clean(a)}","{src_str}"\n'
+    )
     if not log_path.exists():
-        log_path.write_text('"timestamp","question","answer"\n', encoding="utf-8")
+        log_path.write_text(
+            '"timestamp","lang","topic","question","answer","sources"\n',
+            encoding="utf-8",
+        )
     with log_path.open("a", encoding="utf-8") as f:
         f.write(line)
 
