@@ -42,4 +42,5 @@ def test_oracle_answer_returns_response_and_context():
     model, instructions, messages = client.responses.called_with
     assert model == "test-model"
     assert "Rispondi in italiano." in instructions
+    assert "Rispondi SOLO usando i passaggi" in instructions
     assert messages[-1] == {"role": "user", "content": "Che cos'è?"}
