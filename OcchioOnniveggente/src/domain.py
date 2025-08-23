@@ -102,6 +102,7 @@ def validate_question(
     client: Any = None,
     docstore_path: str | Path | None = None,
     top_k: int = 3,
+        codex/improve-oracolo-chatbot-functionality-gnbrya
     emb_model: str | None = None,
     embed_model: str | None = None,
     topic: str | None = None,
@@ -112,6 +113,25 @@ def validate_question(
     """Valida la domanda usando tre segnali e logga la decisione.
 
     Ritorna (is_ok, context_list, needs_clarification, reason).
+
+    emb_model: str | None = None,      # compat
+    embed_model: str | None = None,    # alias
+    **_: Any,                          # ignora altri kwargs
+) -> Tuple[bool, list[str], bool]:
+    """
+    Ritorna (is_ok, context_list, needs_clarification).
+
+    Politica:
+    - Se settings.domain manca o non ha keywords -> NON filtriamo (sempre OK).
+    - Boost se la domanda contiene termini ovvi (neuro, cervell*, brain, IA…).
+    - Overlap parole chiave (soglia bassa).
+    - Opzionale: similarità embedding con i frammenti recuperati.
+
+    Soglie default (se non presenti in settings.domain):
+      kw_min_overlap = 0.04
+      use_embeddings = False
+      emb_min_sim = 0.22
+        main
     """
     q_norm = _norm(question)
 
@@ -172,6 +192,7 @@ def validate_question(
 
     # Se il filtro non è abilitato → sempre OK
     if not enabled:
+        codex/improve-oracolo-chatbot-functionality-gnbrya
         ctx = _try_retrieve(question, settings, docstore_path, top_k, topic, client, emb_model or embed_model)
         return True, ctx, False, "disabled"
 
@@ -179,6 +200,15 @@ def validate_question(
     if not keywords:
         ctx = _try_retrieve(question, settings, docstore_path, top_k, topic, client, emb_model or embed_model)
         return True, ctx, False, "no keywords"
+
+        ctx = _try_retrieve(question, settings, docstore_path, top_k)
+        return True, ctx, False
+
+    # Se NON ci sono keywords → non filtriamo (sempre OK)
+    if not keywords:
+        ctx = _try_retrieve(question, settings, docstore_path, top_k)
+        return True, ctx, False
+        main
 
     # ---- Boost terms (accettazione immediata se compaiono) ----
     boost_terms = [
@@ -189,11 +219,21 @@ def validate_question(
         "cosmo", "universo", "stella", "stelle", "mare"
     ]
     if any(bt in q_norm for bt in boost_terms):
+        codex/improve-oracolo-chatbot-functionality-gnbrya
         ctx = _try_retrieve(question, settings, docstore_path, top_k, topic, client, emb_model or embed_model)
         return True, ctx, False, "boost"
 
     # ---- Overlap parole chiave ----
     kw_score = _keyword_overlap_score(question, keywords)
+
+        ctx = _try_retrieve(question, settings, docstore_path, top_k)
+        return True, ctx, False
+
+    # ---- Overlap parole chiave ----
+    kw_score = _keyword_overlap_score(question, keywords)
+    ok = kw_score >= kw_min_overlap
+    clarify = False
+        main
 
     # segnali dinamici
     hist_tokens: set[str] = set()
@@ -225,6 +265,7 @@ def validate_question(
 
     if log_path:
         try:
+        codex/improve-oracolo-chatbot-functionality-gnbrya
             Path(log_path).parent.mkdir(parents=True, exist_ok=True)
             with Path(log_path).open("a", encoding="utf-8") as f:
                 f.write(f"{int(time.time())}\t{int(ok)}\t{int(clarify)}\t{reason}\t{question}\n")
@@ -232,6 +273,23 @@ def validate_question(
             pass
 
     return ok, ctx, clarify, reason
+
+            to_embed = [question] + ctx[:3]
+            vecs = _embed_texts(client, emb_model, to_embed)
+            if len(vecs) >= 2:
+                qv = vecs[0]
+                sims = [_cosine(qv, v) for v in vecs[1:]]
+                best_sim = max(sims) if sims else 0.0
+                ok = ok or (best_sim >= emb_min_sim)
+                clarify = clarify or (not ok and best_sim > 0)
+        except Exception:
+            pass
+
+    if not ok:
+        clarify = clarify or (kw_score > 0 or bool(ctx))
+
+    return ok, ctx, clarify
+        main
 
 
 # ------------------------- helper retrieval ------------------------- #
