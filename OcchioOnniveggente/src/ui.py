@@ -22,7 +22,7 @@ import threading
 import time
 import tkinter as tk
 from pathlib import Path
-from tkinter import filedialog, messagebox, scrolledtext, ttk
+from tkinter import filedialog, messagebox, scrolledtext, simpledialog, ttk
 from typing import Any
 
 from src.retrieval import retrieve
@@ -32,6 +32,11 @@ import numpy as np
 import sounddevice as sd
 import websockets
 import yaml
+
+try:  # opzionale: drag&drop documenti
+    import tkinterdnd2 as tkdnd  # type: ignore
+except Exception:  # pragma: no cover - fallback se non disponibile
+    tkdnd = None
 
 WS_URL = os.getenv("ORACOLO_WS_URL", "ws://localhost:8765")
 SR = 24_000
@@ -700,24 +705,57 @@ class OracoloUI(tk.Tk):
         win.configure(bg=self._bg)
 
         dom = self.settings.setdefault("domain", {})
+        presets = self.settings.setdefault("domain_presets", {})
+        preset_var = tk.StringVar()
+
+        tk.Label(win, text="Preset", fg=self._fg, bg=self._bg).grid(row=0, column=0, padx=6, pady=6, sticky="e")
+        preset_cb = ttk.Combobox(win, textvariable=preset_var, values=list(presets.keys()), state="readonly", width=20)
+        preset_cb.grid(row=0, column=1, padx=6, pady=6, sticky="w")
+
         kw_var = tk.StringVar(value=", ".join(dom.get("keywords", [])))
         rigid_var = tk.StringVar(value=str(dom.get("accept_threshold", 0.5)))
+
         tk.Label(win, text="Keyword (separate da virgola)", fg=self._fg, bg=self._bg).grid(
-            row=0, column=0, padx=6, pady=6, sticky="e"
+            row=1, column=0, padx=6, pady=6, sticky="e"
         )
-        tk.Entry(win, textvariable=kw_var, width=40).grid(row=0, column=1, padx=6, pady=6, sticky="w")
+        tk.Entry(win, textvariable=kw_var, width=40).grid(row=1, column=1, padx=6, pady=6, sticky="w")
 
         tk.Label(win, text="Prompt", fg=self._fg, bg=self._bg).grid(
-            row=1, column=0, padx=6, pady=6, sticky="ne"
+            row=2, column=0, padx=6, pady=6, sticky="ne"
         )
         prompt_box = scrolledtext.ScrolledText(win, width=40, height=6)
         prompt_box.insert("1.0", self.settings.get("oracle_system", ""))
-        prompt_box.grid(row=1, column=1, padx=6, pady=6, sticky="w")
+        prompt_box.grid(row=2, column=1, padx=6, pady=6, sticky="w")
 
         tk.Label(win, text="Rigidità", fg=self._fg, bg=self._bg).grid(
-            row=2, column=0, padx=6, pady=6, sticky="e"
+            row=3, column=0, padx=6, pady=6, sticky="e"
         )
-        tk.Entry(win, textvariable=rigid_var, width=8).grid(row=2, column=1, padx=6, pady=6, sticky="w")
+        tk.Entry(win, textvariable=rigid_var, width=8).grid(row=3, column=1, padx=6, pady=6, sticky="w")
+
+        def load_preset(*_):
+            name = preset_var.get()
+            data = presets.get(name)
+            if not data:
+                return
+            kw_var.set(", ".join(data.get("keywords", [])))
+            rigid_var.set(str(data.get("accept_threshold", 0.5)))
+            prompt_box.delete("1.0", "end")
+            prompt_box.insert("1.0", data.get("prompt", ""))
+
+        def save_preset() -> None:
+            name = simpledialog.askstring("Salva preset", "Nome preset:", parent=win)
+            if not name:
+                return
+            presets[name] = {
+                "keywords": [k.strip() for k in kw_var.get().split(",") if k.strip()],
+                "accept_threshold": float(rigid_var.get() or 0.5),
+                "prompt": prompt_box.get("1.0", "end").strip(),
+            }
+            preset_cb.configure(values=list(presets.keys()))
+            preset_var.set(name)
+
+        preset_cb.bind("<<ComboboxSelected>>", load_preset)
+        ttk.Button(win, text="Salva preset", command=save_preset).grid(row=0, column=2, padx=6, pady=6)
 
         def on_ok() -> None:
             dom["keywords"] = [k.strip() for k in kw_var.get().split(",") if k.strip()]
@@ -728,10 +766,13 @@ class OracoloUI(tk.Tk):
             self.settings["oracle_system"] = prompt_box.get("1.0", "end").strip()
             win.destroy()
 
-        ttk.Button(win, text="OK", command=on_ok).grid(row=3, column=0, columnspan=2, pady=10)
+        ttk.Button(win, text="OK", command=on_ok).grid(row=4, column=0, columnspan=3, pady=10)
 
     def _open_knowledge_dialog(self) -> None:
-        win = tk.Toplevel(self)
+        if tkdnd is not None:
+            win = tkdnd.TkinterDnD.Toplevel(self)  # type: ignore[attr-defined]
+        else:
+            win = tk.Toplevel(self)
         win.title("Conoscenza")
         win.configure(bg=self._bg)
 
@@ -781,6 +822,42 @@ class OracoloUI(tk.Tk):
 
         ttk.Button(win, text="Prova", command=run_test).grid(row=2, column=2, padx=6, pady=6)
 
+        drop_lab = ttk.Label(
+            win,
+            text="Trascina qui file o cartelle per importarli",
+            relief="ridge",
+            padding=6,
+        )
+        drop_lab.grid(row=4, column=0, columnspan=3, padx=6, pady=6, sticky="we")
+
+        def _ingest_paths(paths: list[str]) -> None:
+            if not paths:
+                return
+            script = self._find_ingest_script()
+            if not script:
+                messagebox.showwarning("Documento", "Script di ingest non trovato (scripts/ingest_docs.py).")
+                return
+            try:
+                subprocess.run(
+                    [sys.executable, "-m", "scripts.ingest_docs", "--add", *paths],
+                    check=True,
+                    cwd=self.root_dir,
+                )
+                messagebox.showinfo("Successo", "Documenti aggiunti.")
+            except subprocess.CalledProcessError as exc:
+                messagebox.showerror("Errore", f"Ingest fallito: {exc}")
+
+        def _handle_drop(event):  # pragma: no cover - dipende da GUI
+            try:
+                items = drop_lab.tk.splitlist(event.data)  # type: ignore[attr-defined]
+            except Exception:
+                items = []
+            _ingest_paths(list(items))
+
+        if tkdnd is not None:  # pragma: no cover - non testabile headless
+            drop_lab.drop_target_register(tkdnd.DND_FILES)  # type: ignore[attr-defined]
+            drop_lab.dnd_bind("<<Drop>>", _handle_drop)  # type: ignore[attr-defined]
+
         def on_ok() -> None:
             self.settings["docstore_path"] = doc_var.get().strip()
             try:
@@ -789,7 +866,7 @@ class OracoloUI(tk.Tk):
                 pass
             win.destroy()
 
-        ttk.Button(win, text="OK", command=on_ok).grid(row=4, column=0, columnspan=3, pady=10)
+        ttk.Button(win, text="OK", command=on_ok).grid(row=5, column=0, columnspan=3, pady=10)
 
     def _open_lighting_dialog(self) -> None:
         win = tk.Toplevel(self)
