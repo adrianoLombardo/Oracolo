@@ -32,10 +32,15 @@ def test_update_topic_detects_change():
     client = DummyEmbClient(mapping)
     chat = ChatState()
 
+    chat.push_user("tema1")
     assert chat.update_topic("tema1", client, "m") is False
+    chat.push_user("tema1 follow")
     assert chat.update_topic("tema1 follow", client, "m") is False
+    chat.push_user("tema2")
     assert chat.update_topic("tema2", client, "m") is True
     assert chat.topic_text == "tema2"
+    assert chat.summary  # previous history summarized
+    assert len(chat.history) == 1 and chat.history[0]["content"] == "tema2"
 
 
 def test_retrieve_filters_by_topic(tmp_path: Path):
