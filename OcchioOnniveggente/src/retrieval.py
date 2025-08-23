@@ -1,6 +1,6 @@
 # src/retrieval.py
 from __future__ import annotations
-import json, math, re
+import json, math, re, hashlib
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Dict, Tuple, Iterable, Optional, Any
@@ -112,15 +112,45 @@ def _cosine(a: np.ndarray, b: np.ndarray) -> float:
     return float(np.dot(a, b) / (na * nb))
 
 
-def _embed_texts(client: Any, model: str, texts: List[str]) -> List[np.ndarray]:
+def _embed_texts(
+    client: Any, model: str, texts: List[str], *, cache_dir: str | Path | None = None
+) -> List[np.ndarray]:
     if not texts:
         return []
-    resp = client.embeddings.create(model=model, input=texts)  # type: ignore[attr-defined]
-    vecs: List[np.ndarray] = []
-    for item in resp.data:
-        vec = np.array(getattr(item, "embedding", []), dtype=np.float32)
-        vecs.append(vec)
-    return vecs
+
+    results: List[Optional[np.ndarray]] = [None] * len(texts)
+    to_compute: List[Tuple[int, str, Path | None]] = []
+    cdir = Path(cache_dir) if cache_dir else None
+    if cdir:
+        cdir.mkdir(parents=True, exist_ok=True)
+    for idx, txt in enumerate(texts):
+        if cdir:
+            h = hashlib.sha1(txt.encode("utf-8")).hexdigest()
+            fp = cdir / f"{h}.npy"
+            if fp.exists():
+                try:
+                    results[idx] = np.load(fp)
+                    continue
+                except Exception:
+                    pass
+            to_compute.append((idx, txt, fp))
+        else:
+            to_compute.append((idx, txt, None))
+
+    if to_compute:
+        resp = client.embeddings.create(  # type: ignore[attr-defined]
+            model=model, input=[t for _, t, _ in to_compute]
+        )
+        for (idx, _txt, fp), item in zip(to_compute, resp.data):
+            vec = np.array(getattr(item, "embedding", []), dtype=np.float32)
+            results[idx] = vec
+            if fp is not None:
+                try:
+                    np.save(fp, vec)
+                except Exception:
+                    pass
+
+    return [r if r is not None else np.zeros(0, dtype=np.float32) for r in results]
 
 
 def _rewrite_query(client: Any, model: str, query: str, n: int = 2) -> List[str]:
@@ -258,18 +288,16 @@ def retrieve(
 
     if client is not None and embed_model:
         try:
-            to_embed = [query] + [c.text for c, _ in best]
-            vecs = _embed_texts(client, embed_model, to_embed)
-            if len(vecs) >= 2:
-                qv = vecs[0]
-                sims = [_cosine(qv, v) for v in vecs[1:]]
-                combo: List[Tuple[Chunk, float]] = []
-                for (ch, bm_sc), sim in zip(best, sims):
-                    combo.append((ch, 0.5 * bm_sc + 0.5 * sim))
-                combo.sort(key=lambda x: x[1], reverse=True)
-                best = combo[: max(top_k * 4, top_k)]
-            else:
-                best = best[: max(top_k * 4, top_k)]
+            cache_dir = Path(docstore_path).with_suffix(".embcache")
+            qv = _embed_texts(client, embed_model, [query])[0]
+            texts = [c.text for c, _ in best]
+            vecs = _embed_texts(client, embed_model, texts, cache_dir=cache_dir)
+            sims = [_cosine(qv, v) for v in vecs]
+            combo: List[Tuple[Chunk, float]] = []
+            for (ch, bm_sc), sim in zip(best, sims):
+                combo.append((ch, 0.5 * bm_sc + 0.5 * sim))
+            combo.sort(key=lambda x: x[1], reverse=True)
+            best = combo[: max(top_k * 4, top_k)]
         except Exception:
             best = best[: max(top_k * 4, top_k)]
     else:
