@@ -45,6 +45,25 @@ audio:
   output_device: 5
 ```
 
+Il file include inoltre sezioni per l'attivazione tramite **hotword** e per
+definire più **profili** preconfigurati. Ad esempio:
+
+```yaml
+wake:
+  enabled: true
+  single_turn: true
+  it_phrases: ["ciao oracolo"]
+
+profiles:
+  Museo:
+    oracle_system: "Sei l'oracolo del museo…"
+    docstore_path: DataBase/museo.json
+```
+
+Queste opzioni permettono di risvegliare l'Oracolo con una frase chiave e di
+passare rapidamente tra preset completi (prompt, dominio, archivio e memoria
+della chat).
+
 ---
 
 ## 3. Avvio dell'Oracolo
@@ -77,6 +96,14 @@ Dal menu **Impostazioni** è possibile:
 - Selezionare input/output audio
 - Configurare modalità luce (sACN o WLED)
 - Gestire i documenti indicizzati
+
+La GUI offre inoltre:
+- Scheda **Chat** con rendering Markdown e comandi slash (`/reset`,
+  `/profile`, `/topic`, `/docs`, `/realtime`)
+- Indicatori di livello audio in tempo reale e pulsanti per avviare/fermare
+  il client WebSocket Realtime
+- Menu **Strumenti** per esportare la conversazione (TXT/MD/JSON), salvare le
+  risposte in audio (WAV/MP3) e scaricare log o profili da condividere
 
 ---
 
@@ -139,7 +166,18 @@ salvati e ricaricati come preset con un clic.
 
 ---
 
-## 6. Test
+## 6. Chat, profili ed esportazione
+
+La conversazione è multi-turno e può essere salvata in `data/logs/chat_sessions.jsonl`.
+È possibile fissare messaggi, cambiare topic e passare da un profilo all'altro
+anche da riga di comando (`/reset`, `/profile`, `/topic…`).
+
+Dal menu **Strumenti** si possono esportare:
+- la chat corrente in testo, Markdown o JSON;
+- l'ultima risposta sintetizzata in audio (WAV/MP3);
+- il log delle interazioni e le configurazioni di profilo, utili per la collaborazione.
+
+## 7. Test
 
 Esecuzione completa con pytest:
 
@@ -154,7 +192,7 @@ I test includono:
 
 ---
 
-## 7. Moduli principali
+## 8. Moduli principali
 
 | Modulo | Scopo |
 | ------ | ----- |
@@ -170,10 +208,11 @@ I test includono:
 
 ---
 
-## 8. Note rapide
+## 9. Note rapide
 
 - I file `data/filters/en_blacklist.txt` e `it_blacklist.txt` definiscono le parole/frasi bandite.
 - `data/logs/dialoghi.csv` raccoglie cronologia delle conversazioni.
+- `data/logs/chat_sessions.jsonl` salva le chat multi-turno.
 - `tests/data/filters/*.txt` fornisce dizionari di esempio per i test.
 - Alcuni script richiedono librerie opzionali (`pypdf`, `python-docx`, `rank-bm25`, `rapidfuzz`); installarle se necessarie per l'uso esteso.
 
