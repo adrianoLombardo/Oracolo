@@ -116,11 +116,11 @@ def validate_question(
     history: list[dict[str, str]] | None = None,
     log_path: str | Path | None = "data/logs/validator.log",
     **_: Any,
-) -> Tuple[bool, list[dict], bool, str]:
+) -> Tuple[bool, list[dict], bool, str, str]:
     """
     Valida la domanda usando tre segnali: overlap parole-chiave (kw), similarità
     embedding (emb) e recupero documenti (rag). Ritorna:
-      (is_ok, context_list, needs_clarification, reason_str).
+      (is_ok, context_list, needs_clarification, reason_str, topic_suggestion).
     """
     q_norm = _norm(question)
 
@@ -284,6 +284,16 @@ def validate_question(
     if hist_tokens & set(_tokens(" ".join(keywords))):
         weights["kw"] = min(1.0, weights.get("kw", 0.4) + 0.1)
 
+    # soglie adattive: alza o abbassa la soglia di accettazione in base alla coerenza recente
+    if history:
+        recent_msgs = [t.get("content", "") for t in history[-4:] if t.get("role") == "user"]
+        if recent_msgs:
+            overlaps = [_keyword_overlap_score(m, keywords) for m in recent_msgs]
+            div = sum(1 for s in overlaps if s < 0.2)
+            coh = sum(1 for s in overlaps if s > 0.6)
+            accept_threshold += 0.05 * div - 0.05 * coh
+            accept_threshold = min(max(accept_threshold, 0.1), 0.9)
+
     # ---- Retrieval ----
     ctx = _try_retrieve(question, settings, docstore_path, top_k, use_topic, client, emb_model or embed_model)
     rag_hits = len(ctx)
@@ -306,9 +316,26 @@ def validate_question(
         + weights.get("emb", 0.0) * emb_sim
         + weights.get("rag", 0.0) * rag_score
     )
-    ok = score >= accept_threshold
-    clarify = (not ok) and (score >= (accept_threshold - clarify_margin))
-    reason = f"kw={kw_score:.2f} emb={emb_sim:.2f} rag={rag_score:.2f} score={score:.2f}"
+    thr = accept_threshold
+    ok = score >= thr
+    clarify = (not ok) and (score >= (thr - clarify_margin))
+    reason = f"kw={kw_score:.2f} emb={emb_sim:.2f} rag={rag_score:.2f} score={score:.2f} thr={thr:.2f}"
+
+    topic_suggestion = ""
+    if clarify and docstore_path:
+        try:
+            alt_ctx = _try_retrieve(
+                question, settings, docstore_path, top_k, None, client, emb_model
+            )
+        except Exception:
+            alt_ctx = []
+        for it in alt_ctx:
+            t = str(it.get("topic") or "")
+            if t and t != use_topic:
+                topic_suggestion = t
+                break
+        if topic_suggestion:
+            reason += f" suggest={topic_suggestion}"
 
     # logging decisione
     if log_path:
@@ -319,7 +346,7 @@ def validate_question(
         except Exception:
             pass
 
-    return ok, ctx, clarify, reason
+    return ok, ctx, clarify, reason, topic_suggestion
 
 
 # ------------------------- helper retrieval ------------------------- #
