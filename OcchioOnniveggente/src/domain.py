@@ -116,11 +116,11 @@ def validate_question(
     history: list[dict[str, str]] | None = None,
     log_path: str | Path | None = "data/logs/validator.log",
     **_: Any,
-) -> Tuple[bool, list[dict], bool, str, str]:
+) -> Tuple[bool, list[dict], bool, str, str | None]:
     """
     Valida la domanda usando tre segnali: overlap parole-chiave (kw), similarità
     embedding (emb) e recupero documenti (rag). Ritorna:
-      (is_ok, context_list, needs_clarification, reason_str, topic_suggestion).
+      (is_ok, context_list, needs_clarification, reason_str, topic_suggestion or None).
     """
     q_norm = _norm(question)
 
@@ -248,17 +248,17 @@ def validate_question(
                 ctx = _try_retrieve(
                     question, settings, docstore_path, top_k, use_topic, client, emb_model or embed_model
                 )
-                return True, ctx, False, "wake"
+                return True, ctx, False, "wake", None
 
     # Se il filtro non è abilitato → sempre OK
     if not enabled:
         ctx = _try_retrieve(question, settings, docstore_path, top_k, use_topic, client, emb_model or embed_model)
-        return True, ctx, False, "disabled"
+        return True, ctx, False, "disabled", None
 
     # Se NON ci sono keywords → non filtriamo (sempre OK)
     if not keywords:
         ctx = _try_retrieve(question, settings, docstore_path, top_k, use_topic, client, emb_model or embed_model)
-        return True, ctx, False, "no keywords"
+        return True, ctx, False, "no keywords", None
 
     # ---- Boost terms (accettazione immediata se compaiono) ----
     boost_terms = [
@@ -270,7 +270,7 @@ def validate_question(
     ]
     if any(bt in q_norm for bt in boost_terms):
         ctx = _try_retrieve(question, settings, docstore_path, top_k, use_topic, client, emb_model or embed_model)
-        return True, ctx, False, "boost"
+        return True, ctx, False, "boost", None
 
     # ---- Overlap parole chiave ----
     kw_score = _keyword_overlap_score(question, keywords)

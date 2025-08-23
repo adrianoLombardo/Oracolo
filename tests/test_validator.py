@@ -46,3 +46,12 @@ def test_topic_switch_suggestion(tmp_path):
     )
     assert clarify
     assert sugg == "vehicles"
+
+
+def test_disabled_returns_full_tuple():
+    dom = SimpleNamespace(enabled=False, keywords=["science"])
+    settings = SimpleNamespace(domain=dom)
+    ok, ctx, clarify, reason, sugg = validate_question("hi", settings=settings)
+    assert ok
+    assert reason == "disabled"
+    assert sugg is None
