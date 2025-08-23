@@ -14,6 +14,7 @@ class ChatState:
     history: List[Dict[str, str]] = field(default_factory=list)
     topic_emb: Optional[np.ndarray] = field(default=None, repr=False)
     topic_text: Optional[str] = None
+    pinned: List[str] = field(default_factory=list)
 
     def reset(self) -> None:
         self.history.clear()
@@ -27,6 +28,18 @@ class ChatState:
         self.history.append({"role": "assistant", "content": text})
         self._trim()
         self._persist("assistant", text)
+
+    def pin_message(self, text: str) -> None:
+        if not text:
+            return
+        self.pinned.append(text)
+        self._persist("pinned", text)
+
+    def pin_last_user(self) -> None:
+        for msg in reversed(self.history):
+            if msg.get("role") == "user":
+                self.pin_message(msg.get("content", ""))
+                break
 
     def _trim(self) -> None:
         if self.max_turns > 0:

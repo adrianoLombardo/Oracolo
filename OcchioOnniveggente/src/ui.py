@@ -336,9 +336,20 @@ class OracoloUI(tk.Tk):
         self.mode_choice = tk.StringVar(value=default_mode)
         self.style_var = tk.BooleanVar(value=True)
         self.use_mic_var = tk.BooleanVar(value=True)
+        chat_conf = self.settings.get("chat", {})
         self.chat_state = ChatState()
+        self.chat_state.max_turns = int(chat_conf.get("max_turns", 10)) if chat_conf.get("enabled", True) else 0
+        pj = chat_conf.get("persist_jsonl")
+        if pj:
+            self.chat_state.persist_jsonl = Path(pj)
+        self.remember_var = tk.BooleanVar(value=bool(chat_conf.get("enabled", True)))
+        self.turns_var = tk.IntVar(value=int(chat_conf.get("max_turns", 10)))
+        profiles = self.settings.get("profiles", {})
+        self.profile_names = list(profiles.keys())
+        self.profile_var = tk.StringVar(value=self.profile_names[0] if self.profile_names else "")
         self.tts_muted = False
         self.last_answer = ""
+        self.last_activity = time.time()
 
         # process & logs
         self.proc: subprocess.Popen | None = None
@@ -351,10 +362,13 @@ class OracoloUI(tk.Tk):
         # UI
         self._build_menubar()
         self._build_layout()
+        if self.profile_var.get():
+            self._apply_profile(self.profile_var.get())
 
         # poll
         self.after(500, self._poll_process)
         self.after(500, self._poll_status)
+        self.after(1000, self._poll_idle)
         self.protocol("WM_DELETE_WINDOW", self._on_close)
 
     # --------------------------- Menubar & dialogs ------------------------ #
@@ -380,6 +394,7 @@ class OracoloUI(tk.Tk):
         settings_menu.add_command(label="OpenAI…", command=self._open_openai_dialog)
         settings_menu.add_command(label="Argomenti & Regole…", command=self._open_domain_dialog)
         settings_menu.add_command(label="Conoscenza…", command=self._open_knowledge_dialog)
+        settings_menu.add_command(label="Wake…", command=self._open_wake_dialog)
         settings_menu.add_separator()
         settings_menu.add_command(label="Salva", command=self.save_settings)
         menubar.add_cascade(label="Impostazioni", menu=settings_menu)
@@ -391,6 +406,11 @@ class OracoloUI(tk.Tk):
         header = ttk.Frame(self)
         header.pack(fill="x", padx=16, pady=(12, 8))
         ttk.Label(header, text="Occhio Onniveggente", font=("Helvetica", 18, "bold")).pack(side="left")
+        if self.profile_names:
+            ttk.Label(header, text="Profilo:").pack(side="left", padx=(16, 4))
+            cb = ttk.Combobox(header, textvariable=self.profile_var, values=self.profile_names, state="readonly", width=12)
+            cb.pack(side="left")
+            cb.bind("<<ComboboxSelected>>", self._on_profile_change)
 
         bar = ttk.Frame(self)
         bar.pack(fill="x", padx=16, pady=(0, 8))
@@ -418,6 +438,9 @@ class OracoloUI(tk.Tk):
             width=7,
         )
         self.lang_cb.pack(side="left")
+        ttk.Checkbutton(opts, text="Ricorda", variable=self.remember_var, command=self._update_memory).pack(side="left", padx=(8, 4))
+        self.turns_spin = tk.Spinbox(opts, from_=1, to=20, width=3, textvariable=self.turns_var, command=self._update_memory)
+        self.turns_spin.pack(side="left")
         ttk.Label(opts, text="Risposta:").pack(side="left", padx=(8, 4))
         self.mode_cb = ttk.Combobox(
             opts,
@@ -475,6 +498,7 @@ class OracoloUI(tk.Tk):
         ttk.Button(btns, text="/stop TTS", command=self._stop_tts).pack(side="left", padx=(4, 0))
         ttk.Button(btns, text="Copia risposta", command=self._copy_last).pack(side="left", padx=(4, 0))
         ttk.Button(btns, text="Esporta", command=self._export_chat).pack(side="left", padx=(4, 0))
+        ttk.Button(btns, text="Pin messaggio", command=self._pin_last).pack(side="left", padx=(4, 0))
 
         log_frame = ttk.Frame(notebook)
         notebook.add(log_frame, text="Log")
@@ -518,6 +542,40 @@ class OracoloUI(tk.Tk):
         if role == "assistant":
             self.last_answer = clean
 
+    def _update_memory(self) -> None:
+        if self.remember_var.get():
+            self.chat_state.max_turns = int(self.turns_var.get())
+        else:
+            self.chat_state.max_turns = 0
+        chat_conf = self.settings.setdefault("chat", {})
+        chat_conf["enabled"] = bool(self.remember_var.get())
+        chat_conf["max_turns"] = int(self.turns_var.get())
+
+    def _pin_last(self) -> None:
+        self.chat_state.pin_last_user()
+        self._append_chat("system", "Messaggio fissato.")
+
+    def _on_profile_change(self, event=None) -> None:
+        self._apply_profile(self.profile_var.get())
+        self._append_chat("system", f"Profilo cambiato: {self.profile_var.get()}")
+
+    def _apply_profile(self, name: str) -> None:
+        profiles = self.settings.get("profiles", {})
+        prof = profiles.get(name)
+        if not prof:
+            return
+        if prof.get("oracle_system"):
+            self.settings["style_prompt"] = prof.get("oracle_system", "")
+        if prof.get("domain"):
+            self.settings["domain"] = prof["domain"]
+            self.chat_state.topic_text = prof["domain"].get("topic")
+        if prof.get("docstore_path"):
+            self.settings["docstore_path"] = prof["docstore_path"]
+        if prof.get("chat_memory"):
+            self.chat_state.persist_jsonl = Path(prof["chat_memory"])
+            self.settings.setdefault("chat", {})["persist_jsonl"] = prof["chat_memory"]
+        self.chat_state.reset()
+
     def _on_chat_enter(self, event) -> str:
         text = self.chat_entry.get().strip()
         if not text:
@@ -559,6 +617,7 @@ class OracoloUI(tk.Tk):
             self._append_chat("system", "Comando sconosciuto")
 
     def _send_chat(self, text: str) -> None:
+        self.last_activity = time.time()
         self._append_chat("user", text)
         self.chat_state.push_user(text)
         try:
@@ -566,12 +625,21 @@ class OracoloUI(tk.Tk):
             style_prompt = self.settings.get("style_prompt", "") if self.style_var.get() else ""
             lang = self.lang_map.get(self.lang_choice.get(), "auto")
             mode = self.mode_map.get(self.mode_choice.get(), "detailed")
+            ctx = retrieve(
+                text,
+                self.settings.get("docstore_path", ""),
+                top_k=int(self.settings.get("retrieval_top_k", 3)),
+                topic=self.chat_state.topic_text,
+            )
+            pin_ctx = [{"id": f"pin{i}", "text": t} for i, t in enumerate(self.chat_state.pinned)]
+            ctx = pin_ctx + ctx
             ans, _ = oracle_answer(
                 text,
                 lang,
                 client,
                 self.settings.get("llm_model", "gpt-4o"),
                 style_prompt,
+                context=ctx,
                 history=self.chat_state.history,
                 topic=self.chat_state.topic_text,
                 mode=mode,
@@ -580,6 +648,8 @@ class OracoloUI(tk.Tk):
             ans = f"Errore: {e}"
         self.chat_state.push_assistant(ans)
         self._append_chat("assistant", ans)
+        self.last_activity = time.time()
+        self.status_var.set("🟢 Attivo")
 
     def _mute_tts(self) -> None:
         self.tts_muted = not self.tts_muted
@@ -614,6 +684,15 @@ class OracoloUI(tk.Tk):
             self.tts_queue.set("TTS q=0")
             self.ws_latency.set("WS: -")
         self.after(500, self._poll_status)
+
+    def _poll_idle(self) -> None:
+        now = time.time()
+        timeout = self.settings.get("wake", {}).get("idle_timeout", 60)
+        if now - self.last_activity > timeout:
+            self.status_var.set("😴 Dormiente — dì Ciao Oracolo per riattivarmi")
+        elif self.status_var.get().startswith("😴"):
+            self.status_var.set("🟡 In attesa")
+        self.after(1000, self._poll_idle)
 
     # --------------------------- Log helpers ------------------------------ #
     def _append_log(self, text: str) -> None:
@@ -990,6 +1069,31 @@ class OracoloUI(tk.Tk):
             win.destroy()
 
         ttk.Button(win, text="OK", command=on_ok).grid(row=8, column=0, columnspan=2, pady=10)
+
+    def _open_wake_dialog(self) -> None:
+        win = tk.Toplevel(self)
+        win.title("Inattività & Wake")
+        win.configure(bg=self._bg)
+
+        wake = self.settings.setdefault("wake", {})
+        timeout_var = tk.IntVar(value=int(wake.get("idle_timeout", 60)))
+        it_var = tk.StringVar(value=", ".join(wake.get("it_phrases", [])))
+        en_var = tk.StringVar(value=", ".join(wake.get("en_phrases", [])))
+
+        tk.Label(win, text="Timeout (s)", fg=self._fg, bg=self._bg).grid(row=0, column=0, padx=6, pady=6, sticky="e")
+        tk.Scale(win, from_=10, to=300, orient="horizontal", variable=timeout_var, length=200).grid(row=0, column=1, padx=6, pady=6, sticky="w")
+        tk.Label(win, text="Wake IT", fg=self._fg, bg=self._bg).grid(row=1, column=0, padx=6, pady=6, sticky="e")
+        tk.Entry(win, textvariable=it_var, width=40).grid(row=1, column=1, padx=6, pady=6, sticky="w")
+        tk.Label(win, text="Wake EN", fg=self._fg, bg=self._bg).grid(row=2, column=0, padx=6, pady=6, sticky="e")
+        tk.Entry(win, textvariable=en_var, width=40).grid(row=2, column=1, padx=6, pady=6, sticky="w")
+
+        def on_ok() -> None:
+            wake["idle_timeout"] = int(timeout_var.get())
+            wake["it_phrases"] = [p.strip() for p in it_var.get().split(",") if p.strip()]
+            wake["en_phrases"] = [p.strip() for p in en_var.get().split(",") if p.strip()]
+            win.destroy()
+
+        ttk.Button(win, text="OK", command=on_ok).grid(row=3, column=0, columnspan=2, pady=10)
 
     def _open_knowledge_dialog(self) -> None:
         if tkdnd is not None:
