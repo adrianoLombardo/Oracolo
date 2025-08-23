@@ -367,6 +367,7 @@ class OracoloUI(tk.Tk):
         docs_menu.add_command(label="Rimuovi…", command=self._remove_documents)
         docs_menu.add_separator()
         docs_menu.add_command(label="Aggiorna indice…", command=self._reindex_documents)
+        docs_menu.add_command(label="Libreria…", command=self._open_library_dialog)
         menubar.add_cascade(label="Documenti", menu=docs_menu)
 
         # Impostazioni
@@ -377,7 +378,7 @@ class OracoloUI(tk.Tk):
         settings_menu.add_command(label="Recording…", command=self._open_recording_dialog)
         settings_menu.add_command(label="Luci…", command=self._open_lighting_dialog)
         settings_menu.add_command(label="OpenAI…", command=self._open_openai_dialog)
-        settings_menu.add_command(label="Dominio…", command=self._open_domain_dialog)
+        settings_menu.add_command(label="Argomenti & Regole…", command=self._open_domain_dialog)
         settings_menu.add_command(label="Conoscenza…", command=self._open_knowledge_dialog)
         settings_menu.add_separator()
         settings_menu.add_command(label="Salva", command=self.save_settings)
@@ -694,6 +695,53 @@ class OracoloUI(tk.Tk):
                 continue
         messagebox.showerror("Indice", "Impossibile aggiornare l'indice (nessuna delle opzioni supportata).")
 
+    def _open_library_dialog(self) -> None:
+        win = tk.Toplevel(self)
+        win.title("Libreria")
+        win.configure(bg=self._bg)
+
+        tree = ttk.Treeview(win, columns=("tag", "date", "size"), show="headings")
+        tree.heading("tag", text="Tag")
+        tree.heading("date", text="Indicizzazione")
+        tree.heading("size", text="Dim.")
+        tree.pack(fill="both", expand=True, padx=6, pady=6)
+
+        docs = self._load_doc_index()
+        for d in docs:
+            name = d.get("title") or d.get("id") or ""
+            tag = ", ".join(d.get("tags", [])) or d.get("topic", "")
+            date = d.get("date", "")
+            size = len(d.get("text", ""))
+            tree.insert("", "end", iid=str(d.get("id", name)), values=(tag, date, size), text=name)
+
+        btn_frame = ttk.Frame(win)
+        btn_frame.pack(fill="x", padx=6, pady=4)
+
+        def make_collection() -> None:
+            sel = tree.selection()
+            if not sel:
+                messagebox.showinfo("Collezione", "Seleziona almeno un documento")
+                return
+            names = [tree.item(i, "text") for i in sel]
+            dom = self.settings.setdefault("domain", {})
+            dom["topic"] = "\n".join(names)
+            messagebox.showinfo("Collezione", "Topic aggiornato dalla selezione.")
+
+        ttk.Button(btn_frame, text="Crea Collezione da selezione", command=make_collection).pack(side="left")
+        ttk.Button(btn_frame, text="Verifica indice", command=self._open_knowledge_dialog).pack(side="right")
+
+    def _load_doc_index(self) -> list[dict]:
+        path = self.settings.get("docstore_path", "DataBase/index.json")
+        try:
+            data = json.loads(Path(path).read_text(encoding="utf-8"))
+        except Exception:
+            return []
+        if isinstance(data, dict) and "documents" in data:
+            return list(data.get("documents", []))
+        if isinstance(data, list):
+            return data
+        return []
+
     # --------------------------- Settings dialogs ------------------------- #
     def _update_debug(self) -> None:
         self.settings["debug"] = bool(self.debug_var.get())
@@ -890,72 +938,58 @@ class OracoloUI(tk.Tk):
 
     def _open_domain_dialog(self) -> None:
         win = tk.Toplevel(self)
-        win.title("Dominio")
+        win.title("Argomenti & Regole")
         win.configure(bg=self._bg)
 
         dom = self.settings.setdefault("domain", {})
-        presets = self.settings.setdefault("domain_presets", {})
-        preset_var = tk.StringVar()
 
-        tk.Label(win, text="Preset", fg=self._fg, bg=self._bg).grid(row=0, column=0, padx=6, pady=6, sticky="e")
-        preset_cb = ttk.Combobox(win, textvariable=preset_var, values=list(presets.keys()), state="readonly", width=20)
-        preset_cb.grid(row=0, column=1, padx=6, pady=6, sticky="w")
+        topic_box = scrolledtext.ScrolledText(win, width=40, height=4)
+        topic_box.insert("1.0", dom.get("topic", ""))
+        tk.Label(win, text="Topic", fg=self._fg, bg=self._bg).grid(row=0, column=0, padx=6, pady=6, sticky="ne")
+        topic_box.grid(row=0, column=1, padx=6, pady=6, sticky="w")
 
         kw_var = tk.StringVar(value=", ".join(dom.get("keywords", [])))
-        rigid_var = tk.StringVar(value=str(dom.get("accept_threshold", 0.5)))
-
-        tk.Label(win, text="Keyword (separate da virgola)", fg=self._fg, bg=self._bg).grid(
-            row=1, column=0, padx=6, pady=6, sticky="e"
-        )
+        tk.Label(win, text="Keywords", fg=self._fg, bg=self._bg).grid(row=1, column=0, padx=6, pady=6, sticky="e")
         tk.Entry(win, textvariable=kw_var, width=40).grid(row=1, column=1, padx=6, pady=6, sticky="w")
 
-        tk.Label(win, text="Prompt", fg=self._fg, bg=self._bg).grid(
-            row=2, column=0, padx=6, pady=6, sticky="ne"
-        )
-        prompt_box = scrolledtext.ScrolledText(win, width=40, height=6)
-        prompt_box.insert("1.0", self.settings.get("oracle_system", ""))
-        prompt_box.grid(row=2, column=1, padx=6, pady=6, sticky="w")
+        weights = dom.get("weights", {})
+        ov_var = tk.DoubleVar(value=weights.get("kw", 0.4))
+        emb_var = tk.DoubleVar(value=weights.get("emb", 0.3))
+        rag_var = tk.DoubleVar(value=weights.get("rag", 0.3))
+        tk.Label(win, text="Peso Overlap", fg=self._fg, bg=self._bg).grid(row=2, column=0, padx=6, pady=6, sticky="e")
+        ttk.Scale(win, from_=0, to=1, variable=ov_var, orient="horizontal", length=180).grid(row=2, column=1, padx=6, pady=6, sticky="w")
+        tk.Label(win, text="Peso Embedding", fg=self._fg, bg=self._bg).grid(row=3, column=0, padx=6, pady=6, sticky="e")
+        ttk.Scale(win, from_=0, to=1, variable=emb_var, orient="horizontal", length=180).grid(row=3, column=1, padx=6, pady=6, sticky="w")
+        tk.Label(win, text="Peso RAG", fg=self._fg, bg=self._bg).grid(row=4, column=0, padx=6, pady=6, sticky="e")
+        ttk.Scale(win, from_=0, to=1, variable=rag_var, orient="horizontal", length=180).grid(row=4, column=1, padx=6, pady=6, sticky="w")
 
-        tk.Label(win, text="Rigidità", fg=self._fg, bg=self._bg).grid(
-            row=3, column=0, padx=6, pady=6, sticky="e"
-        )
-        tk.Entry(win, textvariable=rigid_var, width=8).grid(row=3, column=1, padx=6, pady=6, sticky="w")
+        acc_var = tk.DoubleVar(value=dom.get("accept_threshold", 0.5))
+        clar_var = tk.DoubleVar(value=dom.get("clarify_margin", 0.15))
+        tk.Label(win, text="Accept threshold", fg=self._fg, bg=self._bg).grid(row=5, column=0, padx=6, pady=6, sticky="e")
+        ttk.Scale(win, from_=0, to=1, variable=acc_var, orient="horizontal", length=180).grid(row=5, column=1, padx=6, pady=6, sticky="w")
+        tk.Label(win, text="Clarify margin", fg=self._fg, bg=self._bg).grid(row=6, column=0, padx=6, pady=6, sticky="e")
+        ttk.Scale(win, from_=0, to=1, variable=clar_var, orient="horizontal", length=180).grid(row=6, column=1, padx=6, pady=6, sticky="w")
 
-        def load_preset(*_):
-            name = preset_var.get()
-            data = presets.get(name)
-            if not data:
-                return
-            kw_var.set(", ".join(data.get("keywords", [])))
-            rigid_var.set(str(data.get("accept_threshold", 0.5)))
-            prompt_box.delete("1.0", "end")
-            prompt_box.insert("1.0", data.get("prompt", ""))
-
-        def save_preset() -> None:
-            name = simpledialog.askstring("Salva preset", "Nome preset:", parent=win)
-            if not name:
-                return
-            presets[name] = {
-                "keywords": [k.strip() for k in kw_var.get().split(",") if k.strip()],
-                "accept_threshold": float(rigid_var.get() or 0.5),
-                "prompt": prompt_box.get("1.0", "end").strip(),
-            }
-            preset_cb.configure(values=list(presets.keys()))
-            preset_var.set(name)
-
-        preset_cb.bind("<<ComboboxSelected>>", load_preset)
-        ttk.Button(win, text="Salva preset", command=save_preset).grid(row=0, column=2, padx=6, pady=6)
+        wake_var = tk.BooleanVar(value=dom.get("always_accept_wake", True))
+        tk.Checkbutton(
+            win,
+            text="Accetta sempre saluti/wake words",
+            variable=wake_var,
+            bg=self._bg,
+            fg=self._fg,
+            selectcolor=self._bg,
+        ).grid(row=7, column=0, columnspan=2, padx=6, pady=6, sticky="w")
 
         def on_ok() -> None:
+            dom["topic"] = topic_box.get("1.0", "end").strip()
             dom["keywords"] = [k.strip() for k in kw_var.get().split(",") if k.strip()]
-            try:
-                dom["accept_threshold"] = float(rigid_var.get())
-            except Exception:
-                pass
-            self.settings["oracle_system"] = prompt_box.get("1.0", "end").strip()
+            dom["weights"] = {"kw": float(ov_var.get()), "emb": float(emb_var.get()), "rag": float(rag_var.get())}
+            dom["accept_threshold"] = float(acc_var.get())
+            dom["clarify_margin"] = float(clar_var.get())
+            dom["always_accept_wake"] = bool(wake_var.get())
             win.destroy()
 
-        ttk.Button(win, text="OK", command=on_ok).grid(row=4, column=0, columnspan=3, pady=10)
+        ttk.Button(win, text="OK", command=on_ok).grid(row=8, column=0, columnspan=2, pady=10)
 
     def _open_knowledge_dialog(self) -> None:
         if tkdnd is not None:
