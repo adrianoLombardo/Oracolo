@@ -21,6 +21,7 @@ from src.audio import record_until_silence, play_and_pulse
 from src.lights import SacnLight, WledLight, color_from_text
 from src.oracle import transcribe, oracle_answer, synthesize, append_log
 from src.domain import validate_question
+from src.chat import ChatState
 
 
 # --------------------------- console helpers --------------------------- #
@@ -194,6 +195,24 @@ def main() -> None:
     EMB_MODEL = getattr(SET.openai, "embed_model", "text-embedding-3-small")
     ORACLE_SYSTEM = SET.oracle_system
 
+    # Chat state
+    CHAT_ENABLED = bool(getattr(getattr(SET, "chat", None), "enabled", False))
+    chat = ChatState(
+        max_turns=int(getattr(getattr(SET, "chat", None), "max_turns", 10)),
+        persist_jsonl=Path(
+            getattr(
+                getattr(SET, "chat", None),
+                "persist_jsonl",
+                "data/logs/chat_sessions.jsonl",
+            )
+        )
+        if CHAT_ENABLED
+        else None,
+    )
+    CHAT_RESET_ON_WAKE = bool(
+        getattr(getattr(SET, "chat", None), "reset_on_hotword", True)
+    )
+
     # Filters / palettes / lights
     FILTER_MODE = SET.filter.mode
     PALETTES = {k: v.model_dump() for k, v in SET.palette_keywords.items()}
@@ -301,6 +320,8 @@ def main() -> None:
                     lighting_conf,
                     output_device_id=out_dev,
                 )
+                if CHAT_ENABLED and CHAT_RESET_ON_WAKE:
+                    chat.reset()
                 state = "ACTIVE"
                 active_deadline = time.time() + IDLE_TIMEOUT
                 continue
@@ -373,7 +394,11 @@ def main() -> None:
 
                 if not ok:
                     a = "Domanda non pertinente"
+                    if CHAT_ENABLED:
+                        chat.push_assistant(a)
                 else:
+                    if CHAT_ENABLED:
+                        chat.push_user(q)
                     a = oracle_answer(
                         q,
                         eff_lang,
@@ -381,7 +406,10 @@ def main() -> None:
                         LLM_MODEL,
                         ORACLE_SYSTEM,
                         context=context,
+                        history=(chat.history if CHAT_ENABLED else None),
                     )
+                    if CHAT_ENABLED:
+                        chat.push_assistant(a)
 
                 # ▼▼ AGGIUNTA: log della risposta in viewport (anche se --quiet)
                 print(f"🔮 Oracolo: {a}", flush=True)

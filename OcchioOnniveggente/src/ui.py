@@ -178,6 +178,8 @@ class RealtimeWSClient:
                 self.on_partial(data.get("text", ""))
             elif kind == "answer":
                 self.on_answer(data.get("text", ""))
+            elif kind == "reset_ok":
+                self.on_partial("↻ Chat azzerata")
             if self.stop_event.is_set():
                 break
 
@@ -248,6 +250,12 @@ class RealtimeWSClient:
             self.thread.join(timeout=1)
         self.thread = None
         self.loop = None
+
+    def send_json(self, payload: dict) -> None:
+        if self.ws and self.loop:
+            asyncio.run_coroutine_threadsafe(
+                self.ws.send(json.dumps(payload)), self.loop
+            )
 
 
 # ------------------------------- UI class -------------------------------- #
@@ -356,6 +364,7 @@ class OracoloUI(tk.Tk):
         settings_menu.add_command(label="Recording…", command=self._open_recording_dialog)
         settings_menu.add_command(label="Luci…", command=self._open_lighting_dialog)
         settings_menu.add_command(label="OpenAI…", command=self._open_openai_dialog)
+        settings_menu.add_command(label="Chat…", command=self._open_chat_dialog)
         settings_menu.add_separator()
         settings_menu.add_command(label="Salva", command=self.save_settings)
         menubar.add_cascade(label="Impostazioni", menu=settings_menu)
@@ -376,10 +385,12 @@ class OracoloUI(tk.Tk):
         self.stop_btn = ttk.Button(bar, text="Ferma", command=self.stop_oracolo, state="disabled")
         self.ws_start_btn = ttk.Button(bar, text="Avvia WS", command=self.start_realtime)
         self.ws_stop_btn = ttk.Button(bar, text="Ferma WS", command=self.stop_realtime, state="disabled")
+        self.ws_reset_btn = ttk.Button(bar, text="Reset chat", command=self.reset_chat, state="disabled")
         self.start_btn.pack(side="left", padx=(0, 8))
         self.stop_btn.pack(side="left")
         self.ws_start_btn.pack(side="left", padx=(8, 8))
         self.ws_stop_btn.pack(side="left")
+        self.ws_reset_btn.pack(side="left", padx=(8, 0))
 
         self.status_var = tk.StringVar(value="🟡 In attesa")
         ttk.Label(bar, textvariable=self.status_var).pack(side="right")
@@ -656,6 +667,35 @@ class OracoloUI(tk.Tk):
 
         ttk.Button(win, text="OK", command=on_ok).grid(row=len(rows), column=0, columnspan=2, pady=10)
 
+    def _open_chat_dialog(self) -> None:
+        win = tk.Toplevel(self); win.title("Chat"); win.configure(bg=self._bg)
+        chat = self.settings.setdefault("chat", {})
+        enabled = tk.BooleanVar(value=bool(chat.get("enabled", True)))
+        max_turns = tk.StringVar(value=str(chat.get("max_turns", 10)))
+        reset_on_hotword = tk.BooleanVar(value=bool(chat.get("reset_on_hotword", True)))
+        persist = tk.StringVar(value=str(chat.get("persist_jsonl", "data/logs/chat_sessions.jsonl")))
+
+        def add_row(r: int, label: str, widget: tk.Widget) -> None:
+            tk.Label(win, text=label, fg=self._fg, bg=self._bg).grid(row=r, column=0, padx=6, pady=6, sticky="e")
+            widget.grid(row=r, column=1, padx=6, pady=6, sticky="w")
+
+        add_row(0, "Abilitata", tk.Checkbutton(win, variable=enabled, bg=self._bg, fg=self._fg, selectcolor="#222"))
+        add_row(1, "Max turni", tk.Entry(win, textvariable=max_turns, width=6))
+        add_row(2, "Reset su hotword", tk.Checkbutton(win, variable=reset_on_hotword, bg=self._bg, fg=self._fg, selectcolor="#222"))
+        add_row(3, "Log conversazioni (JSONL)", tk.Entry(win, textvariable=persist, width=36))
+
+        def on_ok() -> None:
+            chat["enabled"] = bool(enabled.get())
+            try:
+                chat["max_turns"] = int(max_turns.get())
+            except Exception:
+                chat["max_turns"] = 10
+            chat["reset_on_hotword"] = bool(reset_on_hotword.get())
+            chat["persist_jsonl"] = persist.get().strip()
+            win.destroy()
+
+        ttk.Button(win, text="OK", command=on_ok).grid(row=4, column=0, columnspan=2, pady=10)
+
     def _open_lighting_dialog(self) -> None:
         win = tk.Toplevel(self); win.title("Luci"); win.configure(bg=self._bg)
 
@@ -819,6 +859,7 @@ class OracoloUI(tk.Tk):
             self.ws_client.start()
             self.ws_start_btn.configure(state="disabled")
             self.ws_stop_btn.configure(state="normal")
+            self.ws_reset_btn.configure(state="normal")
         except Exception as e:
             messagebox.showerror("Realtime", f"Impossibile avviare il WS: {e}")
             self.ws_client = None
@@ -832,6 +873,12 @@ class OracoloUI(tk.Tk):
             self.ws_client = None
             self.ws_start_btn.configure(state="normal")
             self.ws_stop_btn.configure(state="disabled")
+            self.ws_reset_btn.configure(state="disabled")
+
+    def reset_chat(self) -> None:
+        if self.ws_client:
+            self.ws_client.send_json({"type": "reset"})
+            self._append_log("↻ Chat reset richiesta\n")
 
     def _poll_process(self) -> None:
         if self.proc is not None:

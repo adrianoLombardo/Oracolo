@@ -6,11 +6,7 @@ import sys
 import time
 import wave
 from pathlib import Path
-codex/review-project-files-and-websocket-scripts-ag8z2e
-
-
 from typing import Any, Optional
- main
 
 import numpy as np
 import websockets
@@ -24,6 +20,7 @@ from src.config import Settings
 from src.hotword import strip_hotword_prefix
 from src.oracle import transcribe, oracle_answer, synthesize
 from src.retrieval import retrieve
+from src.chat import ChatState
 
 CHUNK_MS = 20
 # soglia più permissiva per captare parlato anche con microfoni poco sensibili
@@ -69,6 +66,20 @@ class RTSession:
                 getattr(setts.wake, "en_phrases", [])
             )
         self.idle_timeout = float(getattr(setts.wake, "idle_timeout", 60.0))
+
+        self.chat_enabled = bool(getattr(getattr(setts, "chat", None), "enabled", False))
+        self.chat = ChatState(
+            max_turns=int(getattr(getattr(setts, "chat", None), "max_turns", 10)),
+            persist_jsonl=Path(
+                getattr(
+                    getattr(setts, "chat", None),
+                    "persist_jsonl",
+                    "data/logs/chat_sessions.jsonl",
+                )
+            )
+            if self.chat_enabled
+            else None,
+        )
 
     async def send_json(self, obj: dict) -> None:
         try:
@@ -142,11 +153,7 @@ class RTSession:
             await self.send_partial("…silenzio…")
             return
 
-        codex/review-project-files-and-websocket-scripts-ag8z2e
         print(f"🗣️ {text.strip()}", flush=True)
-
-
-        main
         now = time.time()
         if now > self.active_until:
             self.active_until = 0.0
@@ -174,6 +181,8 @@ class RTSession:
         except Exception:
             ctx = []
 
+        if self.chat_enabled:
+            self.chat.push_user(text)
         ans = oracle_answer(
             text,
             lang,
@@ -181,7 +190,10 @@ class RTSession:
             self.SET.openai.llm_model,
             self.SET.oracle_system,
             context=ctx,
+            history=(self.chat.history if self.chat_enabled else None),
         )
+        if self.chat_enabled:
+            self.chat.push_assistant(ans)
         await self.send_answer(ans)
 
         synthesize(
@@ -207,7 +219,6 @@ async def handler(ws):
         except json.JSONDecodeError:
             await ws.close(code=1002, reason="invalid hello")
             return
-        codex/review-project-files-and-websocket-scripts-ag8z2e
         if hello.get("type") not in (None, "hello"):
             await ws.close(code=1002, reason="missing hello type")
             return
@@ -218,7 +229,6 @@ async def handler(ws):
             await ws.close(code=1002, reason="missing hello type")
             return
         sess.client_sr = int(hello.get("sr", SET.audio.sample_rate))
-        main
 
         await sess.send_json({"type": "ready"})
         await sess.send_partial("Sto capendo...")
@@ -235,6 +245,9 @@ async def handler(ws):
                     continue
                 if data.get("type") == "barge_in":
                     sess.barge = True
+                elif data.get("type") == "reset":
+                    sess.chat.reset()
+                    await sess.send_json({"type": "reset_ok"})
     except websockets.ConnectionClosed:
         pass
 
