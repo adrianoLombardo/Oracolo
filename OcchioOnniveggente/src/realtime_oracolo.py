@@ -21,6 +21,7 @@ from typing import Any
 import numpy as np
 import sounddevice as sd
 import websockets
+from src.dialogue import DialogueManager, DialogState
 
 
 SR = 24_000
@@ -71,7 +72,7 @@ async def _sender(ws, q: "queue.Queue[bytes]") -> None:
 
 
 async def _player(
-    audio_q: "queue.Queue[bytes]", *, sr: int, state: dict[str, Any]
+    audio_q: "queue.Queue[bytes]", *, sr: int, state: dict[str, Any], dlg: DialogueManager
 ) -> None:
     """Riproduce i frame audio (binari) ricevuti dal server."""
 
@@ -92,6 +93,7 @@ async def _player(
             outdata[:] = b"\x00" * len(outdata)
             state["tts_playing"] = False
             state["barge_sent"] = False
+            dlg.transition(DialogState.LISTENING)
 
     with sd.RawOutputStream(
         samplerate=sr, channels=1, dtype="int16", callback=callback
@@ -100,7 +102,7 @@ async def _player(
             await asyncio.sleep(0.1)
 
 
-async def _receiver(ws, audio_q: "queue.Queue[bytes]") -> None:
+async def _receiver(ws, audio_q: "queue.Queue[bytes]", dlg: DialogueManager) -> None:
     """Gestisce i messaggi provenienti dal server."""
 
     try:
@@ -114,8 +116,10 @@ async def _receiver(ws, audio_q: "queue.Queue[bytes]") -> None:
                 continue
             kind = data.get("type")
             if kind == "partial":
+                dlg.transition(DialogState.THINKING)
                 print(f"… {data.get('text', '')}", flush=True)
             elif kind == "answer":
+                dlg.transition(DialogState.SPEAKING)
                 print(f"🔮 {data.get('text', '')}", flush=True)
     except (websockets.ConnectionClosed, asyncio.CancelledError):
         return
@@ -127,6 +131,8 @@ async def _run(url: str, sr: int) -> None:
     send_q: "queue.Queue[bytes]" = queue.Queue()
     audio_q: "queue.Queue[bytes]" = queue.Queue()
     state: dict[str, Any] = {"tts_playing": False, "barge_sent": False}
+    dlg = DialogueManager(idle_timeout=60)
+    dlg.transition(DialogState.LISTENING)
 
     async with websockets.connect(url, ping_interval=20, ping_timeout=20) as ws:
         await ws.send(
@@ -154,8 +160,8 @@ async def _run(url: str, sr: int) -> None:
         tasks = [
             asyncio.create_task(_mic_worker(ws, send_q, sr=sr, state=state)),
             asyncio.create_task(_sender(ws, send_q)),
-            asyncio.create_task(_receiver(ws, audio_q)),
-            asyncio.create_task(_player(audio_q, sr=sr, state=state)),
+            asyncio.create_task(_receiver(ws, audio_q, dlg)),
+            asyncio.create_task(_player(audio_q, sr=sr, state=state, dlg=dlg)),
         ]
         try:
             await asyncio.gather(*tasks)
