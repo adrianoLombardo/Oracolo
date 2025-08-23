@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import csv
 import re
 import time
 from datetime import datetime
@@ -182,12 +183,10 @@ def synthesize(text: str, out_path: Path, client, tts_model: str, tts_voice: str
 def append_log(q: str, a: str, log_path: Path) -> None:
     log_path.parent.mkdir(parents=True, exist_ok=True)
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    def clean(s: str) -> str:
-        return s.replace('"', "'")
-    line = f'"{ts}","{clean(q)}","{clean(a)}"\n'
-    if not log_path.exists():
-        log_path.write_text('"timestamp","question","answer"\n', encoding="utf-8")
-    with log_path.open("a", encoding="utf-8") as f:
-        f.write(line)
+    with log_path.open("a", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f, quoting=csv.QUOTE_ALL)
+        if f.tell() == 0:
+            writer.writerow(["timestamp", "question", "answer"])
+        writer.writerow([ts, q, a])
 
 
