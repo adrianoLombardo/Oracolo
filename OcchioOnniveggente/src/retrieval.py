@@ -163,6 +163,26 @@ def _score_fallback(query: str, chunks: List[Chunk], top_k: int) -> List[Tuple[C
     return scored[:top_k]
 
 
+def _compress_passage(text: str, query: str, max_sents: int = 5) -> str:
+    """Reduce ``text`` to at most ``max_sents`` sentences relevant to ``query``.
+
+    Sentences are scored by simple token overlap with the query and the top
+    ones are kept in their original order.
+    """
+    sents = _simple_sentences(text)
+    if len(sents) <= max_sents:
+        return " ".join(sents)
+    qtok = set(_tokenize(query))
+    scored: List[Tuple[int, int, str]] = []
+    for idx, s in enumerate(sents):
+        stok = set(_tokenize(s))
+        score = len(qtok & stok)
+        scored.append((score, idx, s))
+    scored.sort(key=lambda x: x[0], reverse=True)
+    selected = sorted(scored[:max_sents], key=lambda x: x[1])
+    return " ".join(s for _, _, s in selected)
+
+
 def _rerank_cross_encoder(
     query: str, pairs: List[Tuple[Chunk, float]], model_name: str
 ) -> List[Tuple[Chunk, float]]:
@@ -262,7 +282,8 @@ def retrieve(
 
     out = []
     for ch, sc in best:
-        item = {"id": ch.doc_id, "text": ch.text, "score": float(sc)}
+        txt = _compress_passage(ch.text, query)
+        item = {"id": ch.doc_id, "text": txt, "score": float(sc)}
         item.update(ch.meta or {})
         out.append(item)
     return out

@@ -141,7 +141,20 @@ def oracle_answer(
         if mode == "concise"
         else " Struttura: 1) sintesi, 2) 2-3 dettagli puntuali, 3) fonti citate [1], [2], …"
     )
-    policy = (policy_prompt or "") + topic_clause + " " + lang_clause + mode_clause
+    grounding_clause = (
+        "Answer ONLY using the passages; if they are insufficient, ask for clarifications."
+        if lang_hint == "en"
+        else "Rispondi SOLO usando i passaggi; se non sono sufficienti, chiedi chiarimenti."
+    )
+    policy = (
+        (policy_prompt or "")
+        + topic_clause
+        + " "
+        + grounding_clause
+        + " "
+        + lang_clause
+        + mode_clause
+    )
 
     messages: List[Dict[str, str]] = []
     if style_prompt:
