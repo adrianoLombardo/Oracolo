@@ -29,6 +29,7 @@ from typing import Any
 from src.retrieval import retrieve
 from src.chat import ChatState
 from src.oracle import oracle_answer, synthesize
+from src.domain import validate_question
 
 import asyncio
 import numpy as np
@@ -46,6 +47,19 @@ except Exception:  # pragma: no cover - fallback se non disponibile
 
 WS_URL = os.getenv("ORACOLO_WS_URL", "ws://localhost:8765")
 SR = 24_000
+
+_REASON_RE = re.compile(
+    r"kw=(?P<kw>[-0-9.]+) emb=(?P<emb>[-0-9.]+) rag=(?P<rag>[-0-9.]+) score=(?P<score>[-0-9.]+) thr=(?P<thr>[-0-9.]+)"
+)
+
+
+def _highlight_terms(text: str, query: str) -> str:
+    """Evidenzia i termini della query all'interno del testo."""
+    tokens = set(re.findall(r"[A-Za-zÀ-ÖØ-öø-ÿ0-9]+", query.lower()))
+    for t in sorted(tokens, key=len, reverse=True):
+        pattern = re.compile(re.escape(t), re.IGNORECASE)
+        text = pattern.sub(lambda m: f"[{m.group(0)}]", text)
+    return text
 
 # opzionale: compatibilità icona PNG via Pillow
 try:
@@ -412,6 +426,7 @@ class OracoloUI(tk.Tk):
         self.last_answer = ""
         self.last_sources: list[dict[str, str]] = []
         self.last_activity = time.time()
+        self.last_test_result: dict[str, Any] | None = None
 
         # sandbox and log state
         self.sandbox_var = tk.BooleanVar(value=False)
@@ -474,6 +489,7 @@ class OracoloUI(tk.Tk):
         # Strumenti
         tools_menu = tk.Menu(menubar, tearoff=0)
         tools_menu.add_command(label="Prompt di sistema…", command=self._open_system_prompt_dialog)
+        tools_menu.add_command(label="Pannello Test…", command=self._open_test_dialog)
         tools_menu.add_checkbutton(label="Sandbox", variable=self.sandbox_var, command=self._update_sandbox)
         tools_menu.add_command(label="Esporta conversazione…", command=self._export_chat)
         tools_menu.add_command(label="Risposta in audio…", command=self._export_audio)
@@ -880,6 +896,104 @@ class OracoloUI(tk.Tk):
             self.log.insert("end", txt)
         self.log.see("end")
         self.log.configure(state="disabled")
+
+    def _open_test_dialog(self) -> None:
+        win = tk.Toplevel(self)
+        win.title("Pannello Test")
+        win.configure(bg=self._bg)
+
+        q_var = tk.StringVar()
+        lang_var = tk.StringVar(value=self.lang_choice.get())
+        topk_var = tk.StringVar(value=str(self.settings.get("retrieval_top_k", 3)))
+
+        tk.Label(win, text="Domanda", fg=self._fg, bg=self._bg).grid(row=0, column=0, padx=6, pady=6, sticky="e")
+        tk.Entry(win, textvariable=q_var, width=50).grid(row=0, column=1, columnspan=2, padx=6, pady=6)
+
+        tk.Label(win, text="Lingua", fg=self._fg, bg=self._bg).grid(row=1, column=0, padx=6, pady=6, sticky="e")
+        ttk.Combobox(win, textvariable=lang_var, values=list(self.lang_map.keys()), state="readonly", width=10).grid(
+            row=1, column=1, padx=6, pady=6, sticky="w"
+        )
+
+        tk.Label(win, text="Top-K", fg=self._fg, bg=self._bg).grid(row=1, column=2, padx=6, pady=6, sticky="e")
+        tk.Entry(win, textvariable=topk_var, width=4).grid(row=1, column=3, padx=6, pady=6, sticky="w")
+
+        result_box = scrolledtext.ScrolledText(win, width=70, height=20)
+        result_box.grid(row=3, column=0, columnspan=4, padx=6, pady=6)
+
+        def run_test() -> None:
+            question = q_var.get().strip()
+            if not question:
+                return
+            try:
+                k = int(topk_var.get() or 3)
+            except Exception:
+                k = 3
+            lang = self.lang_map.get(lang_var.get(), "auto")
+            start = time.time()
+            try:
+                client = OpenAI()
+            except Exception:
+                client = None
+            ok, ctx, _clar, reason, _ = validate_question(
+                question,
+                lang,
+                settings=self.settings,
+                client=client,
+                docstore_path=self.settings.get("docstore_path"),
+                top_k=k,
+            )
+            end = time.time()
+            m = _REASON_RE.search(reason)
+            kw = emb = rag = score = thr = 0.0
+            if m:
+                kw = float(m.group("kw"))
+                emb = float(m.group("emb"))
+                rag = float(m.group("rag"))
+                score = float(m.group("score"))
+                thr = float(m.group("thr"))
+            result_box.delete("1.0", "end")
+            result_box.insert(
+                "end",
+                f"kw_overlap={kw:.2f} emb_sim={emb:.2f} rag_score={rag:.2f}\nscore={score:.2f} thr={thr:.2f} → {'OK' if ok else 'NO'}\n\n",
+            )
+            toks = q_var.get()
+            for i, ch in enumerate(ctx[:k], start=1):
+                text = _highlight_terms(str(ch.get("text", "")), toks)
+                result_box.insert("end", f"[{i}] {text}\n\n")
+            self.last_test_result = {
+                "input": question,
+                "lang": lang,
+                "messages": [{"role": "user", "content": question}],
+                "context": ctx,
+                "citations": [c.get("id", "") for c in ctx],
+                "timings": {"start": start, "end": end, "elapsed": end - start},
+                "metrics": {
+                    "kw_overlap": kw,
+                    "emb_sim": emb,
+                    "rag_score": rag,
+                    "score": score,
+                    "threshold": thr,
+                    "decision": ok,
+                },
+            }
+
+        def export_session() -> None:
+            if not self.last_test_result:
+                return
+            path = filedialog.asksaveasfilename(
+                parent=win,
+                defaultextension=".json",
+                filetypes=[("JSON", "*.json"), ("Tutti", "*.*")],
+            )
+            if not path:
+                return
+            Path(path).write_text(
+                json.dumps(self.last_test_result, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+
+        ttk.Button(win, text="Prova", command=run_test).grid(row=0, column=3, padx=6, pady=6)
+        ttk.Button(win, text="Esporta", command=export_session).grid(row=4, column=0, columnspan=4, pady=(0, 6))
 
     def _open_system_prompt_dialog(self) -> None:
         win = tk.Toplevel(self)
