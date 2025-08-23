@@ -38,24 +38,30 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 class SimpleDocumentDB:
     """
     Docstore minimale basato su JSON.
-    Struttura: {"docs": [{"id": "...", "text": "..."}]}
+
+    Struttura attesa: {"documents": [{"id": "...", "text": "...", "topic": "..."}]}
     Nota: salva il testo nell'indice (ok per volumi piccoli/medi).
     """
 
     def __init__(self, index_path: str | Path) -> None:
         self.index_path = Path(index_path)
         self.index_path.parent.mkdir(parents=True, exist_ok=True)
-        self._data = {"docs": []}
+        self._data = {"documents": []}
         self._load()
 
     def _load(self) -> None:
         if self.index_path.exists():
             try:
                 self._data = json.loads(self.index_path.read_text(encoding="utf-8"))
-                if "docs" not in self._data or not isinstance(self._data["docs"], list):
-                    self._data = {"docs": []}
+                if "documents" in self._data and isinstance(self._data["documents"], list):
+                    return
+                # compatibilità con vecchi indici {"docs": []}
+                if "docs" in self._data and isinstance(self._data["docs"], list):
+                    self._data = {"documents": self._data["docs"]}
+                else:
+                    self._data = {"documents": []}
             except Exception:
-                self._data = {"docs": []}
+                self._data = {"documents": []}
 
     def _save(self) -> None:
         self.index_path.write_text(
@@ -65,33 +71,33 @@ class SimpleDocumentDB:
 
     def add_documents(self, documents: List[dict]) -> None:
         # sostituisce per id
-        existing = {d["id"]: i for i, d in enumerate(self._data["docs"]) if "id" in d}
+        existing = {d["id"]: i for i, d in enumerate(self._data["documents"]) if "id" in d}
         for doc in documents:
             doc_id = doc.get("id")
             if not doc_id:
                 continue
             if doc_id in existing:
-                self._data["docs"][existing[doc_id]] = doc
+                self._data["documents"][existing[doc_id]] = doc
             else:
-                self._data["docs"].append(doc)
+                self._data["documents"].append(doc)
         self._save()
 
     def delete_documents(self, ids: List[str]) -> None:
-        self._data["docs"] = [d for d in self._data["docs"] if d.get("id") not in ids]
+        self._data["documents"] = [d for d in self._data["documents"] if d.get("id") not in ids]
         self._save()
 
     # Comodo per il bottone "Aggiorna indice": rilegge i file dai path id
     def reindex(self) -> None:
         new_docs = []
-        for d in self._data["docs"]:
+        for d in self._data["documents"]:
             fid = d.get("id")
             if not fid:
                 continue
             p = Path(fid)
             if p.exists() and p.is_file():
                 txt = _read_file_text(p)
-                new_docs.append({"id": str(p), "text": txt})
-        self._data["docs"] = new_docs
+                new_docs.append({"id": str(p), "text": txt, "topic": d.get("topic")})
+        self._data["documents"] = new_docs
         self._save()
 
 
@@ -184,13 +190,16 @@ def _load_db(path: str) -> object:
 
 
 # ----------------------------- Operazioni ------------------------------------ #
-def _add(paths: Iterable[str], docstore_path: str) -> None:
+def _add(paths: Iterable[str], docstore_path: str, topic: str | None = None) -> None:
     db = _load_db(docstore_path)
     files = _gather_files(paths)
     documents = []
     for file in files:
         text = _read_file_text(file)
-        documents.append({"id": str(file), "text": text})
+        doc = {"id": str(file), "text": text}
+        if topic:
+            doc["topic"] = topic
+        documents.append(doc)
     if documents:
         db.add_documents(documents)
     logging.info("Indexed %d document(s)", len(documents))
@@ -241,6 +250,7 @@ def main() -> None:
         default=_default_docstore_path(),
         help="Path al document store (default: settings.yaml docstore_path o data/index.json)",
     )
+    parser.add_argument("--topic", help="Etichetta topic da associare ai documenti aggiunti")
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--add", nargs="+", help="File o cartelle da indicizzare (PDF/DOCX/TXT/MD)")
     group.add_argument("--remove", nargs="+", help="File o cartelle da rimuovere dall'indice")
@@ -248,7 +258,7 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.add:
-        _add(args.add, args.path)
+        _add(args.add, args.path, args.topic)
     elif args.remove:
         _remove(args.remove, args.path)
     elif args.reindex:
