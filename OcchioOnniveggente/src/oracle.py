@@ -131,7 +131,7 @@ def oracle_answer(
 
     lang_clause = "Answer in English." if lang_hint == "en" else "Rispondi in italiano."
     topic_clause = (
-        " Rispondi solo con informazioni coerenti al tema seguente e non mescolare altri argomenti a meno che l'utente lo chieda esplicitamente. Tema: "
+        " Rispondi solo con informazioni coerenti al topic corrente; non mescolare altri temi a meno che l'utente lo chieda esplicitamente. Topic: "
         + topic
         if topic
         else ""
