@@ -124,12 +124,35 @@ def routed_save(base_now: dict, local_now: dict, merged_new: dict, root: Path) -
 class RealtimeWSClient:
     """Gestisce la connessione WebSocket realtime con audio bidirezionale."""
 
-    def __init__(self, url: str, sr: int, on_partial, on_answer) -> None:
+    def __init__(
+        self,
+        url: str,
+        sr: int,
+        on_partial,
+        on_answer,
+        *,
+        barge_threshold: float = 500.0,
+        ping_interval: int = 20,
+        ping_timeout: int = 20,
+        auto_reconnect: bool = False,
+        on_input_level=lambda level: None,
+        on_output_level=lambda level: None,
+        on_event=lambda evt: None,
+        on_ping=lambda ms: None,
+    ) -> None:
         self.url = url
         self.sr = sr
         self.frame_samples = int(self.sr * 0.02)
         self.on_partial = on_partial
         self.on_answer = on_answer
+        self.barge_threshold = barge_threshold
+        self.ping_interval = ping_interval
+        self.ping_timeout = ping_timeout
+        self.auto_reconnect = auto_reconnect
+        self.on_input_level = on_input_level
+        self.on_output_level = on_output_level
+        self.on_event = on_event
+        self.on_ping = on_ping
         self.send_q: "queue.Queue[bytes]" = queue.Queue()
         self.audio_q: "queue.Queue[bytes]" = queue.Queue()
         self.state: dict[str, Any] = {"tts_playing": False, "barge_sent": False}
@@ -145,10 +168,11 @@ class RealtimeWSClient:
         def callback(indata, frames, time_info, status) -> None:  # type: ignore[override]
             data = bytes(indata)
             self.send_q.put_nowait(data)
+            samples = np.frombuffer(data, dtype=np.int16).astype(np.float32)
+            level = float(np.sqrt(np.mean(samples ** 2)))
+            self.on_input_level(level / 32768.0)
             if self.state.get("tts_playing") and not self.state.get("barge_sent"):
-                samples = np.frombuffer(data, dtype=np.int16).astype(np.float32)
-                level = float(np.sqrt(np.mean(samples ** 2)))
-                if level > 500:
+                if level > self.barge_threshold:
                     self.state["barge_sent"] = True
                     asyncio.run_coroutine_threadsafe(
                         self.ws.send(json.dumps({"type": "barge_in"})), loop
@@ -200,11 +224,15 @@ class RealtimeWSClient:
                 else:
                     outdata[:len(chunk)] = chunk
                     outdata[len(chunk):] = b"\x00" * (n - len(chunk))
+                samples = np.frombuffer(outdata, dtype=np.int16).astype(np.float32)
+                level = float(np.sqrt(np.mean(samples ** 2)))
+                self.on_output_level(level / 32768.0)
                 self.state["tts_playing"] = True
             except queue.Empty:
                 outdata[:] = b"\x00" * len(outdata)
                 self.state["tts_playing"] = False
                 self.state["barge_sent"] = False
+                self.on_output_level(0.0)
 
         with sd.RawOutputStream(
             samplerate=self.sr,
@@ -216,37 +244,66 @@ class RealtimeWSClient:
             while not self.stop_event.is_set():
                 await asyncio.sleep(0.1)
 
+    async def _pinger(self) -> None:
+        assert self.ws is not None and self.stop_event is not None
+        while not self.stop_event.is_set():
+            start = time.perf_counter()
+            try:
+                pong = await self.ws.ping()
+                await pong
+                self.on_ping((time.perf_counter() - start) * 1000)
+            except Exception:
+                break
+            await asyncio.sleep(self.ping_interval)
+
     async def _run(self) -> None:
         self.stop_event = asyncio.Event()
-        async with websockets.connect(self.url, ping_interval=20, ping_timeout=20) as ws:
-            self.ws = ws
-            print(
-                f"🔌 Realtime WS → {self.url}  (sr={self.sr}, in={sd.default.device[0]}, out={sd.default.device[1]})",
-                flush=True,
-            )
-            # Handshake
-            await ws.send(json.dumps({"type": "hello", "sr": self.sr, "format": "pcm_s16le", "channels": 1}))
+        while not self.stop_event.is_set():
             try:
-                ready_raw = await asyncio.wait_for(ws.recv(), timeout=10)
-                data = json.loads(ready_raw) if isinstance(ready_raw, str) else {}
-                if data.get("type") != "ready":
-                    print("Handshake non valido", flush=True)
-                    return
-            except Exception:
-                print("Handshake non valido", flush=True)
-                return
+                async with websockets.connect(
+                    self.url, ping_interval=None, ping_timeout=self.ping_timeout
+                ) as ws:
+                    self.ws = ws
+                    self.on_event("connected")
+                    await ws.send(
+                        json.dumps(
+                            {"type": "hello", "sr": self.sr, "format": "pcm_s16le", "channels": 1}
+                        )
+                    )
+                    try:
+                        ready_raw = await asyncio.wait_for(ws.recv(), timeout=10)
+                        data = json.loads(ready_raw) if isinstance(ready_raw, str) else {}
+                        if data.get("type") != "ready":
+                            raise RuntimeError("handshake")
+                    except Exception as e:
+                        self.on_event(f"handshake_error:{e}")
+                        if not self.auto_reconnect:
+                            return
+                        await asyncio.sleep(2)
+                        continue
 
-            print("✅ pronto a ricevere audio", flush=True)
+                    self.on_event("handshake_ok")
 
-            tasks = [
-                asyncio.create_task(self._mic_worker()),
-                asyncio.create_task(self._sender()),
-                asyncio.create_task(self._receiver()),
-                asyncio.create_task(self._player()),
-            ]
-            await self.stop_event.wait()
-            for t in tasks:
-                t.cancel()
+                    tasks = [
+                        asyncio.create_task(self._mic_worker()),
+                        asyncio.create_task(self._sender()),
+                        asyncio.create_task(self._receiver()),
+                        asyncio.create_task(self._player()),
+                        asyncio.create_task(self._pinger()),
+                    ]
+                    await self.stop_event.wait()
+                    for t in tasks:
+                        t.cancel()
+            except Exception as e:
+                self.on_event(f"error:{e}")
+                if not self.auto_reconnect:
+                    break
+                await asyncio.sleep(2)
+            finally:
+                self.ws = None
+            if not self.auto_reconnect:
+                break
+        self.on_event("disconnected")
 
     def start(self) -> None:
         if self.thread and self.thread.is_alive():
@@ -422,6 +479,14 @@ class OracoloUI(tk.Tk):
         self.stop_btn.pack(side="left")
         self.ws_start_btn.pack(side="left", padx=(8, 8))
         self.ws_stop_btn.pack(side="left")
+        self.in_level = tk.DoubleVar(value=0.0)
+        self.out_level = tk.DoubleVar(value=0.0)
+        ttk.Progressbar(bar, orient="horizontal", length=80, mode="determinate", variable=self.in_level, maximum=1.0).pack(
+            side="left", padx=(8, 2)
+        )
+        ttk.Progressbar(bar, orient="horizontal", length=80, mode="determinate", variable=self.out_level, maximum=1.0).pack(
+            side="left", padx=(2, 8)
+        )
 
         self.status_var = tk.StringVar(value="🟡 In attesa")
         ttk.Label(bar, textvariable=self.status_var).pack(side="right")
@@ -520,10 +585,10 @@ class OracoloUI(tk.Tk):
         self.ws_latency = tk.StringVar(value="WS: -")
         self.tts_queue = tk.StringVar(value="TTS q=0")
         self.doc_index = tk.StringVar(value="Index: OK")
-        self.vad_level = tk.DoubleVar(value=0.0)
+        self.ws_reconnect_var = tk.BooleanVar(value=True)
         ttk.Label(status, textvariable=self.ws_latency).pack(side="left")
         ttk.Label(status, textvariable=self.tts_queue).pack(side="left", padx=(8, 0))
-        ttk.Progressbar(status, orient="horizontal", length=100, mode="determinate", variable=self.vad_level, maximum=1.0).pack(side="left", padx=(8, 0))
+        ttk.Checkbutton(status, text="Auto-reconnect", variable=self.ws_reconnect_var).pack(side="left", padx=(8, 0))
         ttk.Label(status, textvariable=self.doc_index).pack(side="right")
 
         footer = ttk.Frame(self)
@@ -679,10 +744,11 @@ class OracoloUI(tk.Tk):
     def _poll_status(self) -> None:
         if self.ws_client is not None:
             self.tts_queue.set(f"TTS q={self.ws_client.audio_q.qsize()}")
-            self.ws_latency.set("WS: connesso")
         else:
             self.tts_queue.set("TTS q=0")
             self.ws_latency.set("WS: -")
+            self.in_level.set(0.0)
+            self.out_level.set(0.0)
         self.after(500, self._poll_status)
 
     def _poll_idle(self) -> None:
@@ -842,6 +908,10 @@ class OracoloUI(tk.Tk):
         audio = self.settings.setdefault("audio", {})
         cur_in = audio.get("input_device", None)
         cur_out = audio.get("output_device", None)
+        rt_conf = self.settings.setdefault("realtime", {})
+        rec_conf = self.settings.setdefault("recording", {})
+        barge_var = tk.DoubleVar(value=float(rt_conf.get("barge_rms_threshold", 500.0)))
+        vad_var = tk.DoubleVar(value=float(rec_conf.get("min_speech_level", 0.01)))
 
         def find_label_for_index(i: int | None) -> str:
             if i is None:
@@ -863,6 +933,13 @@ class OracoloUI(tk.Tk):
         tk.Label(win, text="Output", fg=self._fg, bg=self._bg).grid(row=1, column=0, padx=6, pady=6, sticky="e")
         tk.OptionMenu(win, out_var, "(default di sistema)", *options).grid(row=1, column=1, padx=6, pady=6, sticky="w")
 
+        tk.Label(win, text="Barge soglia", fg=self._fg, bg=self._bg).grid(row=2, column=0, padx=6, pady=6, sticky="e")
+        ttk.Scale(win, from_=100, to=5000, orient="horizontal", length=200, variable=barge_var).grid(row=2, column=1, padx=6, pady=6, sticky="w")
+        tk.Label(win, text="Sens. VAD", fg=self._fg, bg=self._bg).grid(row=3, column=0, padx=6, pady=6, sticky="e")
+        ttk.Scale(win, from_=0.001, to=0.1, orient="horizontal", length=200, variable=vad_var).grid(row=3, column=1, padx=6, pady=6, sticky="w")
+        ttk.Button(win, text="Test microfono", command=lambda: self._test_mic(label_to_index(in_var.get()))).grid(row=4, column=0, padx=6, pady=6)
+        ttk.Button(win, text="Test altoparlanti", command=lambda: self._test_speakers(label_to_index(out_var.get()))).grid(row=4, column=1, padx=6, pady=6)
+
         def label_to_index(lbl: str) -> int | None:
             if not lbl or lbl.startswith("(default"):
                 return None
@@ -875,11 +952,68 @@ class OracoloUI(tk.Tk):
         def on_ok() -> None:
             audio["input_device"] = label_to_index(in_var.get())
             audio["output_device"] = label_to_index(out_var.get())
+            rt_conf["barge_rms_threshold"] = float(barge_var.get())
+            rec_conf["min_speech_level"] = float(vad_var.get())
             # applica immediatamente
             sd.default.device = (audio["input_device"], audio["output_device"])
             win.destroy()
 
-        ttk.Button(win, text="OK", command=on_ok).grid(row=2, column=0, columnspan=2, pady=10)
+        ttk.Button(win, text="OK", command=on_ok).grid(row=5, column=0, columnspan=2, pady=10)
+
+    def _test_mic(self, device_index: int | None) -> None:
+        sr = int(self.settings.get("realtime", {}).get("sample_rate", SR))
+        win = tk.Toplevel(self)
+        win.title("Test microfono")
+        win.configure(bg=self._bg)
+        level_var = tk.DoubleVar(value=0.0)
+        ttk.Progressbar(win, orient="horizontal", length=200, mode="determinate", maximum=1.0, variable=level_var).pack(
+            padx=10, pady=10
+        )
+        running = True
+
+        def callback(indata, frames, time_info, status) -> None:  # type: ignore[override]
+            if not running:
+                return
+            samples = np.frombuffer(indata, dtype=np.int16).astype(np.float32)
+            lvl = float(np.sqrt(np.mean(samples ** 2))) / 32768.0
+            self.after(0, level_var.set, lvl)
+
+        try:
+            stream = sd.RawInputStream(
+                samplerate=sr,
+                blocksize=1024,
+                channels=1,
+                dtype="int16",
+                callback=callback,
+                device=device_index,
+            )
+            stream.start()
+        except Exception as e:
+            messagebox.showerror("Audio", f"Errore microfono: {e}")
+            win.destroy()
+            return
+
+        def on_close() -> None:
+            nonlocal running
+            running = False
+            try:
+                stream.stop()
+                stream.close()
+            except Exception:
+                pass
+            win.destroy()
+
+        win.protocol("WM_DELETE_WINDOW", on_close)
+
+    def _test_speakers(self, device_index: int | None) -> None:
+        sr = int(self.settings.get("realtime", {}).get("sample_rate", SR))
+        t = np.linspace(0, 0.5, int(sr * 0.5), endpoint=False)
+        tone = (0.5 * np.sin(2 * np.pi * 440 * t)).astype(np.float32)
+        try:
+            sd.play(tone, sr, device=device_index)
+            sd.wait()
+        except Exception as e:
+            messagebox.showerror("Audio", f"Errore altoparlanti: {e}")
 
     def _open_recording_dialog(self) -> None:
         win = tk.Toplevel(self)
@@ -1358,6 +1492,17 @@ class OracoloUI(tk.Tk):
             self._reader_thread = None
 
     # ----------------------- Realtime WS control ------------------------- #
+    def _on_ws_event(self, ev: str) -> None:
+        self._append_log(f"[WS] {ev}\n")
+        if ev == "connected":
+            self.ws_latency.set("WS: handshake")
+        elif ev == "disconnected":
+            self.ws_latency.set("WS: -")
+            self.in_level.set(0.0)
+            self.out_level.set(0.0)
+        elif ev.startswith("error") or ev.startswith("handshake_error"):
+            self.ws_latency.set("WS: errore")
+
     def start_realtime(self) -> None:
         if self.ws_client is not None:
             messagebox.showinfo("Realtime", "Sessione già attiva.")
@@ -1369,15 +1514,30 @@ class OracoloUI(tk.Tk):
         out_dev = audio.get("output_device", None)
         sd.default.device = (in_dev, out_dev)
 
+        rt_conf = self.settings.get("realtime", {})
+        url = rt_conf.get("ws_url", WS_URL)
+        sr = int(rt_conf.get("sample_rate", SR))
+        barge = float(rt_conf.get("barge_rms_threshold", 500.0))
+        ping_interval = int(rt_conf.get("ping_interval", 20))
+        ping_timeout = int(rt_conf.get("ping_timeout", 20))
+
         self._append_log(
-            f"🔌 Realtime WS → {WS_URL}  (sr={SR}, in={sd.default.device[0]}, out={sd.default.device[1]})\n"
+            f"🔌 Realtime WS → {url}  (sr={sr}, in={sd.default.device[0]}, out={sd.default.device[1]})\n"
         )
 
         self.ws_client = RealtimeWSClient(
-            WS_URL,
-            SR,
+            url,
+            sr,
             on_partial=lambda text: self.after(0, self._append_log, f"… {text}\n"),
             on_answer=lambda text: self.after(0, self._append_log, f"🔮 {text}\n"),
+            barge_threshold=barge,
+            ping_interval=ping_interval,
+            ping_timeout=ping_timeout,
+            auto_reconnect=bool(self.ws_reconnect_var.get()),
+            on_input_level=lambda lvl: self.after(0, self.in_level.set, lvl),
+            on_output_level=lambda lvl: self.after(0, self.out_level.set, lvl),
+            on_ping=lambda ms: self.after(0, self.ws_latency.set, f"WS: {ms:.0f} ms"),
+            on_event=lambda ev: self.after(0, self._on_ws_event, ev),
         )
         try:
             self.ws_client.start()
@@ -1397,6 +1557,9 @@ class OracoloUI(tk.Tk):
             self.ws_client = None
             self.ws_start_btn.configure(state="normal")
             self.ws_stop_btn.configure(state="disabled")
+            self.in_level.set(0.0)
+            self.out_level.set(0.0)
+            self.ws_latency.set("WS: -")
             if not (self.proc and self.proc.poll() is None):
                 self.status_var.set("🟡 In attesa")
 
