@@ -200,6 +200,10 @@ def main() -> None:
     ORACLE_POLICY = getattr(SET, "oracle_policy", "")
     ANSWER_MODE = getattr(SET, "answer_mode", "detailed")
 
+    STYLE_ENABLED = os.getenv("ORACOLO_STYLE", "poetic").lower() != "plain"
+    ANSWER_MODE = os.getenv("ORACOLO_ANSWER_MODE", ANSWER_MODE)
+    LANG_PREF = os.getenv("ORACOLO_LANG", "auto").lower()
+
     # Chat state
     CHAT_ENABLED = bool(getattr(getattr(SET, "chat", None), "enabled", False))
     chat = ChatState(
@@ -266,8 +270,10 @@ def main() -> None:
         # se non c'è la sezione wake, rimaniamo con i default sopra
         pass
 
-    session_lang = "it"  # lingua bloccata per la sessione
-
+    session_lang = "it"
+    if LANG_PREF in ("it", "en"):
+        session_lang = LANG_PREF
+    
     # --------------------------- STATE MACHINE --------------------------- #
     dlg = DialogueManager(IDLE_TIMEOUT)
     wake_lang = "it"
@@ -462,7 +468,7 @@ def main() -> None:
                         pending_lang,
                         client,
                         LLM_MODEL,
-                        ORACLE_SYSTEM,
+                        ORACLE_SYSTEM if STYLE_ENABLED else "",
                         context=context,
                         history=pending_history,
                         topic=pending_topic,
