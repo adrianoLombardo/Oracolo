@@ -15,9 +15,12 @@ class ChatState:
     topic_emb: Optional[np.ndarray] = field(default=None, repr=False)
     topic_text: Optional[str] = None
     pinned: List[str] = field(default_factory=list)
+    summary: str = ""
+    pinned_limit: int = 5
 
     def reset(self) -> None:
         self.history.clear()
+        self.summary = ""
 
     def push_user(self, text: str) -> None:
         self.history.append({"role": "user", "content": text})
@@ -33,6 +36,8 @@ class ChatState:
         if not text:
             return
         self.pinned.append(text)
+        if self.pinned_limit > 0 and len(self.pinned) > self.pinned_limit:
+            self.pinned = self.pinned[-self.pinned_limit:]
         self._persist("pinned", text)
 
     def pin_last_user(self) -> None:
@@ -41,11 +46,33 @@ class ChatState:
                 self.pin_message(msg.get("content", ""))
                 break
 
+    def pinned_shortlist(self) -> List[str]:
+        if self.pinned_limit > 0:
+            return self.pinned[-self.pinned_limit:]
+        return list(self.pinned)
+
     def _trim(self) -> None:
         if self.max_turns > 0:
             excess = len(self.history) - (2 * self.max_turns)
             if excess > 0:
+                self._append_summary(self.history[:excess])
                 self.history = self.history[excess:]
+
+    def _append_summary(self, msgs: List[Dict[str, str]]) -> None:
+        if not msgs:
+            return
+        lines = [f"{m.get('role', '')}: {m.get('content', '')}" for m in msgs]
+        snippet = " ".join(lines)
+        if self.summary:
+            self.summary += " " + snippet
+        else:
+            self.summary = snippet
+
+    def soft_reset(self) -> None:
+        self._append_summary(self.history)
+        self.history.clear()
+        self.topic_emb = None
+        self.topic_text = None
 
     def _persist(self, role: str, text: str) -> None:
         if not self.persist_jsonl:
@@ -119,6 +146,9 @@ class ChatState:
         sim = float(np.dot(self.topic_emb, vec) / (np.linalg.norm(self.topic_emb) * np.linalg.norm(vec) + 1e-9))
         changed = sim < threshold
         if changed:
+            last = self.history[-1:]  # conserva ultimo messaggio
+            self.soft_reset()
+            self.history.extend(last)
             self.topic_text = text
             self.topic_emb = vec
         else:
