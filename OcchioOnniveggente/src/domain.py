@@ -96,9 +96,9 @@ def validate_question(
     emb_model: str | None = None,      # compat
     embed_model: str | None = None,    # alias
     **_: Any,                          # ignora altri kwargs
-) -> Tuple[bool, list[str]]:
+) -> Tuple[bool, list[str], bool]:
     """
-    Ritorna (is_ok, context_list).
+    Ritorna (is_ok, context_list, needs_clarification).
 
     Politica:
     - Se settings.domain manca o non ha keywords -> NON filtriamo (sempre OK).
@@ -165,12 +165,12 @@ def validate_question(
     # Se il filtro non è abilitato → sempre OK
     if not enabled:
         ctx = _try_retrieve(question, settings, docstore_path, top_k)
-        return True, ctx
+        return True, ctx, False
 
     # Se NON ci sono keywords → non filtriamo (sempre OK)
     if not keywords:
         ctx = _try_retrieve(question, settings, docstore_path, top_k)
-        return True, ctx
+        return True, ctx, False
 
     # ---- Boost terms (accettazione immediata se compaiono) ----
     boost_terms = [
@@ -182,11 +182,12 @@ def validate_question(
     ]
     if any(bt in q_norm for bt in boost_terms):
         ctx = _try_retrieve(question, settings, docstore_path, top_k)
-        return True, ctx
+        return True, ctx, False
 
     # ---- Overlap parole chiave ----
     kw_score = _keyword_overlap_score(question, keywords)
     ok = kw_score >= kw_min_overlap
+    clarify = False
 
     # ---- Recupera contesto ----
     ctx = _try_retrieve(question, settings, docstore_path, top_k)
@@ -202,10 +203,14 @@ def validate_question(
                 sims = [_cosine(qv, v) for v in vecs[1:]]
                 best_sim = max(sims) if sims else 0.0
                 ok = ok or (best_sim >= emb_min_sim)
+                clarify = clarify or (not ok and best_sim > 0)
         except Exception:
             pass
 
-    return ok, ctx
+    if not ok:
+        clarify = clarify or (kw_score > 0 or bool(ctx))
+
+    return ok, ctx, clarify
 
 
 # ------------------------- helper retrieval ------------------------- #

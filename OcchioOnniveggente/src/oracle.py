@@ -117,6 +117,7 @@ def oracle_answer(
     *,
     context: list[dict] | None = None,
     history: list[dict[str, str]] | None = None,
+    topic: str | None = None,
 ) -> str:
     print("✨ Interrogo l’Oracolo…")
     lang_clause = "Answer in English." if lang_hint == "en" else "Rispondi in italiano."
@@ -130,8 +131,15 @@ def oracle_answer(
         messages.extend(history)
     messages.append({"role": "user", "content": question})
 
+    topic_clause = (
+        " Rispondi solo con informazioni coerenti al tema seguente e non mescolare altri argomenti a meno che l'utente lo chieda esplicitamente. Tema: "
+        + topic
+        if topic
+        else ""
+    )
     sys_prompt = (
         oracle_system
+        + topic_clause
         + " Se la domanda non riguarda neuroscienze, neuroestetica, arte contemporanea o l'universo, rispondi: 'Domanda non pertinente'. "
         + lang_clause
     )
@@ -144,7 +152,6 @@ def oracle_answer(
                 input=messages,
             )
             ans = resp.output_text.strip()
-            print(f"🔮 Oracolo: {ans}")
             return ans
         except openai.OpenAIError as e:
             print(f"Errore OpenAI: {e}")
