@@ -36,7 +36,12 @@ import numpy as np
 import sounddevice as sd
 import websockets
 import yaml
-from markdown2 import markdown
+try:  # markdown2 è opzionale
+    from markdown2 import markdown
+except ImportError:  # pragma: no cover - fallback se non installato
+    def markdown(text: str, *_, **__):
+        """Ritorna il testo originale se markdown2 non è disponibile."""
+        return text
 from openai import OpenAI
 import re
 import webbrowser
