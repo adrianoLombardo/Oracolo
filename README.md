@@ -125,6 +125,13 @@ python scripts/ingest_docs.py --reindex
 
 Il percorso dell'indice è configurabile con `docstore_path` in `settings.yaml`.
 
+Nell'interfaccia grafica sono disponibili le nuove finestre **Dominio…** e
+**Conoscenza…**: la prima consente di definire parole chiave, prompt
+oracolare e rigidità del filtro; la seconda permette di scegliere l'indice,
+impostare il `top-k` e testare le query di recupero. Queste opzioni rendono
+l'Oracolo adattabile a mostre, conferenze e installazioni, semplificando la
+gestione dei documenti e migliorando la pertinenza delle risposte.
+
 ---
 
 ## 6. Test

@@ -109,7 +109,7 @@ def validate_question(
     settings: Any = None,
     client: Any = None,
     docstore_path: str | Path | None = None,
-    top_k: int = 3,
+    top_k: int | None = None,
     emb_model: str | None = None,
     embed_model: str | None = None,
     topic: str | None = None,
@@ -123,6 +123,17 @@ def validate_question(
       (is_ok, context_list, needs_clarification, reason_str).
     """
     q_norm = _norm(question)
+
+    # ---- parametri retrieval ----
+    if top_k is None and settings is not None:
+        try:
+            top_k = int(getattr(settings, "retrieval_top_k", 3))
+        except Exception:
+            try:
+                top_k = int(settings.get("retrieval_top_k", 3))  # type: ignore[attr-defined]
+            except Exception:
+                top_k = 3
+    top_k = int(top_k or 3)
 
     # ---- leggi settings.domain ----
     dom = None
