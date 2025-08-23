@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import re
-import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
 import openai
 from langdetect import DetectorFactory, detect
+from .utils import retry_with_backoff
 
 DetectorFactory.seed = 42
 
@@ -48,15 +48,16 @@ def _score_lang(text: str, lang: str, *, debug: bool = False) -> float:
 
 def transcribe(path: Path, client, stt_model: str, *, debug: bool = False) -> Tuple[str, str]:
     def _call_transcription(**kwargs) -> str:
-        for _ in range(3):
-            try:
-                with open(path, "rb") as f:
-                    tx = client.audio.transcriptions.create(model=stt_model, file=f, **kwargs)
-                return (tx.text or "").strip()
-            except openai.OpenAIError as e:
-                print(f"Errore OpenAI: {e}")
-                time.sleep(1)
-        return ""
+        def do_call() -> str:
+            with open(path, "rb") as f:
+                tx = client.audio.transcriptions.create(model=stt_model, file=f, **kwargs)
+            return (tx.text or "").strip()
+
+        try:
+            return retry_with_backoff(do_call)
+        except openai.OpenAIError as e:
+            print(f"Errore OpenAI: {e}")
+            return ""
 
     print("🧠 Trascrizione (auto)…")
     text_auto = _call_transcription(
@@ -169,44 +170,47 @@ def oracle_answer(
         messages.extend(history)
     messages.append({"role": "user", "content": question})
 
-    for _ in range(3):
-        try:
-            resp = client.responses.create(
-                model=llm_model,
-                instructions=policy,
-                input=messages,
-            )
-            ans = resp.output_text.strip()
-            return ans, context or []
-        except openai.OpenAIError as e:
-            print(f"Errore OpenAI: {e}")
-            time.sleep(1)
-    return "", context or []
+    def do_request():
+        return client.responses.create(
+            model=llm_model,
+            instructions=policy,
+            input=messages,
+        )
+
+    try:
+        resp = retry_with_backoff(do_request)
+        ans = resp.output_text.strip()
+        return ans, context or []
+    except openai.OpenAIError as e:
+        print(f"Errore OpenAI: {e}")
+        return "", context or []
 
 
 def synthesize(text: str, out_path: Path, client, tts_model: str, tts_voice: str) -> None:
     print("🎧 Sintesi vocale…")
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    for _ in range(3):
+
+    def do_call() -> Path:
         try:
             with client.audio.speech.with_streaming_response.create(
                 model=tts_model, voice=tts_voice, input=text, response_format="wav"
             ) as resp:
                 resp.stream_to_file(out_path.as_posix())
-            print(f"✅ Audio → {out_path.name}")
-            return
+            return out_path
         except TypeError:
+            alt = out_path.with_suffix(".mp3") if out_path.suffix.lower() != ".mp3" else out_path
             with client.audio.speech.with_streaming_response.create(
                 model=tts_model, voice=tts_voice, input=text
             ) as resp:
-                if out_path.suffix.lower() != ".mp3":
-                    out_path = out_path.with_suffix(".mp3")
-                resp.stream_to_file(out_path.as_posix())
-            print(f"✅ Audio → {out_path.name}")
-            return
-        except openai.OpenAIError as e:
-            print(f"Errore OpenAI: {e}")
-            time.sleep(1)
+                resp.stream_to_file(alt.as_posix())
+            return alt
+
+    try:
+        final_path = retry_with_backoff(do_call)
+        print(f"✅ Audio → {final_path.name}")
+        return
+    except openai.OpenAIError as e:
+        print(f"Errore OpenAI: {e}")
     print("❌ Impossibile sintetizzare l'audio.")
 
 

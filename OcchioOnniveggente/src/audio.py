@@ -7,8 +7,11 @@ from pathlib import Path
 from typing import Any, Dict, Tuple
 
 import numpy as np
-import sounddevice as sd
 import soundfile as sf
+try:  # pragma: no cover - optional dependency
+    import sounddevice as sd
+except Exception:  # pragma: no cover
+    sd = None
 
 try:
     import webrtcvad  # type: ignore
@@ -36,13 +39,36 @@ def load_audio_as_float(path: Path, target_sr: int) -> Tuple[np.ndarray, int]:
     return y, target_sr
 
 
+def apply_agc(y: np.ndarray, target_rms: float = 0.1, max_gain: float = 10.0) -> np.ndarray:
+    """Apply a simple automatic gain control to ``y``.
+
+    The signal is amplified towards ``target_rms`` but never more than
+    ``max_gain`` and clipped at [-1, 1]."""
+
+    if y.size == 0:
+        return y
+    rms = float(np.sqrt(np.mean(y**2))) + 1e-8
+    gain = min(max_gain, target_rms / rms)
+    y = y * gain
+    return np.clip(y, -1.0, 1.0)
+
+
+def apply_limiter(y: np.ndarray, threshold: float = 0.95) -> np.ndarray:
+    """Limit the peak amplitude of ``y`` to ``threshold``."""
+
+    peak = float(np.max(np.abs(y))) if y.size else 0.0
+    if peak <= threshold or peak == 0.0:
+        return y
+    return y * (threshold / peak)
+
+
 def record_wav(path: Path, seconds: int, sr: int) -> None:
     """Record audio for a fixed amount of seconds."""
     path.parent.mkdir(parents=True, exist_ok=True)
     print(f"\n🎤 Registra (max {seconds}s)…")
     audio = sd.rec(int(seconds * sr), samplerate=sr, channels=1, dtype="float32")
     sd.wait()
-    sf.write(path.as_posix(), audio, sr)
+    sf.write(path.as_posix(), apply_agc(audio[:, 0] if audio.ndim > 1 else audio), sr)
     print("✅ Fatto.")
 
 
@@ -101,7 +127,7 @@ def _record_with_webrtcvad(
     if peak < MIN_SPEECH:
         print("😴 Non ho colto parole distinte. Resto in attesa.")
         return False
-    sf.write(path.as_posix(), y, sr)
+    sf.write(path.as_posix(), apply_agc(y), sr)
     print(f"✅ Registrazione completata ({len(y)/sr:.2f}s).")
     return True
 
@@ -227,7 +253,7 @@ def record_until_silence(
         print("😴 Non ho colto parole distinte. Resto in attesa.")
         return False
 
-    sf.write(path.as_posix(), y, sr)
+    sf.write(path.as_posix(), apply_agc(y), sr)
     dur = len(y) / sr
     print(f"✅ Registrazione completata ({dur:.2f}s).")
     return True
@@ -243,6 +269,7 @@ def play_and_pulse(
 ) -> None:
     """Play audio and drive lights, with optional volume ducking."""
     y, sr = load_audio_as_float(path, sr)
+    y = apply_limiter(y)
     stop = False
 
     def worker() -> None:
