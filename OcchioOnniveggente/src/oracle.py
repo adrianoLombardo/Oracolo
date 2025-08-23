@@ -259,9 +259,11 @@ def append_log(
     def clean(s: str) -> str:
         return s.replace('"', "'")
 
-    src_str = ";".join(f"{s.get('id','')}:{s.get('score',0):.2f}" for s in (sources or []))
+    src_str = ";".join(
+        f"{s.get('id','')}:{s.get('score',0):.2f}" for s in (sources or [])
+    )
     line = (
-        f'"{ts}","{lang}","{clean(topic or '')}",'
+        f'"{ts}","{lang}","{clean(topic or "")}",'
         f'"{clean(q)}","{clean(a)}","{src_str}"\n'
     )
     if not log_path.exists():
