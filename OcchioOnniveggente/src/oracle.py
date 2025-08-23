@@ -197,6 +197,35 @@ def synthesize(text: str, out_path: Path, client, tts_model: str, tts_voice: str
     print("❌ Impossibile sintetizzare l'audio.")
 
 
+def export_audio_answer(
+    text: str,
+    out_path: Path,
+    *,
+    synth: Any | None = None,
+    client: Any | None = None,
+    tts_model: str = "",
+    tts_voice: str = "",
+) -> None:
+    """Export ``text`` as an audio file to ``out_path``.
+
+    A custom ``synth`` callable can be provided for testing purposes. If not
+    given, ``client``/``tts_model``/``tts_voice`` are used with
+    :func:`synthesize` to generate the audio.
+    """
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    if synth is not None:
+        synth(text, out_path)
+    else:
+        if client is None:
+            raise ValueError("client required if synth not provided")
+        synthesize(text, out_path, client, tts_model, tts_voice)
+
+
+def format_citations(sources: list[dict[str, str]]) -> str:
+    """Return a comma-separated string of source identifiers."""
+    return ", ".join(s.get("id", "") for s in sources if s.get("id"))
+
+
 def append_log(
     q: str,
     a: str,
