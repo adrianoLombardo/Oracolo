@@ -39,6 +39,7 @@ import yaml
 from markdown2 import markdown
 from openai import OpenAI
 import re
+import webbrowser
 
 try:  # opzionale: drag&drop documenti
     import tkinterdnd2 as tkdnd  # type: ignore
@@ -427,6 +428,8 @@ class OracoloUI(tk.Tk):
         self.last_sources: list[dict[str, str]] = []
         self.last_activity = time.time()
         self.last_test_result: dict[str, Any] | None = None
+        self.topic_threshold = tk.DoubleVar(value=float(self.settings.get("topic_threshold", 0.65)))
+        self.keywords: list[str] = list(self.settings.get("keywords", []))
 
         # sandbox and log state
         self.sandbox_var = tk.BooleanVar(value=False)
@@ -523,12 +526,6 @@ class OracoloUI(tk.Tk):
         self.ws_stop_btn.pack(side="left")
         self.in_level = tk.DoubleVar(value=0.0)
         self.out_level = tk.DoubleVar(value=0.0)
-        ttk.Progressbar(bar, orient="horizontal", length=80, mode="determinate", variable=self.in_level, maximum=1.0).pack(
-            side="left", padx=(8, 2)
-        )
-        ttk.Progressbar(bar, orient="horizontal", length=80, mode="determinate", variable=self.out_level, maximum=1.0).pack(
-            side="left", padx=(2, 8)
-        )
 
         self.status_var = tk.StringVar(value="🟡 In attesa")
         ttk.Label(bar, textvariable=self.status_var).pack(side="right")
@@ -629,13 +626,41 @@ class OracoloUI(tk.Tk):
         )
         self.log.pack(fill="both", expand=True)
 
+        topics_frame = ttk.Frame(notebook)
+        notebook.add(topics_frame, text="Argomenti & Regole")
+        ttk.Label(topics_frame, text="Soglia cambio argomento:").pack(anchor="w", padx=8, pady=(8, 0))
+        ttk.Scale(
+            topics_frame,
+            from_=0.0,
+            to=1.0,
+            variable=self.topic_threshold,
+            orient="horizontal",
+            length=200,
+        ).pack(fill="x", padx=8)
+        kw_frame = ttk.Frame(topics_frame)
+        kw_frame.pack(fill="both", expand=True, padx=8, pady=8)
+        self.keyword_entry = tk.Entry(kw_frame)
+        self.keyword_entry.pack(fill="x")
+        ttk.Button(kw_frame, text="Aggiungi", command=self._add_keyword).pack(pady=4)
+        self.keyword_listbox = tk.Listbox(kw_frame, height=5)
+        self.keyword_listbox.pack(fill="both", expand=True)
+        ttk.Button(kw_frame, text="Rimuovi selezionati", command=self._remove_keyword).pack(pady=4)
+        for kw in self.keywords:
+            self.keyword_listbox.insert("end", kw)
+
         status = ttk.Frame(self)
         status.pack(fill="x", padx=16, pady=(0, 4))
-        self.ws_latency = tk.StringVar(value="WS: -")
+        ttk.Progressbar(
+            status, orient="horizontal", length=80, mode="determinate", variable=self.in_level, maximum=1.0
+        ).pack(side="left", padx=(0, 2))
+        ttk.Progressbar(
+            status, orient="horizontal", length=80, mode="determinate", variable=self.out_level, maximum=1.0
+        ).pack(side="left", padx=(2, 8))
+        self.ping_var = tk.StringVar(value="Ping: -")
         self.tts_queue = tk.StringVar(value="TTS q=0")
         self.doc_index = tk.StringVar(value="Index: OK")
         self.ws_reconnect_var = tk.BooleanVar(value=True)
-        ttk.Label(status, textvariable=self.ws_latency).pack(side="left")
+        ttk.Label(status, textvariable=self.ping_var).pack(side="left")
         ttk.Label(status, textvariable=self.tts_queue).pack(side="left", padx=(8, 0))
         ttk.Checkbutton(status, text="Auto-reconnect", variable=self.ws_reconnect_var).pack(side="left", padx=(8, 0))
         ttk.Label(status, textvariable=self.doc_index).pack(side="right")
@@ -656,6 +681,31 @@ class OracoloUI(tk.Tk):
         if role == "assistant":
             self.last_answer = clean
 
+    def _append_citations(self, sources: list[dict[str, str]]) -> None:
+        if not sources:
+            return
+        self.chat_view.configure(state="normal")
+        for i, src in enumerate(sources, 1):
+            cid = src.get("id", f"doc{i}")
+            self.chat_view.insert("end", f"[{i}] {cid} ")
+            btn = ttk.Button(self.chat_view, text="apri documento", command=lambda s=src: self._open_citation(s))
+            self.chat_view.window_create("end", window=btn)
+            self.chat_view.insert("end", "\n")
+        self.chat_view.configure(state="disabled")
+        self.chat_view.see("end")
+
+    def _open_citation(self, src: dict[str, str]) -> None:
+        path = src.get("path")
+        if path and Path(path).exists():
+            webbrowser.open(Path(path).as_uri())
+            return
+        win = tk.Toplevel(self)
+        win.title(src.get("title") or src.get("id", "Documento"))
+        box = scrolledtext.ScrolledText(win, wrap="word", width=60, height=20)
+        box.pack(fill="both", expand=True)
+        box.insert("1.0", src.get("text", ""))
+        box.configure(state="disabled")
+
     def _update_memory(self) -> None:
         if self.remember_var.get():
             self.chat_state.max_turns = int(self.turns_var.get())
@@ -664,6 +714,20 @@ class OracoloUI(tk.Tk):
         chat_conf = self.settings.setdefault("chat", {})
         chat_conf["enabled"] = bool(self.remember_var.get())
         chat_conf["max_turns"] = int(self.turns_var.get())
+
+    def _add_keyword(self) -> None:
+        kw = self.keyword_entry.get().strip()
+        if kw and kw not in self.keywords:
+            self.keywords.append(kw)
+            self.keyword_listbox.insert("end", kw)
+        self.keyword_entry.delete(0, "end")
+
+    def _remove_keyword(self) -> None:
+        sel = list(self.keyword_listbox.curselection())
+        for idx in reversed(sel):
+            kw = self.keyword_listbox.get(idx)
+            self.keywords.remove(kw)
+            self.keyword_listbox.delete(idx)
 
     def _pin_last(self) -> None:
         self.chat_state.pin_last_user()
@@ -737,6 +801,12 @@ class OracoloUI(tk.Tk):
         self.last_sources = []
         try:
             client = OpenAI()
+            self.chat_state.update_topic(
+                text,
+                client,
+                self.settings.get("openai", {}).get("embed_model", "text-embedding-3-small"),
+                threshold=float(self.topic_threshold.get()),
+            )
             style_prompt = self.settings.get("style_prompt", "") if self.style_var.get() else ""
             lang = self.lang_map.get(self.lang_choice.get(), "auto")
             mode = self.mode_map.get(self.mode_choice.get(), "detailed")
@@ -767,6 +837,7 @@ class OracoloUI(tk.Tk):
             ans = f"Errore: {e}"
         self.chat_state.push_assistant(ans)
         self._append_chat("assistant", ans)
+        self._append_citations(self.last_sources)
         self.last_activity = time.time()
         self.status_var.set("🟢 Attivo")
 
@@ -852,7 +923,7 @@ class OracoloUI(tk.Tk):
             self.tts_queue.set(f"TTS q={self.ws_client.audio_q.qsize()}")
         else:
             self.tts_queue.set("TTS q=0")
-            self.ws_latency.set("WS: -")
+            self.ping_var.set("Ping: -")
             self.in_level.set(0.0)
             self.out_level.set(0.0)
         self.after(500, self._poll_status)
@@ -1699,9 +1770,16 @@ class OracoloUI(tk.Tk):
     # ------------------------------ Save ----------------------------------- #
     def save_settings(self) -> None:
         self.settings["debug"] = bool(self.debug_var.get())
+        self.settings["topic_threshold"] = float(self.topic_threshold.get())
+        self.settings["keywords"] = self.keywords
         try:
             routed_save(self.base_settings, self.local_settings, self.settings, self.root_dir)
             self.base_settings, self.local_settings, self.settings = load_settings_pair(self.root_dir)
+            self.keywords = list(self.settings.get("keywords", []))
+            self.keyword_listbox.delete(0, "end")
+            for kw in self.keywords:
+                self.keyword_listbox.insert("end", kw)
+            self.topic_threshold.set(float(self.settings.get("topic_threshold", self.topic_threshold.get())))
             messagebox.showinfo("Impostazioni", "Salvate correttamente.")
         except Exception as e:
             messagebox.showerror("Impostazioni", f"Errore nel salvataggio: {e}")
@@ -1800,13 +1878,13 @@ class OracoloUI(tk.Tk):
     def _on_ws_event(self, ev: str) -> None:
         self._append_log(f"[WS] {ev}\n", "WS")
         if ev == "connected":
-            self.ws_latency.set("WS: handshake")
+            self.ping_var.set("Ping: handshake")
         elif ev == "disconnected":
-            self.ws_latency.set("WS: -")
+            self.ping_var.set("Ping: -")
             self.in_level.set(0.0)
             self.out_level.set(0.0)
         elif ev.startswith("error") or ev.startswith("handshake_error"):
-            self.ws_latency.set("WS: errore")
+            self.ping_var.set("Ping: errore")
 
     def start_realtime(self) -> None:
         if self.ws_client is not None:
@@ -1846,7 +1924,7 @@ class OracoloUI(tk.Tk):
             auto_reconnect=bool(self.ws_reconnect_var.get()),
             on_input_level=lambda lvl: self.after(0, self.in_level.set, lvl),
             on_output_level=lambda lvl: self.after(0, self.out_level.set, lvl),
-            on_ping=lambda ms: self.after(0, self.ws_latency.set, f"WS: {ms:.0f} ms"),
+            on_ping=lambda ms: self.after(0, self.ping_var.set, f"Ping: {ms:.0f} ms"),
             on_event=lambda ev: self.after(0, self._on_ws_event, ev),
         )
         try:
@@ -1869,7 +1947,7 @@ class OracoloUI(tk.Tk):
             self.ws_stop_btn.configure(state="disabled")
             self.in_level.set(0.0)
             self.out_level.set(0.0)
-            self.ws_latency.set("WS: -")
+            self.ping_var.set("Ping: -")
             if not (self.proc and self.proc.poll() is None):
                 self.status_var.set("🟡 In attesa")
 
