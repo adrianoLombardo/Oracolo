@@ -60,6 +60,33 @@ class ChatState:
         with self.persist_jsonl.open("a", encoding="utf-8") as f:
             f.write(json.dumps(rec, ensure_ascii=False) + "\n")
 
+    def export_history(self, path: Path) -> None:
+        """Export the current chat history to *path*.
+
+        The output format is determined by the file extension:
+
+        - ``.json`` → JSON array of messages
+        - ``.md``   → simple Markdown transcript
+        - otherwise → plain text transcript
+        """
+        ext = path.suffix.lower()
+        if ext == ".json":
+            path.write_text(
+                json.dumps(self.history, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+            return
+
+        lines = []
+        for msg in self.history:
+            role = msg.get("role", "")
+            content = msg.get("content", "")
+            if ext == ".md":
+                lines.append(f"**{role}:** {content}")
+            else:
+                lines.append(f"{role}: {content}")
+        path.write_text("\n".join(lines), encoding="utf-8")
+
     # ----------------- topic tracking -----------------
     def update_topic(
         self,
