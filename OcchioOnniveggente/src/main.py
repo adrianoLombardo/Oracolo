@@ -266,6 +266,7 @@ def main() -> None:
     # --------------------------- STATE MACHINE --------------------------- #
     state = "SLEEP"      # SLEEP -> attende hotword. ACTIVE -> dialogo attivo
     active_deadline = 0  # timestamp (time.time()) di scadenza inattività
+    processing_turn = False
 
     try:
         while True:
@@ -335,6 +336,10 @@ def main() -> None:
                     state = "SLEEP"
                     continue
 
+                if processing_turn:
+                    # stiamo ancora elaborando il turno precedente
+                    continue
+
                 # ascolto una domanda
                 say(
                     "🎤 Parla pure (VAD energia, max %.1fs)…" % (SET.vad.max_ms / 1000.0),
@@ -363,6 +368,8 @@ def main() -> None:
                         say("🌘 Torno al silenzio. Di' «ciao oracolo» per riattivarmi.", quiet=args.quiet)
                         state = "SLEEP"
                     continue
+                # rinnova timer appena rilevato parlato valido
+                active_deadline = time.time() + IDLE_TIMEOUT
 
                 eff_lang = qlang if qlang in ("it", "en") else last_lang
 
@@ -384,13 +391,18 @@ def main() -> None:
                     DOCSTORE_PATH = "DataBase/index.json"
                     TOPK = 3
 
-                ok, context = validate_question(
+                ok, context, clarify = validate_question(
                     q,
                     client=client,
                     emb_model=EMB_MODEL,
                     docstore_path=DOCSTORE_PATH,
                     top_k=TOPK,
                 )
+
+                if not ok and clarify:
+                    say("🤔 Puoi chiarire meglio la tua domanda?", quiet=args.quiet)
+                    processing_turn = False
+                    continue
 
                 if not ok:
                     a = "Domanda non pertinente"
@@ -399,6 +411,11 @@ def main() -> None:
                 else:
                     if CHAT_ENABLED:
                         chat.push_user(q)
+                        chat.update_topic(q, client, EMB_MODEL)
+                        topic_txt = chat.topic_text
+                    else:
+                        topic_txt = None
+                    processing_turn = True
                     a = oracle_answer(
                         q,
                         eff_lang,
@@ -407,6 +424,7 @@ def main() -> None:
                         ORACLE_SYSTEM,
                         context=context,
                         history=(chat.history if CHAT_ENABLED else None),
+                        topic=topic_txt,
                     )
                     if CHAT_ENABLED:
                         chat.push_assistant(a)
@@ -446,6 +464,7 @@ def main() -> None:
 
                 # estendi timeout perché c'è stata attività
                 active_deadline = time.time() + IDLE_TIMEOUT
+                processing_turn = False
 
                 # se modalità "single turn", torna subito a SLEEP
                 if WAKE_ENABLED and WAKE_SINGLE_TURN:
