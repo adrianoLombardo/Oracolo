@@ -6,36 +6,35 @@ UI Tkinter per Occhio Onniveggente.
 - Salvataggio "split": debug e audio.(input/output)_device -> settings.local.yaml,
   tutto il resto -> settings.yaml.
 - Menu Documenti: Aggiungi / Rimuovi / Aggiorna indice.
-- Avvio/Stop offline (src.main) e Realtime WS con log in tempo reale.
+- Avvio/Stop di src.main in modalità --autostart con log in tempo reale.
+- Controllo client Realtime WebSocket (start/stop) con streaming audio.
 """
 
 from __future__ import annotations
 
+import copy
+import json
 import os
+import queue
+import subprocess
 import sys
 import threading
-import subprocess
 import time
 import tkinter as tk
-from tkinter import filedialog, messagebox, ttk
-from tkinter import scrolledtext
 from pathlib import Path
-import copy
+from tkinter import filedialog, messagebox, scrolledtext, ttk
 from typing import Any
 
 import asyncio
-import json
-import queue
-
-import sounddevice as sd
-import yaml
 import numpy as np
+import sounddevice as sd
 import websockets
+import yaml
 
 WS_URL = os.getenv("ORACOLO_WS_URL", "ws://localhost:8765")
 SR = 24_000
 
-# opzionale: miglior compatibilità PNG con fallback
+# opzionale: compatibilità icona PNG via Pillow
 try:
     from PIL import Image, ImageTk  # pip install pillow
 except Exception:
@@ -110,18 +109,10 @@ def routed_save(base_now: dict, local_now: dict, merged_new: dict, root: Path) -
 
 
 # ------------------------- Realtime WS client ---------------------------- #
-
-
 class RealtimeWSClient:
     """Gestisce la connessione WebSocket realtime con audio bidirezionale."""
 
-    def __init__(
-        self,
-        url: str,
-        sr: int,
-        on_partial,
-        on_answer,
-    ) -> None:
+    def __init__(self, url: str, sr: int, on_partial, on_answer) -> None:
         self.url = url
         self.sr = sr
         self.on_partial = on_partial
@@ -134,7 +125,6 @@ class RealtimeWSClient:
         self.ws = None
         self.stop_event: asyncio.Event | None = None
 
-    # ------------------------- main runtime ------------------------- #
     async def _mic_worker(self) -> None:
         assert self.ws is not None and self.stop_event is not None
         loop = asyncio.get_running_loop()
@@ -151,9 +141,7 @@ class RealtimeWSClient:
                         self.ws.send(json.dumps({"type": "barge_in"})), loop
                     )
 
-        with sd.RawInputStream(
-            samplerate=self.sr, channels=1, dtype="int16", callback=callback
-        ):
+        with sd.RawInputStream(samplerate=self.sr, channels=1, dtype="int16", callback=callback):
             while not self.stop_event.is_set():
                 await asyncio.sleep(0.1)
 
@@ -178,8 +166,6 @@ class RealtimeWSClient:
                 self.on_partial(data.get("text", ""))
             elif kind == "answer":
                 self.on_answer(data.get("text", ""))
-            elif kind == "reset_ok":
-                self.on_partial("↻ Chat azzerata")
             if self.stop_event.is_set():
                 break
 
@@ -189,37 +175,44 @@ class RealtimeWSClient:
         def callback(outdata, frames, time_info, status) -> None:  # type: ignore[override]
             try:
                 chunk = self.audio_q.get_nowait()
-                outdata[:] = chunk
+                n = len(outdata)
+                if len(chunk) >= n:
+                    outdata[:] = chunk[:n]
+                else:
+                    outdata[:len(chunk)] = chunk
+                    outdata[len(chunk):] = b"\x00" * (n - len(chunk))
                 self.state["tts_playing"] = True
             except queue.Empty:
-                outdata.fill(0)
+                outdata[:] = b"\x00" * len(outdata)
                 self.state["tts_playing"] = False
                 self.state["barge_sent"] = False
 
-        with sd.RawOutputStream(
-            samplerate=self.sr, channels=1, dtype="int16", callback=callback
-        ):
+        with sd.RawOutputStream(samplerate=self.sr, channels=1, dtype="int16", callback=callback):
             while not self.stop_event.is_set():
                 await asyncio.sleep(0.1)
 
     async def _run(self) -> None:
         self.stop_event = asyncio.Event()
-        async with websockets.connect(self.url) as ws:
+        async with websockets.connect(self.url, ping_interval=20, ping_timeout=20) as ws:
             self.ws = ws
             print(
                 f"🔌 Realtime WS → {self.url}  (sr={self.sr}, in={sd.default.device[0]}, out={sd.default.device[1]})",
                 flush=True,
             )
-            await ws.send(json.dumps({"type": "hello", "sr": self.sr}))
+            # Handshake
+            await ws.send(json.dumps({"type": "hello", "sr": self.sr, "format": "pcm_s16le", "channels": 1}))
             try:
-                ready_raw = await ws.recv()
-                if json.loads(ready_raw).get("type") != "ready":
+                ready_raw = await asyncio.wait_for(ws.recv(), timeout=10)
+                data = json.loads(ready_raw) if isinstance(ready_raw, str) else {}
+                if data.get("type") != "ready":
                     print("Handshake non valido", flush=True)
                     return
             except Exception:
                 print("Handshake non valido", flush=True)
                 return
+
             print("✅ pronto a ricevere audio", flush=True)
+
             tasks = [
                 asyncio.create_task(self._mic_worker()),
                 asyncio.create_task(self._sender()),
@@ -234,9 +227,7 @@ class RealtimeWSClient:
         if self.thread and self.thread.is_alive():
             return
         self.loop = asyncio.new_event_loop()
-        self.thread = threading.Thread(
-            target=self.loop.run_until_complete, args=(self._run(),), daemon=True
-        )
+        self.thread = threading.Thread(target=self.loop.run_until_complete, args=(self._run(),), daemon=True)
         self.thread.start()
 
     def stop(self) -> None:
@@ -251,12 +242,6 @@ class RealtimeWSClient:
         self.thread = None
         self.loop = None
 
-    def send_json(self, payload: dict) -> None:
-        if self.ws and self.loop:
-            asyncio.run_coroutine_threadsafe(
-                self.ws.send(json.dumps(payload)), self.loop
-            )
-
 
 # ------------------------------- UI class -------------------------------- #
 class OracoloUI(tk.Tk):
@@ -267,14 +252,13 @@ class OracoloUI(tk.Tk):
         self.root_dir = Path(__file__).resolve().parents[1]
         self.title("Occhio Onniveggente")
 
-        # --- Icona finestra con fallback robusto (PNG via Tk -> PNG via Pillow -> ICO su Windows) ---
+        # icona con fallback
         try:
             logo_png = self.root_dir / "img" / "logo.png"
             if logo_png.exists():
                 try:
                     self.iconphoto(False, tk.PhotoImage(file=str(logo_png)))
                 except tk.TclError:
-                    # fallback via Pillow se disponibile
                     if Image is not None and ImageTk is not None:
                         try:
                             img = Image.open(str(logo_png))
@@ -282,7 +266,6 @@ class OracoloUI(tk.Tk):
                             self.iconphoto(False, icon)
                         except Exception:
                             pass
-            # Prova ICO su Windows se PNG non impostato
             logo_ico = self.root_dir / "img" / "logo.ico"
             if sys.platform.startswith("win") and logo_ico.exists():
                 try:
@@ -290,12 +273,11 @@ class OracoloUI(tk.Tk):
                 except Exception:
                     pass
         except Exception:
-            # mai far crashare l'UI per l'icona
             pass
 
         self.geometry("900x600")
 
-        # tema scuro
+        # tema
         self._bg = "#0f0f0f"
         self._fg = "#00ffe1"
         self._mid = "#161616"
@@ -312,43 +294,34 @@ class OracoloUI(tk.Tk):
             focuscolor="none",
             padding=8,
         )
-        style.map(
-            "TButton",
-            background=[("active", self._fg)],
-            foreground=[("active", self._bg)],
-        )
+        style.map("TButton", background=[("active", self._fg)], foreground=[("active", self._bg)])
         style.configure("TLabel", background=self._bg, foreground=self._fg)
         style.configure("TFrame", background=self._bg)
 
-        # root del progetto: .../src/ui.py -> parents[1] = root
-        self.root_dir = Path(__file__).resolve().parents[1]
-
-        # carica settings + overlay
+        # settings
         self.base_settings, self.local_settings, self.settings = load_settings_pair(self.root_dir)
 
-        # stato processo + thread logs
+        # process & logs
         self.proc: subprocess.Popen | None = None
         self._reader_thread: threading.Thread | None = None
         self._stop_reader = threading.Event()
 
-        # client realtime WebSocket
+        # realtime client
         self.ws_client: RealtimeWSClient | None = None
 
-        # menu + layout
+        # UI
         self._build_menubar()
         self._build_layout()
 
-        # polling stato processo
+        # poll
         self.after(500, self._poll_process)
-
-        # chiusura sicura
         self.protocol("WM_DELETE_WINDOW", self._on_close)
 
     # --------------------------- Menubar & dialogs ------------------------ #
     def _build_menubar(self) -> None:
         menubar = tk.Menu(self)
 
-        # Documenti (Aggiungi/Rimuovi/Aggiorna indice)
+        # Documenti
         docs_menu = tk.Menu(menubar, tearoff=0)
         docs_menu.add_command(label="Aggiungi…", command=self._add_documents)
         docs_menu.add_command(label="Rimuovi…", command=self._remove_documents)
@@ -364,7 +337,6 @@ class OracoloUI(tk.Tk):
         settings_menu.add_command(label="Recording…", command=self._open_recording_dialog)
         settings_menu.add_command(label="Luci…", command=self._open_lighting_dialog)
         settings_menu.add_command(label="OpenAI…", command=self._open_openai_dialog)
-        settings_menu.add_command(label="Chat…", command=self._open_chat_dialog)
         settings_menu.add_separator()
         settings_menu.add_command(label="Salva", command=self.save_settings)
         menubar.add_cascade(label="Impostazioni", menu=settings_menu)
@@ -373,29 +345,24 @@ class OracoloUI(tk.Tk):
 
     # --------------------------- Layout / Widgets ------------------------- #
     def _build_layout(self) -> None:
-        # Header
         header = ttk.Frame(self)
         header.pack(fill="x", padx=16, pady=(12, 8))
         ttk.Label(header, text="Occhio Onniveggente", font=("Helvetica", 18, "bold")).pack(side="left")
 
-        # Barra controlli
         bar = ttk.Frame(self)
         bar.pack(fill="x", padx=16, pady=(0, 8))
         self.start_btn = ttk.Button(bar, text="Avvia", command=self.start_oracolo)
         self.stop_btn = ttk.Button(bar, text="Ferma", command=self.stop_oracolo, state="disabled")
         self.ws_start_btn = ttk.Button(bar, text="Avvia WS", command=self.start_realtime)
         self.ws_stop_btn = ttk.Button(bar, text="Ferma WS", command=self.stop_realtime, state="disabled")
-        self.ws_reset_btn = ttk.Button(bar, text="Reset chat", command=self.reset_chat, state="disabled")
         self.start_btn.pack(side="left", padx=(0, 8))
         self.stop_btn.pack(side="left")
         self.ws_start_btn.pack(side="left", padx=(8, 8))
         self.ws_stop_btn.pack(side="left")
-        self.ws_reset_btn.pack(side="left", padx=(8, 0))
 
         self.status_var = tk.StringVar(value="🟡 In attesa")
         ttk.Label(bar, textvariable=self.status_var).pack(side="right")
 
-        # Viewport log
         log_frame = ttk.Frame(self)
         log_frame.pack(fill="both", expand=True, padx=16, pady=(0, 12))
 
@@ -412,7 +379,6 @@ class OracoloUI(tk.Tk):
         )
         self.log.pack(fill="both", expand=True)
 
-        # Footer
         footer = ttk.Frame(self)
         footer.pack(fill="x", padx=16, pady=(0, 12))
         ttk.Button(footer, text="Esci", command=self._on_close).pack(side="right")
@@ -447,7 +413,6 @@ class OracoloUI(tk.Tk):
             messagebox.showwarning("Documento", "Script di ingest non trovato (scripts/ingest_docs.py).")
             return
         try:
-            # ▶︎ usa il modulo
             subprocess.run(
                 [sys.executable, "-m", "scripts.ingest_docs", "--add", *paths],
                 check=True,
@@ -470,7 +435,6 @@ class OracoloUI(tk.Tk):
             messagebox.showwarning("Documento", "Script di ingest non trovato (scripts/ingest_docs.py).")
             return
         try:
-            # ▶︎ usa il modulo
             subprocess.run(
                 [sys.executable, "-m", "scripts.ingest_docs", "--remove", *paths],
                 check=True,
@@ -481,20 +445,13 @@ class OracoloUI(tk.Tk):
             messagebox.showerror("Errore", f"Rimozione fallita: {exc}")
 
     def _reindex_documents(self) -> None:
-        """Rigenera l'indice della knowledge base (coerente col README: 'Aggiorna indice')."""
         script = self._find_ingest_script()
         if not script:
             messagebox.showwarning("Indice", "Script di ingest non trovato (scripts/ingest_docs.py).")
             return
-
-        tried = (
-            ["--reindex"],
-            ["--rebuild"],
-            ["--refresh"],
-        )
+        tried = (["--reindex"], ["--rebuild"], ["--refresh"])
         for args in tried:
             try:
-                # ▶︎ usa il modulo
                 subprocess.run(
                     [sys.executable, "-m", "scripts.ingest_docs", *args],
                     check=True,
@@ -511,7 +468,9 @@ class OracoloUI(tk.Tk):
         self.settings["debug"] = bool(self.debug_var.get())
 
     def _open_audio_dialog(self) -> None:
-        win = tk.Toplevel(self); win.title("Dispositivi audio"); win.configure(bg=self._bg)
+        win = tk.Toplevel(self)
+        win.title("Dispositivi audio")
+        win.configure(bg=self._bg)
         try:
             devs = sd.query_devices()
         except Exception as e:
@@ -558,12 +517,16 @@ class OracoloUI(tk.Tk):
         def on_ok() -> None:
             audio["input_device"] = label_to_index(in_var.get())
             audio["output_device"] = label_to_index(out_var.get())
+            # applica immediatamente
+            sd.default.device = (audio["input_device"], audio["output_device"])
             win.destroy()
 
         ttk.Button(win, text="OK", command=on_ok).grid(row=2, column=0, columnspan=2, pady=10)
 
     def _open_recording_dialog(self) -> None:
-        win = tk.Toplevel(self); win.title("Recording"); win.configure(bg=self._bg)
+        win = tk.Toplevel(self)
+        win.title("Recording")
+        win.configure(bg=self._bg)
 
         rec = self.settings.setdefault("recording", {})
         vad = self.settings.setdefault("vad", {})
@@ -585,6 +548,7 @@ class OracoloUI(tk.Tk):
         base_end = tk.StringVar(value=str(vad.get("base_end", 0.0035)))
 
         r = 0
+
         def add_row(label, var):
             nonlocal r
             tk.Label(win, text=label, fg=self._fg, bg=self._bg).grid(row=r, column=0, padx=6, pady=4, sticky="e")
@@ -592,30 +556,52 @@ class OracoloUI(tk.Tk):
             r += 1
 
         tk.Label(win, text="Mode (vad/timed)", fg=self._fg, bg=self._bg).grid(row=r, column=0, padx=6, pady=4, sticky="e")
-        tk.OptionMenu(win, mode_var, "vad", "timed").grid(row=r, column=1, padx=6, pady=4, sticky="w"); r += 1
+        tk.OptionMenu(win, mode_var, "vad", "timed").grid(row=r, column=1, padx=6, pady=4, sticky="w")
+        r += 1
         add_row("Timed seconds", timed_var)
-        tk.Checkbutton(win, text="Fallback to timed in silenzio", variable=fallback_var,
-                       bg=self._bg, fg=self._fg, selectcolor="#222").grid(row=r, column=0, columnspan=2, padx=6, pady=4, sticky="w"); r += 1
+        tk.Checkbutton(
+            win,
+            text="Fallback to timed in silenzio",
+            variable=fallback_var,
+            bg=self._bg,
+            fg=self._fg,
+            selectcolor="#222",
+        ).grid(row=r, column=0, columnspan=2, padx=6, pady=4, sticky="w")
+        r += 1
         add_row("Min speech level", minlevel_var)
 
-        ttk.Separator(win).grid(row=r, column=0, columnspan=2, sticky="ew", pady=8); r += 1
-        tk.Label(win, text="Parametri VAD", fg=self._fg, bg=self._bg, font=("Helvetica", 11, "bold")).grid(row=r, column=0, columnspan=2, pady=(0,6)); r += 1
+        ttk.Separator(win).grid(row=r, column=0, columnspan=2, sticky="ew", pady=8)
+        r += 1
+        tk.Label(win, text="Parametri VAD", fg=self._fg, bg=self._bg, font=("Helvetica", 11, "bold")).grid(
+            row=r, column=0, columnspan=2, pady=(0, 6)
+        )
+        r += 1
 
         for lab, var in [
-            ("frame_ms", frame_ms), ("start_ms", start_ms), ("end_ms", end_ms), ("max_ms", max_ms),
-            ("preroll_ms", preroll_ms), ("noise_window_ms", noise_win),
-            ("start_mult", start_mult), ("end_mult", end_mult),
-            ("base_start", base_start), ("base_end", base_end),
+            ("frame_ms", frame_ms),
+            ("start_ms", start_ms),
+            ("end_ms", end_ms),
+            ("max_ms", max_ms),
+            ("preroll_ms", preroll_ms),
+            ("noise_window_ms", noise_win),
+            ("start_mult", start_mult),
+            ("end_mult", end_mult),
+            ("base_start", base_start),
+            ("base_end", base_end),
         ]:
             add_row(lab, var)
 
         def on_ok() -> None:
             rec["mode"] = mode_var.get().strip().lower()
-            try: rec["timed_seconds"] = int(timed_var.get())
-            except: rec["timed_seconds"] = 10
+            try:
+                rec["timed_seconds"] = int(timed_var.get())
+            except Exception:
+                rec["timed_seconds"] = 10
             rec["fallback_to_timed"] = bool(fallback_var.get())
-            try: rec["min_speech_level"] = float(minlevel_var.get())
-            except: rec["min_speech_level"] = 0.01
+            try:
+                rec["min_speech_level"] = float(minlevel_var.get())
+            except Exception:
+                rec["min_speech_level"] = 0.01
 
             for var, key, cast, default in [
                 (frame_ms, "frame_ms", int, 30),
@@ -629,14 +615,18 @@ class OracoloUI(tk.Tk):
                 (base_start, "base_start", float, 0.006),
                 (base_end, "base_end", float, 0.0035),
             ]:
-                try: vad[key] = cast(var.get())
-                except: vad[key] = default
+                try:
+                    vad[key] = cast(var.get())
+                except Exception:
+                    vad[key] = default
             win.destroy()
 
         ttk.Button(win, text="OK", command=on_ok).grid(row=r, column=0, columnspan=2, pady=10)
 
     def _open_openai_dialog(self) -> None:
-        win = tk.Toplevel(self); win.title("OpenAI"); win.configure(bg=self._bg)
+        win = tk.Toplevel(self)
+        win.title("OpenAI")
+        win.configure(bg=self._bg)
 
         openai_conf = self.settings.setdefault("openai", {})
         api_var = tk.StringVar(value=openai_conf.get("api_key", ""))
@@ -667,37 +657,10 @@ class OracoloUI(tk.Tk):
 
         ttk.Button(win, text="OK", command=on_ok).grid(row=len(rows), column=0, columnspan=2, pady=10)
 
-    def _open_chat_dialog(self) -> None:
-        win = tk.Toplevel(self); win.title("Chat"); win.configure(bg=self._bg)
-        chat = self.settings.setdefault("chat", {})
-        enabled = tk.BooleanVar(value=bool(chat.get("enabled", True)))
-        max_turns = tk.StringVar(value=str(chat.get("max_turns", 10)))
-        reset_on_hotword = tk.BooleanVar(value=bool(chat.get("reset_on_hotword", True)))
-        persist = tk.StringVar(value=str(chat.get("persist_jsonl", "data/logs/chat_sessions.jsonl")))
-
-        def add_row(r: int, label: str, widget: tk.Widget) -> None:
-            tk.Label(win, text=label, fg=self._fg, bg=self._bg).grid(row=r, column=0, padx=6, pady=6, sticky="e")
-            widget.grid(row=r, column=1, padx=6, pady=6, sticky="w")
-
-        add_row(0, "Abilitata", tk.Checkbutton(win, variable=enabled, bg=self._bg, fg=self._fg, selectcolor="#222"))
-        add_row(1, "Max turni", tk.Entry(win, textvariable=max_turns, width=6))
-        add_row(2, "Reset su hotword", tk.Checkbutton(win, variable=reset_on_hotword, bg=self._bg, fg=self._fg, selectcolor="#222"))
-        add_row(3, "Log conversazioni (JSONL)", tk.Entry(win, textvariable=persist, width=36))
-
-        def on_ok() -> None:
-            chat["enabled"] = bool(enabled.get())
-            try:
-                chat["max_turns"] = int(max_turns.get())
-            except Exception:
-                chat["max_turns"] = 10
-            chat["reset_on_hotword"] = bool(reset_on_hotword.get())
-            chat["persist_jsonl"] = persist.get().strip()
-            win.destroy()
-
-        ttk.Button(win, text="OK", command=on_ok).grid(row=4, column=0, columnspan=2, pady=10)
-
     def _open_lighting_dialog(self) -> None:
-        win = tk.Toplevel(self); win.title("Luci"); win.configure(bg=self._bg)
+        win = tk.Toplevel(self)
+        win.title("Luci")
+        win.configure(bg=self._bg)
 
         lighting = self.settings.setdefault("lighting", {})
         mode_var = tk.StringVar(value=lighting.get("mode", "sacn"))
@@ -712,7 +675,9 @@ class OracoloUI(tk.Tk):
         sacn_idle = tk.StringVar(value=str(sacn_conf.get("idle_level", 10)))
         sacn_peak = tk.StringVar(value=str(sacn_conf.get("peak_level", 255)))
 
-        for i, (lab, var) in enumerate([("IP", sacn_ip), ("Universe", sacn_uni), ("Idle", sacn_idle), ("Peak", sacn_peak)]):
+        for i, (lab, var) in enumerate(
+            [("IP", sacn_ip), ("Universe", sacn_uni), ("Idle", sacn_idle), ("Peak", sacn_peak)]
+        ):
             tk.Label(sacn_frame, text=lab, fg=self._fg, bg=self._bg).grid(row=i, column=0, padx=6, pady=4, sticky="e")
             tk.Entry(sacn_frame, textvariable=var, width=18).grid(row=i, column=1, padx=6, pady=4, sticky="w")
 
@@ -724,7 +689,8 @@ class OracoloUI(tk.Tk):
         tk.Entry(wled_frame, textvariable=wled_host, width=22).grid(row=0, column=1, padx=6, pady=6, sticky="w")
 
         def update_mode(*_):
-            sacn_frame.grid_remove(); wled_frame.grid_remove()
+            sacn_frame.grid_remove()
+            wled_frame.grid_remove()
             if mode_var.get() == "sacn":
                 sacn_frame.grid(row=1, column=0, columnspan=2, padx=6, pady=6, sticky="w")
             else:
@@ -736,12 +702,18 @@ class OracoloUI(tk.Tk):
         def on_ok() -> None:
             lighting["mode"] = mode_var.get()
             sacn_conf["destination_ip"] = sacn_ip.get().strip()
-            try: sacn_conf["universe"] = int(sacn_uni.get())
-            except: sacn_conf["universe"] = 1
-            try: sacn_conf["idle_level"] = int(sacn_idle.get())
-            except: pass
-            try: sacn_conf["peak_level"] = int(sacn_peak.get())
-            except: pass
+            try:
+                sacn_conf["universe"] = int(sacn_uni.get())
+            except Exception:
+                sacn_conf["universe"] = 1
+            try:
+                sacn_conf["idle_level"] = int(sacn_idle.get())
+            except Exception:
+                pass
+            try:
+                sacn_conf["peak_level"] = int(sacn_peak.get())
+            except Exception:
+                pass
             wled_conf["host"] = wled_host.get().strip()
             win.destroy()
 
@@ -769,7 +741,6 @@ class OracoloUI(tk.Tk):
             env["PYTHONIOENCODING"] = "utf-8"
             env["PYTHONUTF8"] = "1"
 
-            # se debug è False, possiamo attivare --quiet
             use_quiet = not bool(self.settings.get("debug", False))
 
             args = [sys.executable, "-u", "-m", "src.main", "--autostart"]
@@ -779,7 +750,7 @@ class OracoloUI(tk.Tk):
             self.proc = subprocess.Popen(
                 args,
                 cwd=self.root_dir,
-                stdin=subprocess.DEVNULL,            # ⬅️ nessun input (evita blocchi su input())
+                stdin=subprocess.DEVNULL,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
@@ -844,11 +815,21 @@ class OracoloUI(tk.Tk):
             self._reader_thread = None
 
     # ----------------------- Realtime WS control ------------------------- #
-
     def start_realtime(self) -> None:
         if self.ws_client is not None:
             messagebox.showinfo("Realtime", "Sessione già attiva.")
             return
+
+        # applica dispositivi audio da settings come default
+        audio = self.settings.get("audio", {})
+        in_dev = audio.get("input_device", None)
+        out_dev = audio.get("output_device", None)
+        sd.default.device = (in_dev, out_dev)
+
+        self._append_log(
+            f"🔌 Realtime WS → {WS_URL}  (sr={SR}, in={sd.default.device[0]}, out={sd.default.device[1]})\n"
+        )
+
         self.ws_client = RealtimeWSClient(
             WS_URL,
             SR,
@@ -859,7 +840,7 @@ class OracoloUI(tk.Tk):
             self.ws_client.start()
             self.ws_start_btn.configure(state="disabled")
             self.ws_stop_btn.configure(state="normal")
-            self.ws_reset_btn.configure(state="normal")
+            self.status_var.set("🟢 In esecuzione (realtime)")
         except Exception as e:
             messagebox.showerror("Realtime", f"Impossibile avviare il WS: {e}")
             self.ws_client = None
@@ -873,12 +854,8 @@ class OracoloUI(tk.Tk):
             self.ws_client = None
             self.ws_start_btn.configure(state="normal")
             self.ws_stop_btn.configure(state="disabled")
-            self.ws_reset_btn.configure(state="disabled")
-
-    def reset_chat(self) -> None:
-        if self.ws_client:
-            self.ws_client.send_json({"type": "reset"})
-            self._append_log("↻ Chat reset richiesta\n")
+            if not (self.proc and self.proc.poll() is None):
+                self.status_var.set("🟡 In attesa")
 
     def _poll_process(self) -> None:
         if self.proc is not None:
