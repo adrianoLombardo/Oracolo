@@ -115,12 +115,25 @@ def oracle_answer(
     llm_model: str,
     style_prompt: str,
     *,
+        codex/improve-oracolo-chatbot-functionality-w0v4hl
+
+        codex/improve-oracolo-chatbot-functionality-gnbrya
+        main
     context: List[Dict[str, Any]] | None = None,
     history: List[Dict[str, str]] | None = None,
     topic: str | None = None,
     policy_prompt: str = "",
     mode: str = "detailed",
 ) -> Tuple[str, List[Dict[str, Any]]]:
+        codex/improve-oracolo-chatbot-functionality-w0v4hl
+
+
+    context: list[dict] | None = None,
+    history: list[dict[str, str]] | None = None,
+    topic: str | None = None,
+) -> str:
+        main
+        main
     print("✨ Interrogo l’Oracolo…")
     lang_clause = "Answer in English." if lang_hint == "en" else "Rispondi in italiano."
 
@@ -150,6 +163,25 @@ def oracle_answer(
         messages.extend(history)
     messages.append({"role": "user", "content": question})
 
+        codex/improve-oracolo-chatbot-functionality-w0v4hl
+
+        codex/improve-oracolo-chatbot-functionality-gnbrya
+
+    topic_clause = (
+        " Rispondi solo con informazioni coerenti al tema seguente e non mescolare altri argomenti a meno che l'utente lo chieda esplicitamente. Tema: "
+        + topic
+        if topic
+        else ""
+    )
+    sys_prompt = (
+        oracle_system
+        + topic_clause
+        + " Se la domanda non riguarda neuroscienze, neuroestetica, arte contemporanea o l'universo, rispondi: 'Domanda non pertinente'. "
+        + lang_clause
+    )
+
+        main
+        main
     for _ in range(3):
         try:
             resp = client.responses.create(
@@ -158,7 +190,15 @@ def oracle_answer(
                 input=messages,
             )
             ans = resp.output_text.strip()
+        codex/improve-oracolo-chatbot-functionality-w0v4hl
             return ans, context or []
+
+        codex/improve-oracolo-chatbot-functionality-gnbrya
+            return ans, context or []
+
+            return ans
+        main
+        main
         except openai.OpenAIError as e:
             print(f"Errore OpenAI: {e}")
             time.sleep(1)

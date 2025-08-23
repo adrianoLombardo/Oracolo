@@ -4,7 +4,11 @@ from __future__ import annotations
 import re
 import unicodedata
 from pathlib import Path
+        codex/improve-oracolo-chatbot-functionality-w0v4hl
 from typing import Any, Iterable, Tuple, cast
+
+from typing import Any, Iterable, Tuple
+        main
 import time
 
 import numpy as np
@@ -102,6 +106,10 @@ def validate_question(
     client: Any = None,
     docstore_path: str | Path | None = None,
     top_k: int = 3,
+        codex/improve-oracolo-chatbot-functionality-w0v4hl
+
+        codex/improve-oracolo-chatbot-functionality-gnbrya
+        main
     emb_model: str | None = None,
     embed_model: str | None = None,
     topic: str | None = None,
@@ -112,6 +120,28 @@ def validate_question(
     """Valida la domanda usando tre segnali e logga la decisione.
 
     Ritorna (is_ok, context_list, needs_clarification, reason).
+        codex/improve-oracolo-chatbot-functionality-w0v4hl
+
+
+    emb_model: str | None = None,      # compat
+    embed_model: str | None = None,    # alias
+    **_: Any,                          # ignora altri kwargs
+) -> Tuple[bool, list[str], bool]:
+    """
+    Ritorna (is_ok, context_list, needs_clarification).
+
+    Politica:
+    - Se settings.domain manca o non ha keywords -> NON filtriamo (sempre OK).
+    - Boost se la domanda contiene termini ovvi (neuro, cervell*, brain, IA…).
+    - Overlap parole chiave (soglia bassa).
+    - Opzionale: similarità embedding con i frammenti recuperati.
+
+    Soglie default (se non presenti in settings.domain):
+      kw_min_overlap = 0.04
+      use_embeddings = False
+      emb_min_sim = 0.22
+        main
+        main
     """
     q_norm = _norm(question)
 
@@ -153,7 +183,11 @@ def validate_question(
                 weights = dict(dom.get("weights", weights))  # type: ignore[attr-defined]
             except Exception:
                 weights = weights
+        codex/improve-oracolo-chatbot-functionality-w0v4hl
         for attr, var_name, caster, default in [
+
+        for (attr, var_name, cast, default) in [
+        main
             ("accept_threshold", "accept_threshold", float, accept_threshold),
             ("clarify_margin", "clarify_margin", float, clarify_margin),
             ("emb_min_sim", "emb_min_sim", float, emb_min_sim),
@@ -176,6 +210,7 @@ def validate_question(
 
     # Se il filtro non è abilitato → sempre OK
     if not enabled:
+        codex/improve-oracolo-chatbot-functionality-w0v4hl
         ctx = _try_retrieve(question, settings, docstore_path, top_k, topic, client, emb_model or embed_model)
         return True, ctx, False, "disabled"
 
@@ -183,6 +218,25 @@ def validate_question(
     if not keywords:
         ctx = _try_retrieve(question, settings, docstore_path, top_k, topic, client, emb_model or embed_model)
         return True, ctx, False, "no keywords"
+
+        codex/improve-oracolo-chatbot-functionality-gnbrya
+        ctx = _try_retrieve(question, settings, docstore_path, top_k, topic, client, emb_model or embed_model)
+        return True, ctx, False, "disabled"
+
+    # Se NON ci sono keywords → non filtriamo (sempre OK)
+    if not keywords:
+        ctx = _try_retrieve(question, settings, docstore_path, top_k, topic, client, emb_model or embed_model)
+        return True, ctx, False, "no keywords"
+
+        ctx = _try_retrieve(question, settings, docstore_path, top_k)
+        return True, ctx, False
+
+    # Se NON ci sono keywords → non filtriamo (sempre OK)
+    if not keywords:
+        ctx = _try_retrieve(question, settings, docstore_path, top_k)
+        return True, ctx, False
+        main
+        main
 
     # ---- Boost terms (accettazione immediata se compaiono) ----
     boost_terms = [
@@ -193,6 +247,7 @@ def validate_question(
         "cosmo", "universo", "stella", "stelle", "mare"
     ]
     if any(bt in q_norm for bt in boost_terms):
+        codex/improve-oracolo-chatbot-functionality-w0v4hl
         ctx = _try_retrieve(question, settings, docstore_path, top_k, topic, client, emb_model or embed_model)
         return True, ctx, False, "boost"
 
@@ -208,6 +263,33 @@ def validate_question(
     if hist_tokens & set(_tokens(" ".join(keywords))):
         weights["kw"] += 0.1
 
+
+        codex/improve-oracolo-chatbot-functionality-gnbrya
+        ctx = _try_retrieve(question, settings, docstore_path, top_k, topic, client, emb_model or embed_model)
+        return True, ctx, False, "boost"
+
+    # ---- Overlap parole chiave ----
+    kw_score = _keyword_overlap_score(question, keywords)
+
+        ctx = _try_retrieve(question, settings, docstore_path, top_k)
+        return True, ctx, False
+
+    # ---- Overlap parole chiave ----
+    kw_score = _keyword_overlap_score(question, keywords)
+    ok = kw_score >= kw_min_overlap
+    clarify = False
+        main
+
+    # segnali dinamici
+    hist_tokens: set[str] = set()
+    if history:
+        for turn in history[-6:]:
+            if turn.get("role") == "user":
+                hist_tokens.update(_tokens(turn.get("content", "")))
+    if hist_tokens & set(_tokens(" ".join(keywords))):
+        weights["kw"] += 0.1
+
+        main
     ctx = _try_retrieve(question, settings, docstore_path, top_k, topic, client, emb_model or embed_model)
     rag_hits = len(ctx)
     rag_score = rag_hits / float(top_k or 1)
@@ -215,6 +297,7 @@ def validate_question(
     emb_model = emb_model or embed_model
     emb_sim = 0.0
     if client is not None and emb_model and keywords:
+        codex/improve-oracolo-chatbot-functionality-w0v4hl
         try:
             vecs = _embed_texts(client, emb_model, [question, " ".join(keywords)])
             if len(vecs) == 2:
@@ -236,6 +319,47 @@ def validate_question(
             pass
 
     return ok, ctx, clarify, reason
+
+        try:
+            vecs = _embed_texts(client, emb_model, [question, " ".join(keywords)])
+            if len(vecs) == 2:
+                emb_sim = _cosine(vecs[0], vecs[1])
+        except Exception:
+            pass
+
+    score = weights.get("kw", 0.0) * kw_score + weights.get("emb", 0.0) * emb_sim + weights.get("rag", 0.0) * rag_score
+    ok = score >= accept_threshold
+    clarify = (not ok) and (score >= accept_threshold - clarify_margin)
+    reason = f"kw={kw_score:.2f} emb={emb_sim:.2f} rag={rag_score:.2f} score={score:.2f}"
+
+    if log_path:
+        try:
+        codex/improve-oracolo-chatbot-functionality-gnbrya
+            Path(log_path).parent.mkdir(parents=True, exist_ok=True)
+            with Path(log_path).open("a", encoding="utf-8") as f:
+                f.write(f"{int(time.time())}\t{int(ok)}\t{int(clarify)}\t{reason}\t{question}\n")
+        except Exception:
+            pass
+
+    return ok, ctx, clarify, reason
+
+            to_embed = [question] + ctx[:3]
+            vecs = _embed_texts(client, emb_model, to_embed)
+            if len(vecs) >= 2:
+                qv = vecs[0]
+                sims = [_cosine(qv, v) for v in vecs[1:]]
+                best_sim = max(sims) if sims else 0.0
+                ok = ok or (best_sim >= emb_min_sim)
+                clarify = clarify or (not ok and best_sim > 0)
+        except Exception:
+            pass
+
+    if not ok:
+        clarify = clarify or (kw_score > 0 or bool(ctx))
+
+    return ok, ctx, clarify
+        main
+        main
 
 
 # ------------------------- helper retrieval ------------------------- #
