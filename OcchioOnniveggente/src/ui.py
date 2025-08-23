@@ -26,12 +26,17 @@ from tkinter import filedialog, messagebox, scrolledtext, simpledialog, ttk
 from typing import Any
 
 from src.retrieval import retrieve
+from src.chat import ChatState
+from src.oracle import oracle_answer
 
 import asyncio
 import numpy as np
 import sounddevice as sd
 import websockets
 import yaml
+from markdown2 import markdown
+from openai import OpenAI
+import re
 
 try:  # opzionale: drag&drop documenti
     import tkinterdnd2 as tkdnd  # type: ignore
@@ -330,6 +335,10 @@ class OracoloUI(tk.Tk):
         )
         self.mode_choice = tk.StringVar(value=default_mode)
         self.style_var = tk.BooleanVar(value=True)
+        self.use_mic_var = tk.BooleanVar(value=True)
+        self.chat_state = ChatState()
+        self.tts_muted = False
+        self.last_answer = ""
 
         # process & logs
         self.proc: subprocess.Popen | None = None
@@ -345,6 +354,7 @@ class OracoloUI(tk.Tk):
 
         # poll
         self.after(500, self._poll_process)
+        self.after(500, self._poll_status)
         self.protocol("WM_DELETE_WINDOW", self._on_close)
 
     # --------------------------- Menubar & dialogs ------------------------ #
@@ -399,20 +409,79 @@ class OracoloUI(tk.Tk):
         opts.pack(fill="x", padx=16, pady=(0, 8))
         ttk.Checkbutton(opts, text="Stile poetico", variable=self.style_var).pack(side="left")
         ttk.Label(opts, text="Lingua:").pack(side="left", padx=(8, 4))
-        self.lang_cb = ttk.Combobox(opts, textvariable=self.lang_choice, values=list(self.lang_map.keys()), state="readonly", width=7)
+        self.lang_cb = ttk.Combobox(
+            opts,
+            textvariable=self.lang_choice,
+            values=list(self.lang_map.keys()),
+            state="readonly",
+            width=7,
+        )
         self.lang_cb.pack(side="left")
         ttk.Label(opts, text="Risposta:").pack(side="left", padx=(8, 4))
-        self.mode_cb = ttk.Combobox(opts, textvariable=self.mode_choice, values=list(self.mode_map.keys()), state="readonly", width=11)
+        self.mode_cb = ttk.Combobox(
+            opts,
+            textvariable=self.mode_choice,
+            values=list(self.mode_map.keys()),
+            state="readonly",
+            width=11,
+        )
         self.mode_cb.pack(side="left")
+        ttk.Label(opts, text="Voce TTS:").pack(side="left", padx=(8, 4))
+        self.tts_voice = tk.StringVar(value=self.settings.get("tts_voice", "alloy"))
+        self.tts_cb = ttk.Combobox(
+            opts,
+            textvariable=self.tts_voice,
+            values=["alloy", "verse", "aria"],
+            state="readonly",
+            width=10,
+        )
+        self.tts_cb.pack(side="left")
+        ttk.Button(opts, text="▶ Prova", command=self._test_voice).pack(side="left", padx=(4, 4))
+        ttk.Label(opts, text="Velocità:").pack(side="left", padx=(8, 4))
+        self.tts_speed = tk.DoubleVar(value=1.0)
+        ttk.Scale(opts, from_=0.5, to=2.0, variable=self.tts_speed, orient="horizontal", length=100).pack(side="left")
 
-        log_frame = ttk.Frame(self)
-        log_frame.pack(fill="both", expand=True, padx=16, pady=(0, 12))
+        notebook = ttk.Notebook(self)
+        notebook.pack(fill="both", expand=True, padx=16, pady=(0, 12))
 
+        chat_frame = ttk.Frame(notebook)
+        notebook.add(chat_frame, text="Chat")
+
+        self.chat_view = scrolledtext.ScrolledText(
+            chat_frame,
+            wrap="word",
+            state="disabled",
+            height=15,
+            bg=self._mid,
+            fg="#d7fff9",
+            insertbackground=self._fg,
+            relief="flat",
+            font=("Consolas", 10),
+        )
+        self.chat_view.pack(fill="both", expand=True, padx=4, pady=(4, 0))
+
+        input_frame = ttk.Frame(chat_frame)
+        input_frame.pack(fill="x", padx=4, pady=(4, 0))
+        ttk.Checkbutton(input_frame, text="Usa microfono", variable=self.use_mic_var).pack(side="left")
+        self.chat_entry = tk.Entry(input_frame)
+        self.chat_entry.pack(side="left", fill="x", expand=True, padx=(8, 8))
+        self.chat_entry.bind("<Return>", self._on_chat_enter)
+
+        btns = ttk.Frame(chat_frame)
+        btns.pack(fill="x", padx=4, pady=(4, 4))
+        ttk.Button(btns, text="/reset", command=lambda: self._handle_command("/reset")).pack(side="left")
+        ttk.Button(btns, text="/mute TTS", command=self._mute_tts).pack(side="left", padx=(4, 0))
+        ttk.Button(btns, text="/stop TTS", command=self._stop_tts).pack(side="left", padx=(4, 0))
+        ttk.Button(btns, text="Copia risposta", command=self._copy_last).pack(side="left", padx=(4, 0))
+        ttk.Button(btns, text="Esporta", command=self._export_chat).pack(side="left", padx=(4, 0))
+
+        log_frame = ttk.Frame(notebook)
+        notebook.add(log_frame, text="Log")
         self.log = scrolledtext.ScrolledText(
             log_frame,
             wrap="word",
             state="disabled",
-            height=22,
+            height=15,
             bg=self._mid,
             fg="#d7fff9",
             insertbackground=self._fg,
@@ -421,9 +490,129 @@ class OracoloUI(tk.Tk):
         )
         self.log.pack(fill="both", expand=True)
 
+        status = ttk.Frame(self)
+        status.pack(fill="x", padx=16, pady=(0, 4))
+        self.ws_latency = tk.StringVar(value="WS: -")
+        self.tts_queue = tk.StringVar(value="TTS q=0")
+        self.doc_index = tk.StringVar(value="Index: OK")
+        self.vad_level = tk.DoubleVar(value=0.0)
+        ttk.Label(status, textvariable=self.ws_latency).pack(side="left")
+        ttk.Label(status, textvariable=self.tts_queue).pack(side="left", padx=(8, 0))
+        ttk.Progressbar(status, orient="horizontal", length=100, mode="determinate", variable=self.vad_level, maximum=1.0).pack(side="left", padx=(8, 0))
+        ttk.Label(status, textvariable=self.doc_index).pack(side="right")
+
         footer = ttk.Frame(self)
         footer.pack(fill="x", padx=16, pady=(0, 12))
         ttk.Button(footer, text="Esci", command=self._on_close).pack(side="right")
+
+    # --------------------------- Chat helpers ------------------------------ #
+    def _append_chat(self, role: str, text: str) -> None:
+        html = markdown(text, extras=["fenced-code-blocks"]) if text else ""
+        clean = re.sub("<[^<]+?>", "", html)
+        self.chat_view.configure(state="normal")
+        prefix = "👤" if role == "user" else ("🔮" if role == "assistant" else "ℹ️")
+        self.chat_view.insert("end", f"{prefix} {clean}\n")
+        self.chat_view.see("end")
+        self.chat_view.configure(state="disabled")
+        if role == "assistant":
+            self.last_answer = clean
+
+    def _on_chat_enter(self, event) -> str:
+        text = self.chat_entry.get().strip()
+        if not text:
+            return "break"
+        self.chat_entry.delete(0, "end")
+        if text.startswith("/"):
+            self._handle_command(text)
+        else:
+            self._send_chat(text)
+        return "break"
+
+    def _handle_command(self, cmd: str) -> None:
+        parts = cmd.strip().split()
+        if not parts:
+            return
+        base = parts[0].lower()
+        args = parts[1:]
+        if base == "/reset":
+            self.chat_state.reset()
+            self.chat_view.configure(state="normal")
+            self.chat_view.delete("1.0", "end")
+            self.chat_view.configure(state="disabled")
+        elif base == "/profile" and args:
+            self._append_chat("system", f"Profilo cambiato: {args[0]}")
+        elif base == "/topic" and args:
+            self.chat_state.topic_text = " ".join(args)
+            self._append_chat("system", f"Topic: {' '.join(args)}")
+        elif base == "/docs" and args:
+            if args[0] == "add":
+                self._add_documents()
+            elif args[0] == "reindex":
+                self._reindex_documents()
+        elif base == "/realtime" and args:
+            if args[0].lower() == "on":
+                self.start_realtime()
+            else:
+                self.stop_realtime()
+        else:
+            self._append_chat("system", "Comando sconosciuto")
+
+    def _send_chat(self, text: str) -> None:
+        self._append_chat("user", text)
+        self.chat_state.push_user(text)
+        try:
+            client = OpenAI()
+            style_prompt = self.settings.get("style_prompt", "") if self.style_var.get() else ""
+            lang = self.lang_map.get(self.lang_choice.get(), "auto")
+            mode = self.mode_map.get(self.mode_choice.get(), "detailed")
+            ans, _ = oracle_answer(
+                text,
+                lang,
+                client,
+                self.settings.get("llm_model", "gpt-4o"),
+                style_prompt,
+                history=self.chat_state.history,
+                topic=self.chat_state.topic_text,
+                mode=mode,
+            )
+        except Exception as e:
+            ans = f"Errore: {e}"
+        self.chat_state.push_assistant(ans)
+        self._append_chat("assistant", ans)
+
+    def _mute_tts(self) -> None:
+        self.tts_muted = not self.tts_muted
+
+    def _stop_tts(self) -> None:
+        if self.ws_client is not None and self.ws_client.ws is not None:
+            try:
+                asyncio.run(self.ws_client.ws.send(json.dumps({"type": "barge_in"})))
+            except Exception:
+                pass
+
+    def _copy_last(self) -> None:
+        if self.last_answer:
+            self.clipboard_clear()
+            self.clipboard_append(self.last_answer)
+
+    def _export_chat(self) -> None:
+        path = filedialog.asksaveasfilename(defaultextension=".txt", parent=self)
+        if not path:
+            return
+        text = self.chat_view.get("1.0", "end")
+        Path(path).write_text(text, encoding="utf-8")
+
+    def _test_voice(self) -> None:
+        self._append_log(f"Voce test: {self.tts_voice.get()}\n")
+
+    def _poll_status(self) -> None:
+        if self.ws_client is not None:
+            self.tts_queue.set(f"TTS q={self.ws_client.audio_q.qsize()}")
+            self.ws_latency.set("WS: connesso")
+        else:
+            self.tts_queue.set("TTS q=0")
+            self.ws_latency.set("WS: -")
+        self.after(500, self._poll_status)
 
     # --------------------------- Log helpers ------------------------------ #
     def _append_log(self, text: str) -> None:
