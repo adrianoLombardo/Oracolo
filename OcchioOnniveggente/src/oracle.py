@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import re
 import time
 from datetime import datetime
@@ -131,7 +132,7 @@ def oracle_answer(
 
     lang_clause = "Answer in English." if lang_hint == "en" else "Rispondi in italiano."
     topic_clause = (
-        " Rispondi solo con informazioni coerenti al tema seguente e non mescolare altri argomenti a meno che l'utente lo chieda esplicitamente. Tema: "
+        " Rispondi solo con informazioni coerenti al topic corrente; non mescolare altri temi a meno che l'utente lo chieda esplicitamente. Topic: "
         + topic
         if topic
         else ""
@@ -197,14 +198,57 @@ def synthesize(text: str, out_path: Path, client, tts_model: str, tts_voice: str
     print("❌ Impossibile sintetizzare l'audio.")
 
 
-def append_log(q: str, a: str, log_path: Path) -> None:
+_LAST_ANSWER_HASH: str | None = None
+
+
+def reset_last_answer_hash() -> None:
+    """Reset the deduplication hash (useful for testing)."""
+    global _LAST_ANSWER_HASH
+    _LAST_ANSWER_HASH = None
+
+
+def _scrub_pii(text: str) -> str:
+    """Basic PII scrub for emails and phone numbers."""
+    text = re.sub(r"\b[\w.-]+@[\w.-]+\.[a-zA-Z]{2,}\b", "[email]", text)
+    text = re.sub(r"\b\+?\d[\d\s.-]{7,}\b", "[phone]", text)
+    return text
+
+
+def append_log(
+    q: str,
+    a: str,
+    log_path: Path,
+    *,
+    lang: str = "",
+    topic: str | None = None,
+    sources: list[dict[str, str]] | None = None,
+) -> None:
+    """Append a structured CSV line with optional metadata."""
+    global _LAST_ANSWER_HASH
+
     log_path.parent.mkdir(parents=True, exist_ok=True)
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    h = hashlib.sha1(a.encode("utf-8")).hexdigest()
+    if h == _LAST_ANSWER_HASH:
+        return
+    _LAST_ANSWER_HASH = h
+
     def clean(s: str) -> str:
         return s.replace('"', "'")
-    line = f'"{ts}","{clean(q)}","{clean(a)}"\n'
+
+    q = _scrub_pii(q)
+    a = _scrub_pii(a)
+    src_str = ";".join(f"{s.get('id','')}:{s.get('score',0):.2f}" for s in (sources or []))
+    line = (
+        f'"{ts}","{lang}","{clean(topic or '')}",'
+        f'"{clean(q)}","{clean(a)}","{src_str}"\n'
+    )
     if not log_path.exists():
-        log_path.write_text('"timestamp","question","answer"\n', encoding="utf-8")
+        log_path.write_text(
+            '"timestamp","lang","topic","question","answer","sources"\n',
+            encoding="utf-8",
+        )
     with log_path.open("a", encoding="utf-8") as f:
         f.write(line)
 
