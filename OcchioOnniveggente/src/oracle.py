@@ -116,19 +116,18 @@ def oracle_answer(
     oracle_system: str,
     *,
     context: list[dict] | None = None,
-    history: list[tuple[str, str]] | None = None,
+    history: list[dict[str, str]] | None = None,
 ) -> str:
     print("✨ Interrogo l’Oracolo…")
     lang_clause = "Answer in English." if lang_hint == "en" else "Rispondi in italiano."
 
-    messages = []
+    messages: list[dict[str, str]] = []
     if context:
         ctx_txt = "\n\n".join(str(c.get("text", "")) for c in context if c.get("text"))
         if ctx_txt:
             messages.append({"role": "system", "content": f"Contesto:\n{ctx_txt}"})
-    for q_prev, a_prev in (history or []):
-        messages.append({"role": "user", "content": q_prev})
-        messages.append({"role": "assistant", "content": a_prev})
+    if history:
+        messages.extend(history)
     messages.append({"role": "user", "content": question})
 
     sys_prompt = (

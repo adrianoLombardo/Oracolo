@@ -138,6 +138,13 @@ realtime:
   ping_interval: 20              # opzionale, se il server richiede ping WS
   ping_timeout: 20
 
+# Stato conversazione (chat multi-turno)
+chat:
+  enabled: true
+  max_turns: 10
+  reset_on_hotword: true
+  persist_jsonl: data/logs/chat_sessions.jsonl
+
 # RAG: dove sono i documenti indicizzati e quanti frammenti prendere
 docstore_path: DataBase/index.json
 retrieval_top_k: 3
