@@ -4,8 +4,10 @@
 Questo modulo apre una connessione WebSocket verso un backend che accetta
 audio PCM mono a 16 bit. I frame provenienti dal microfono vengono inviati al
 server che risponde con trascrizioni parziali, la risposta finale e frame TTS
-da riprodurre in tempo reale. Se l'utente inizia a parlare durante il TTS viene
-inviato un evento ``barge_in`` per interrompere l'audio in uscita.
+da riprodurre in tempo reale. Se l'utente parla durante il TTS viene inviato un
+evento ``barge_in``: il server interrompe la risposta al termine della frase
+corrente e il volume del TTS viene attenuato localmente per favorire
+l'interruzione naturale.
 """
 
 from __future__ import annotations
@@ -77,11 +79,14 @@ async def _player(
         try:
             chunk = audio_q.get_nowait()
             n = len(outdata)
-            if len(chunk) >= n:
-                outdata[:] = chunk[:n]
+            vol = 0.3 if state.get("barge_sent") else 1.0
+            data = np.frombuffer(chunk, dtype=np.int16).astype(np.float32)
+            data = np.clip(data * vol, -32768, 32767).astype(np.int16).tobytes()
+            if len(data) >= n:
+                outdata[:] = data[:n]
             else:
-                outdata[: len(chunk)] = chunk
-                outdata[len(chunk) :] = b"\x00" * (n - len(chunk))
+                outdata[: len(data)] = data
+                outdata[len(data) :] = b"\x00" * (n - len(data))
             state["tts_playing"] = True
         except queue.Empty:
             outdata[:] = b"\x00" * len(outdata)

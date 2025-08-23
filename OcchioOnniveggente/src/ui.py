@@ -220,11 +220,14 @@ class RealtimeWSClient:
             try:
                 chunk = self.audio_q.get_nowait()
                 n = len(outdata)
-                if len(chunk) >= n:
-                    outdata[:] = chunk[:n]
+                vol = 0.3 if self.state.get("barge_sent") else 1.0
+                data = np.frombuffer(chunk, dtype=np.int16).astype(np.float32)
+                data = np.clip(data * vol, -32768, 32767).astype(np.int16).tobytes()
+                if len(data) >= n:
+                    outdata[:] = data[:n]
                 else:
-                    outdata[:len(chunk)] = chunk
-                    outdata[len(chunk):] = b"\x00" * (n - len(chunk))
+                    outdata[:len(data)] = data
+                    outdata[len(data):] = b"\x00" * (n - len(data))
                 samples = np.frombuffer(outdata, dtype=np.int16).astype(np.float32)
                 level = float(np.sqrt(np.mean(samples ** 2)))
                 self.on_output_level(level / 32768.0)
