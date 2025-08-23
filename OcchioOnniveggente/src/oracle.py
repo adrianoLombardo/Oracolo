@@ -111,45 +111,58 @@ def transcribe(path: Path, client, stt_model: str, *, debug: bool = False) -> Tu
 def oracle_answer(
     question: str,
     lang_hint: str,
-    client,
+    client: Any,
     llm_model: str,
-    oracle_system: str,
+    style_prompt: str,
     *,
-    context: list[dict] | None = None,
-    history: list[dict[str, str]] | None = None,
-) -> str:
+    context: List[Dict[str, Any]] | None = None,
+    history: List[Dict[str, str]] | None = None,
+    topic: str | None = None,
+    policy_prompt: str = "",
+    mode: str = "detailed",
+) -> Tuple[str, List[Dict[str, Any]]]:
     print("✨ Interrogo l’Oracolo…")
     lang_clause = "Answer in English." if lang_hint == "en" else "Rispondi in italiano."
 
-    messages: list[dict[str, str]] = []
+    topic_clause = (
+        " Rispondi solo con informazioni coerenti al tema seguente e non mescolare altri argomenti a meno che l'utente lo chieda esplicitamente. Tema: "
+        + topic
+        if topic
+        else ""
+    )
+    mode_clause = (
+        " Stile conciso: 2-4 frasi e termina con una domanda di follow-up."
+        if mode == "concise"
+        else " Struttura: 1) sintesi, 2) 2-3 dettagli puntuali, 3) fonti citate [1], [2], …"
+    )
+    policy = (policy_prompt or "") + topic_clause + " " + lang_clause + mode_clause
+
+    messages: List[Dict[str, str]] = []
+    if style_prompt:
+        messages.append({"role": "system", "content": style_prompt})
     if context:
-        ctx_txt = "\n\n".join(str(c.get("text", "")) for c in context if c.get("text"))
+        ctx_txt = "\n".join(
+            f"[{i+1}] {c.get('text','')}" for i, c in enumerate(context) if c.get("text")
+        )
         if ctx_txt:
-            messages.append({"role": "system", "content": f"Contesto:\n{ctx_txt}"})
+            messages.append({"role": "system", "content": f"Fonti:\n{ctx_txt}"})
     if history:
         messages.extend(history)
     messages.append({"role": "user", "content": question})
-
-    sys_prompt = (
-        oracle_system
-        + " Se la domanda non riguarda neuroscienze, neuroestetica, arte contemporanea o l'universo, rispondi: 'Domanda non pertinente'. "
-        + lang_clause
-    )
 
     for _ in range(3):
         try:
             resp = client.responses.create(
                 model=llm_model,
-                instructions=sys_prompt,
+                instructions=policy,
                 input=messages,
             )
             ans = resp.output_text.strip()
-            print(f"🔮 Oracolo: {ans}")
-            return ans
+            return ans, context or []
         except openai.OpenAIError as e:
             print(f"Errore OpenAI: {e}")
             time.sleep(1)
-    return ""
+    return "", context or []
 
 
 def synthesize(text: str, out_path: Path, client, tts_model: str, tts_voice: str) -> None:

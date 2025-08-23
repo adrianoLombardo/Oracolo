@@ -18,6 +18,8 @@ async def run():
             "OpenAI-Beta": "realtime=v1",
         },
         max_size=10_000_000,
+        ping_interval=20,
+        ping_timeout=20,
     ) as ws:
         # esempio: manda un “response.create” (solo testo)
         await ws.send(json.dumps({"type": "response.create", "response": {"instructions":"Say hello from realtime."}}))

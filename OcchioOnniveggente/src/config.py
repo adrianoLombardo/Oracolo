@@ -35,6 +35,7 @@ class RecordingConfig(BaseModel):
     timed_seconds: int = 10
     fallback_to_timed: bool = False
     min_speech_level: float = 0.01
+    use_webrtcvad: bool = False
 
 
 class VadConfig(BaseModel):
@@ -77,6 +78,17 @@ class PaletteItem(BaseModel):
     style: str
 
 
+class DomainConfig(BaseModel):
+    enabled: bool = True
+    keywords: List[str] = Field(default_factory=list)
+    kw_min_overlap: float = 0.04
+    emb_min_sim: float = 0.22
+    rag_min_hits: int = 1
+    weights: Dict[str, float] = Field(default_factory=lambda: {"kw": 0.4, "emb": 0.3, "rag": 0.3})
+    accept_threshold: float = 0.5
+    clarify_margin: float = 0.15
+
+
 class Settings(BaseModel):
     debug: bool = False
     wakeword: Optional[str] = None
@@ -87,10 +99,13 @@ class Settings(BaseModel):
     filter: FilterConfig = FilterConfig()
     lighting: LightingConfig = LightingConfig()
     palette_keywords: Dict[str, PaletteItem] = Field(default_factory=dict)
-    oracle_system: str = ""
+    oracle_system: str = ""  # stile oracolare
+    oracle_policy: str = ""  # prompt fattuale/guardrail
+    answer_mode: Literal["detailed", "concise"] = "detailed"
     docstore_path: str = "data/docstore"
     retrieval_top_k: int = 3
     wake: Optional[WakeConfig] = WakeConfig()
+    domain: DomainConfig = DomainConfig()
     
     @classmethod
     def model_validate_yaml(cls, path: Path) -> "Settings":
