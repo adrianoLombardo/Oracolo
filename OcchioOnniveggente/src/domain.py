@@ -95,6 +95,7 @@ def validate_question(
     top_k: int = 3,
     emb_model: str | None = None,      # compat
     embed_model: str | None = None,    # alias
+    topic: str | None = None,
     **_: Any,                          # ignora altri kwargs
 ) -> Tuple[bool, list[str], bool]:
     """
@@ -164,12 +165,20 @@ def validate_question(
 
     # Se il filtro non è abilitato → sempre OK
     if not enabled:
+        codex/improve-oracolo-chatbot-functionality-9nddjz
+        ctx = _try_retrieve(question, settings, docstore_path, top_k, topic)
+
         ctx = _try_retrieve(question, settings, docstore_path, top_k)
+        main
         return True, ctx, False
 
     # Se NON ci sono keywords → non filtriamo (sempre OK)
     if not keywords:
+        codex/improve-oracolo-chatbot-functionality-9nddjz
+        ctx = _try_retrieve(question, settings, docstore_path, top_k, topic)
+
         ctx = _try_retrieve(question, settings, docstore_path, top_k)
+        main
         return True, ctx, False
 
     # ---- Boost terms (accettazione immediata se compaiono) ----
@@ -181,7 +190,11 @@ def validate_question(
         "cosmo", "universo", "stella", "stelle", "mare"
     ]
     if any(bt in q_norm for bt in boost_terms):
+        codex/improve-oracolo-chatbot-functionality-9nddjz
+        ctx = _try_retrieve(question, settings, docstore_path, top_k, topic)
+
         ctx = _try_retrieve(question, settings, docstore_path, top_k)
+        main
         return True, ctx, False
 
     # ---- Overlap parole chiave ----
@@ -190,7 +203,7 @@ def validate_question(
     clarify = False
 
     # ---- Recupera contesto ----
-    ctx = _try_retrieve(question, settings, docstore_path, top_k)
+    ctx = _try_retrieve(question, settings, docstore_path, top_k, topic)
 
     # ---- Embeddings (opzionale) ----
     emb_model = emb_model or embed_model
@@ -219,6 +232,7 @@ def _try_retrieve(
     settings: Any,
     docstore_path: str | Path | None,
     top_k: int,
+    topic: str | None,
 ) -> list[str]:
     if docstore_path is None and settings is not None:
         try:
@@ -231,7 +245,7 @@ def _try_retrieve(
     if not docstore_path:
         return []
     try:
-        raw_ctx = retrieve(question, docstore_path, top_k=top_k)
+        raw_ctx = retrieve(question, docstore_path, top_k=top_k, topic=topic)
     except Exception:
         raw_ctx = []
     # normalizza

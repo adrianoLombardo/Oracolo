@@ -171,8 +171,9 @@ def play_and_pulse(
     sr: int,
     lighting_conf: Dict[str, Any],
     output_device_id: Any | None = None,
+    duck_event: threading.Event | None = None,
 ) -> None:
-    """Play audio file and pulse the given light accordingly."""
+    """Play audio and drive lights, with optional volume ducking."""
     y, sr = load_audio_as_float(path, sr)
     stop = False
 
@@ -198,7 +199,20 @@ def play_and_pulse(
     t = threading.Thread(target=worker, daemon=True)
     t.start()
     try:
-        sd.play(y, sr, blocking=True, device=output_device_id)
+        frame = int(0.02 * sr)
+        pos = 0
+        volume = 1.0
+        with sd.OutputStream(
+            samplerate=sr, channels=1, dtype="float32", device=output_device_id
+        ) as stream:
+            while pos < len(y):
+                seg = y[pos : pos + frame]
+                if duck_event is not None and duck_event.is_set():
+                    volume *= 0.7
+                    if volume <= 0.05:
+                        break
+                stream.write(seg * volume)
+                pos += frame
     except sd.PortAudioError as e:
         print(f"⚠️ Impossibile riprodurre audio: {e}")
     finally:

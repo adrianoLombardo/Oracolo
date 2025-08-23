@@ -7,9 +7,11 @@ import time
 import difflib
 import unicodedata
 import argparse
+import threading
 from pathlib import Path
 from typing import Any, Iterable
 
+import numpy as np
 import sounddevice as sd
 from dotenv import load_dotenv
 from openai import OpenAI
@@ -264,9 +266,37 @@ def main() -> None:
     last_lang = "it"  # lingua da usare quando STT è incerto
 
     # --------------------------- STATE MACHINE --------------------------- #
+        codex/improve-oracolo-chatbot-functionality-9nddjz
+    state = "SLEEP"
+    active_deadline = 0.0
+    is_processing = False
+    wake_lang = "it"
+    pending_q = ""
+    pending_lang = ""
+    pending_topic = None
+    pending_history = None
+    pending_answer = ""
+
+    if not WAKE_ENABLED:
+        state = "LISTENING"
+
+    def _monitor_barge(evt: threading.Event, sr: int, thresh: float, device: Any | None) -> None:
+        frame = int(sr * 0.03)
+        try:
+            with sd.InputStream(samplerate=sr, blocksize=frame, channels=1, dtype="float32", device=device) as stream:
+                while not evt.is_set():
+                    block, _ = stream.read(frame)
+                    level = float(np.sqrt(np.mean(block[:, 0] ** 2)))
+                    if level > thresh:
+                        evt.set()
+                        break
+        except Exception:
+            pass
+
     state = "SLEEP"      # SLEEP -> attende hotword. ACTIVE -> dialogo attivo
     active_deadline = 0  # timestamp (time.time()) di scadenza inattività
     processing_turn = False
+        main
 
     try:
         while True:
@@ -276,12 +306,19 @@ def main() -> None:
                     if cmd.strip().lower() == "q":
                         break
                 except EOFError:
-                    pass  # lanciato da UI con stdin chiuso
+                    pass
+
+            now = time.time()
+
+            # timeout inattività globale
+            if WAKE_ENABLED and state != "SLEEP" and now > active_deadline:
+                say("🌘 Torno al silenzio. Di' «ciao oracolo» per riattivarmi.", quiet=args.quiet)
+                state = "SLEEP"
+                continue
 
             # ---------------------- SLEEP: attendo hotword ---------------------- #
             if WAKE_ENABLED and state == "SLEEP":
                 say("💤 In ascolto della parola chiave…  IT: «ciao oracolo» | EN: «hello oracle»", quiet=args.quiet)
-
                 ok = record_until_silence(
                     INPUT_WAV,
                     AUDIO_SR,
@@ -291,41 +328,52 @@ def main() -> None:
                     input_device_id=in_dev,
                 )
                 if not ok:
-                    # niente parlato → continua a dormire
                     continue
-
                 text, lang = transcribe(INPUT_WAV, client, STT_MODEL, debug=DEBUG and (not args.quiet))
                 say(f"📝 Riconosciuto: {text}", quiet=args.quiet)
-
                 if lang in ("it", "en"):
                     last_lang = lang
-
                 is_it = _match_hotword(text, WAKE_IT)
                 is_en = _match_hotword(text, WAKE_EN)
                 if not (is_it or is_en):
-                    # non è hotword → resta a dormire
                     if DEBUG:
                         say("…hotword non riconosciuta, continuo l'attesa.", quiet=False)
                     continue
-
-                # hotword OK → saluta e passa ad ACTIVE
                 wake_lang = "it" if is_it and not is_en else "en" if is_en and not is_it else (last_lang or "it")
+                state = "AWAKE"
+                continue
+
+            # ---------------------- AWAKE: saluta ---------------------- #
+            if state == "AWAKE":
                 greet = oracle_greeting(wake_lang)
-                # ▼▼ AGGIUNTA: log del saluto in viewport (anche se --quiet)
                 print(f"🔮 Oracolo: {greet}", flush=True)
                 synthesize(greet, OUTPUT_WAV, client, TTS_MODEL, TTS_VOICE)
+                evt = threading.Event()
+                mon = threading.Thread(
+                    target=_monitor_barge,
+                    args=(evt, AUDIO_SR, float(recording_conf.get("min_speech_level", 0.01)), in_dev),
+                    daemon=True,
+                )
+                mon.start()
                 play_and_pulse(
                     OUTPUT_WAV,
                     light,
                     AUDIO_SR,
                     lighting_conf,
                     output_device_id=out_dev,
+                    duck_event=evt,
                 )
+                evt.set()
+                mon.join()
                 if CHAT_ENABLED and CHAT_RESET_ON_WAKE:
                     chat.reset()
-                state = "ACTIVE"
                 active_deadline = time.time() + IDLE_TIMEOUT
+                state = "LISTENING"
                 continue
+
+        codex/improve-oracolo-chatbot-functionality-9nddjz
+            # ---------------------- LISTENING: attesa domanda ---------------------- #
+            if state == "LISTENING":
 
             # ---------------------- ACTIVE: dialogo attivo ---------------------- #
             # Se hotword è disattivata a config, restiamo sempre "attivi".
@@ -341,6 +389,7 @@ def main() -> None:
                     continue
 
                 # ascolto una domanda
+       main
                 say(
                     "🎤 Parla pure (VAD energia, max %.1fs)…" % (SET.vad.max_ms / 1000.0),
                     quiet=args.quiet,
@@ -353,62 +402,89 @@ def main() -> None:
                     debug=DEBUG and (not args.quiet),
                     input_device_id=in_dev,
                 )
-
                 if not ok:
-                    # nessuna traccia valida → controlla timeout e riprova
-                    if WAKE_ENABLED and time.time() > active_deadline:
-                        say("🌘 Torno al silenzio. Di' «ciao oracolo» per riattivarmi.", quiet=args.quiet)
-                        state = "SLEEP"
                     continue
-
                 q, qlang = transcribe(INPUT_WAV, client, STT_MODEL, debug=DEBUG and (not args.quiet))
                 say(f"📝 Domanda: {q}", quiet=args.quiet)
                 if not q:
-                    if WAKE_ENABLED and time.time() > active_deadline:
-                        say("🌘 Torno al silenzio. Di' «ciao oracolo» per riattivarmi.", quiet=args.quiet)
-                        state = "SLEEP"
                     continue
+        codex/improve-oracolo-chatbot-functionality-9nddjz
+                active_deadline = time.time() + IDLE_TIMEOUT
+
                 # rinnova timer appena rilevato parlato valido
                 active_deadline = time.time() + IDLE_TIMEOUT
 
+        main
                 eff_lang = qlang if qlang in ("it", "en") else last_lang
-
-                # filtro input
                 if PROF.contains_profanity(q):
                     if FILTER_MODE == "block":
                         say("🚫 Linguaggio offensivo/bestemmie non ammessi. Riformula in italiano o inglese.", quiet=args.quiet)
-                        # non estendere il timer se l'input è rifiutato
                         continue
                     else:
                         q = PROF.mask(q)
                         say("⚠️ Testo filtrato: " + q, quiet=args.quiet)
+                pending_q = q
+                pending_lang = eff_lang
+                if CHAT_ENABLED:
+                    chat.push_user(q)
+                    changed = chat.update_topic(q, client, EMB_MODEL)
+                    if changed:
+                        say("🔀 Cambio tema.", quiet=args.quiet)
+                    pending_topic = chat.topic_text
+                    pending_history = chat.history
+                else:
+                    pending_topic = None
+                    pending_history = None
+                is_processing = True
+                state = "THINKING"
+                continue
 
-                # risposta oracolare
+            # ---------------------- THINKING: genera risposta ---------------------- #
+            if state == "THINKING":
                 try:
                     DOCSTORE_PATH = getattr(SET, "docstore_path", "DataBase/index.json")
                     TOPK = int(getattr(SET, "retrieval_top_k", 3))
                 except Exception:
                     DOCSTORE_PATH = "DataBase/index.json"
                     TOPK = 3
+        codex/improve-oracolo-chatbot-functionality-9nddjz
+                ok, context, clarify = validate_question(
+                    pending_q,
+
 
                 ok, context, clarify = validate_question(
                     q,
+        main
                     client=client,
                     emb_model=EMB_MODEL,
                     docstore_path=DOCSTORE_PATH,
                     top_k=TOPK,
+                    topic=pending_topic,
                 )
+        codex/improve-oracolo-chatbot-functionality-9nddjz
+                if not ok and clarify:
+                    say("🤔 Puoi chiarire meglio la tua domanda?", quiet=args.quiet)
+                    is_processing = False
+                    state = "LISTENING"
+                    continue
+
 
                 if not ok and clarify:
                     say("🤔 Puoi chiarire meglio la tua domanda?", quiet=args.quiet)
                     processing_turn = False
                     continue
 
+        main
                 if not ok:
-                    a = "Domanda non pertinente"
+                    pending_answer = "Domanda non pertinente"
                     if CHAT_ENABLED:
-                        chat.push_assistant(a)
+                        chat.push_assistant(pending_answer)
                 else:
+       codex/improve-oracolo-chatbot-functionality-9nddjz
+                    pending_answer = oracle_answer(
+                        pending_q,
+                        pending_lang,
+
                     if CHAT_ENABLED:
                         chat.push_user(q)
                         chat.update_topic(q, client, EMB_MODEL)
@@ -419,63 +495,76 @@ def main() -> None:
                     a = oracle_answer(
                         q,
                         eff_lang,
+        main
                         client,
                         LLM_MODEL,
                         ORACLE_SYSTEM,
                         context=context,
+        codex/improve-oracolo-chatbot-functionality-9nddjz
+                        history=pending_history,
+                        topic=pending_topic,
+
                         history=(chat.history if CHAT_ENABLED else None),
                         topic=topic_txt,
+        main
                     )
                     if CHAT_ENABLED:
-                        chat.push_assistant(a)
+                        chat.push_assistant(pending_answer)
+                state = "SPEAKING"
+                continue
 
-                # ▼▼ AGGIUNTA: log della risposta in viewport (anche se --quiet)
-                print(f"🔮 Oracolo: {a}", flush=True)
-
-                # filtro output
-                if PROF.contains_profanity(a):
+            # ---------------------- SPEAKING: TTS risposta ---------------------- #
+            if state == "SPEAKING":
+                print(f"🔮 Oracolo: {pending_answer}", flush=True)
+                if PROF.contains_profanity(pending_answer):
                     if FILTER_MODE == "block":
                         say("⚠️ La risposta conteneva termini non ammessi, riformulo…", quiet=args.quiet)
-                        a = client.responses.create(
+                        pending_answer = client.responses.create(
                             model=LLM_MODEL,
                             instructions=ORACLE_SYSTEM + " Evita qualsiasi offesa o blasfemia.",
-                            input=[{"role": "user", "content": "Riformula in modo poetico e non offensivo:\n" + a}],
+                            input=[{"role": "user", "content": "Riformula in modo poetico e non offensivo:\n" + pending_answer}],
                         ).output_text.strip()
                     else:
-                        a = PROF.mask(a)
-
-                append_log(q, a, LOG_PATH)
-
-                # luce di base dal contenuto
-                base = color_from_text(a, {k: v for k, v in PALETTES.items()})
+                        pending_answer = PROF.mask(pending_answer)
+                append_log(pending_q, pending_answer, LOG_PATH)
+                base = color_from_text(pending_answer, {k: v for k, v in PALETTES.items()})
                 if hasattr(light, "set_base_rgb"):
                     light.set_base_rgb(base)
                     light.idle()
-
-                # TTS + playback con pulse
-                synthesize(a, OUTPUT_WAV, client, TTS_MODEL, TTS_VOICE)
+                synthesize(pending_answer, OUTPUT_WAV, client, TTS_MODEL, TTS_VOICE)
+                evt = threading.Event()
+                mon = threading.Thread(
+                    target=_monitor_barge,
+                    args=(evt, AUDIO_SR, float(recording_conf.get("min_speech_level", 0.01)), in_dev),
+                    daemon=True,
+                )
+                mon.start()
                 play_and_pulse(
                     OUTPUT_WAV,
                     light,
                     AUDIO_SR,
                     lighting_conf,
                     output_device_id=out_dev,
+                    duck_event=evt,
                 )
-
-                # estendi timeout perché c'è stata attività
+                evt.set()
+                mon.join()
                 active_deadline = time.time() + IDLE_TIMEOUT
+        codex/improve-oracolo-chatbot-functionality-9nddjz
+                is_processing = False
+
                 processing_turn = False
 
                 # se modalità "single turn", torna subito a SLEEP
+        main
                 if WAKE_ENABLED and WAKE_SINGLE_TURN:
                     state = "SLEEP"
                     say("🌘 Torno al silenzio. Di' «ciao oracolo» per riattivarmi.", quiet=args.quiet)
-                    continue
-
-                # altrimenti resta ACTIVE e continua ad ascoltare
+                else:
+                    state = "LISTENING"
                 continue
 
-            # Fallback: se per qualche motivo non rientra nei rami, vai a SLEEP
+            # fallback
             state = "SLEEP"
 
     finally:

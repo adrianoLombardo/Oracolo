@@ -84,12 +84,18 @@ def _score_fallback(query: str, chunks: List[Chunk], top_k: int) -> List[Tuple[C
     return scored[:top_k]
 
 
-def retrieve(query: str, docstore_path: str | Path, top_k: int = 3) -> List[Dict]:
-    """
-    Ritorna una lista di dict:
-      [{"id": ..., "text": ..., "score": ...}, ...]
-    """
+def retrieve(
+    query: str,
+    docstore_path: str | Path,
+    top_k: int = 3,
+    *,
+    topic: str | None = None,
+) -> List[Dict]:
+    """Return top_k chunks optionally filtered by topic."""
     docs = _load_index(docstore_path)
+    if topic:
+        tnorm = str(topic).lower()
+        docs = [d for d in docs if str(d.get("topic", "")).lower() == tnorm]
     if not docs or not query.strip():
         return []
 
