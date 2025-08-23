@@ -5,6 +5,7 @@ import re
 import unicodedata
 from pathlib import Path
 from typing import Any, Iterable, Tuple
+import time
 
 import numpy as np
 
@@ -12,7 +13,15 @@ import numpy as np
 try:
     from src.retrieval import retrieve
 except Exception:
-    def retrieve(query: str, docstore_path: str | Path, top_k: int = 3) -> list[str]:
+    def retrieve(
+        query: str,
+        docstore_path: str | Path,
+        top_k: int = 3,
+        *,
+        topic: str | None = None,
+        client: Any | None = None,
+        embed_model: str | None = None,
+    ) -> list[dict]:
         return []
 
 
@@ -87,12 +96,24 @@ def _normalize_context_list(ctx: Any) -> list[str]:
 # ------------------------- funzione principale ------------------------- #
 def validate_question(
     question: str,
-    lang: str | None = None,           # opzionale
+    lang: str | None = None,
     *,
     settings: Any = None,
     client: Any = None,
     docstore_path: str | Path | None = None,
     top_k: int = 3,
+        codex/improve-oracolo-chatbot-functionality-gnbrya
+    emb_model: str | None = None,
+    embed_model: str | None = None,
+    topic: str | None = None,
+    history: list[dict[str, str]] | None = None,
+    log_path: str | Path | None = "data/logs/validator.log",
+    **_: Any,
+) -> Tuple[bool, list[dict], bool, str]:
+    """Valida la domanda usando tre segnali e logga la decisione.
+
+    Ritorna (is_ok, context_list, needs_clarification, reason).
+
     emb_model: str | None = None,      # compat
     embed_model: str | None = None,    # alias
     **_: Any,                          # ignora altri kwargs
@@ -110,6 +131,7 @@ def validate_question(
       kw_min_overlap = 0.04
       use_embeddings = False
       emb_min_sim = 0.22
+        main
     """
     q_norm = _norm(question)
 
@@ -126,8 +148,9 @@ def validate_question(
 
     enabled = True
     keywords: list[str] = []
-    kw_min_overlap = 0.04
-    use_embeddings = False
+    weights: dict[str, float] = {"kw": 0.4, "emb": 0.3, "rag": 0.3}
+    accept_threshold = 0.5
+    clarify_margin = 0.15
     emb_min_sim = 0.22
 
     if dom:
@@ -139,7 +162,6 @@ def validate_question(
                 enabled = bool(dom.get("enabled", True))  # type: ignore[attr-defined]
             except Exception:
                 enabled = True
-        # keywords
         try:
             keywords = list(getattr(dom, "keywords", []) or [])
         except Exception:
@@ -147,10 +169,16 @@ def validate_question(
                 keywords = list(dom.get("keywords", []) or [])  # type: ignore[attr-defined]
             except Exception:
                 keywords = []
-        # soglie
+        try:
+            weights = dict(getattr(dom, "weights", weights))
+        except Exception:
+            try:
+                weights = dict(dom.get("weights", weights))  # type: ignore[attr-defined]
+            except Exception:
+                weights = weights
         for (attr, var_name, cast, default) in [
-            ("kw_min_overlap", "kw_min_overlap", float, kw_min_overlap),
-            ("use_embeddings", "use_embeddings", bool, use_embeddings),
+            ("accept_threshold", "accept_threshold", float, accept_threshold),
+            ("clarify_margin", "clarify_margin", float, clarify_margin),
             ("emb_min_sim", "emb_min_sim", float, emb_min_sim),
         ]:
             try:
@@ -164,6 +192,15 @@ def validate_question(
 
     # Se il filtro non è abilitato → sempre OK
     if not enabled:
+        codex/improve-oracolo-chatbot-functionality-gnbrya
+        ctx = _try_retrieve(question, settings, docstore_path, top_k, topic, client, emb_model or embed_model)
+        return True, ctx, False, "disabled"
+
+    # Se NON ci sono keywords → non filtriamo (sempre OK)
+    if not keywords:
+        ctx = _try_retrieve(question, settings, docstore_path, top_k, topic, client, emb_model or embed_model)
+        return True, ctx, False, "no keywords"
+
         ctx = _try_retrieve(question, settings, docstore_path, top_k)
         return True, ctx, False
 
@@ -171,6 +208,7 @@ def validate_question(
     if not keywords:
         ctx = _try_retrieve(question, settings, docstore_path, top_k)
         return True, ctx, False
+        main
 
     # ---- Boost terms (accettazione immediata se compaiono) ----
     boost_terms = [
@@ -181,6 +219,13 @@ def validate_question(
         "cosmo", "universo", "stella", "stelle", "mare"
     ]
     if any(bt in q_norm for bt in boost_terms):
+        codex/improve-oracolo-chatbot-functionality-gnbrya
+        ctx = _try_retrieve(question, settings, docstore_path, top_k, topic, client, emb_model or embed_model)
+        return True, ctx, False, "boost"
+
+    # ---- Overlap parole chiave ----
+    kw_score = _keyword_overlap_score(question, keywords)
+
         ctx = _try_retrieve(question, settings, docstore_path, top_k)
         return True, ctx, False
 
@@ -188,14 +233,47 @@ def validate_question(
     kw_score = _keyword_overlap_score(question, keywords)
     ok = kw_score >= kw_min_overlap
     clarify = False
+        main
 
-    # ---- Recupera contesto ----
-    ctx = _try_retrieve(question, settings, docstore_path, top_k)
+    # segnali dinamici
+    hist_tokens: set[str] = set()
+    if history:
+        for turn in history[-6:]:
+            if turn.get("role") == "user":
+                hist_tokens.update(_tokens(turn.get("content", "")))
+    if hist_tokens & set(_tokens(" ".join(keywords))):
+        weights["kw"] += 0.1
 
-    # ---- Embeddings (opzionale) ----
+    ctx = _try_retrieve(question, settings, docstore_path, top_k, topic, client, emb_model or embed_model)
+    rag_hits = len(ctx)
+    rag_score = rag_hits / float(top_k or 1)
+
     emb_model = emb_model or embed_model
-    if use_embeddings and client is not None and emb_model:
+    emb_sim = 0.0
+    if client is not None and emb_model and keywords:
         try:
+            vecs = _embed_texts(client, emb_model, [question, " ".join(keywords)])
+            if len(vecs) == 2:
+                emb_sim = _cosine(vecs[0], vecs[1])
+        except Exception:
+            pass
+
+    score = weights.get("kw", 0.0) * kw_score + weights.get("emb", 0.0) * emb_sim + weights.get("rag", 0.0) * rag_score
+    ok = score >= accept_threshold
+    clarify = (not ok) and (score >= accept_threshold - clarify_margin)
+    reason = f"kw={kw_score:.2f} emb={emb_sim:.2f} rag={rag_score:.2f} score={score:.2f}"
+
+    if log_path:
+        try:
+        codex/improve-oracolo-chatbot-functionality-gnbrya
+            Path(log_path).parent.mkdir(parents=True, exist_ok=True)
+            with Path(log_path).open("a", encoding="utf-8") as f:
+                f.write(f"{int(time.time())}\t{int(ok)}\t{int(clarify)}\t{reason}\t{question}\n")
+        except Exception:
+            pass
+
+    return ok, ctx, clarify, reason
+
             to_embed = [question] + ctx[:3]
             vecs = _embed_texts(client, emb_model, to_embed)
             if len(vecs) >= 2:
@@ -211,6 +289,7 @@ def validate_question(
         clarify = clarify or (kw_score > 0 or bool(ctx))
 
     return ok, ctx, clarify
+        main
 
 
 # ------------------------- helper retrieval ------------------------- #
@@ -219,7 +298,10 @@ def _try_retrieve(
     settings: Any,
     docstore_path: str | Path | None,
     top_k: int,
-) -> list[str]:
+    topic: str | None,
+    client: Any,
+    emb_model: str | None,
+) -> list[dict]:
     if docstore_path is None and settings is not None:
         try:
             docstore_path = getattr(settings, "docstore_path", None)
@@ -231,18 +313,28 @@ def _try_retrieve(
     if not docstore_path:
         return []
     try:
-        raw_ctx = retrieve(question, docstore_path, top_k=top_k)
+        raw_ctx = retrieve(
+            question,
+            docstore_path,
+            top_k=top_k,
+            topic=topic,
+            client=client,
+            embed_model=emb_model,
+        )
     except Exception:
         raw_ctx = []
     # normalizza
-    out: list[str] = []
+    out: list[dict] = []
     for it in raw_ctx or []:
-        if isinstance(it, str):
-            t = it.strip()
-        elif isinstance(it, dict):
+        if isinstance(it, dict):
             t = str(it.get("text") or it.get("content") or "").strip()
+            if not t:
+                continue
+            it = dict(it)
+            it["text"] = t[:1000]
+            out.append(it)
         else:
             t = str(it).strip()
-        if t:
-            out.append(t[:1000])
+            if t:
+                out.append({"text": t[:1000]})
     return out

@@ -10,6 +10,11 @@ import numpy as np
 import sounddevice as sd
 import soundfile as sf
 
+try:
+    import webrtcvad  # type: ignore
+except Exception:
+    webrtcvad = None
+
 
 def load_audio_as_float(path: Path, target_sr: int) -> Tuple[np.ndarray, int]:
     """Load an audio file and return mono float32 samples and sample rate."""
@@ -41,6 +46,66 @@ def record_wav(path: Path, seconds: int, sr: int) -> None:
     print("✅ Fatto.")
 
 
+def _record_with_webrtcvad(
+    path: Path,
+    sr: int,
+    recording_conf: Dict[str, Any],
+    input_device_id: Any | None,
+) -> bool:
+    frame_ms = 20
+    frame_samples = int(sr * frame_ms / 1000)
+    START_MS = int(recording_conf.get("start_ms", 200))
+    END_MS = int(recording_conf.get("end_ms", 800))
+    MAX_MS = int(recording_conf.get("max_ms", 15000))
+    MIN_SPEECH = float(recording_conf.get("min_speech_level", 0.01))
+    vad = webrtcvad.Vad(2)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    print(f"\n🎤 Parla pure (VAD webrtc, max {MAX_MS/1000:.1f}s)…")
+    stream_kwargs = {"samplerate": sr, "blocksize": frame_samples, "channels": 1, "dtype": "int16"}
+    if input_device_id is not None:
+        stream_kwargs["device"] = input_device_id
+    voiced = bytearray()
+    started = False
+    speech_ms = 0
+    silence_ms = 0
+    total_ms = 0
+    try:
+        with sd.RawInputStream(**stream_kwargs) as stream:
+            while total_ms < MAX_MS:
+                block, _ = stream.read(frame_samples)
+                total_ms += frame_ms
+                if not started:
+                    if vad.is_speech(block.tobytes(), sr):
+                        speech_ms += frame_ms
+                        if speech_ms >= START_MS:
+                            started = True
+                            voiced.extend(block.tobytes())
+                    else:
+                        speech_ms = 0
+                else:
+                    voiced.extend(block.tobytes())
+                    if vad.is_speech(block.tobytes(), sr):
+                        silence_ms = 0
+                    else:
+                        silence_ms += frame_ms
+                        if silence_ms >= END_MS:
+                            break
+    except sd.PortAudioError as e:
+        print(f"⚠️ Microfono non disponibile: {e}")
+        return False
+    if not voiced:
+        print("😴 Silenzio rilevato. Resto in attesa.")
+        return False
+    y = np.frombuffer(bytes(voiced), dtype=np.int16).astype(np.float32) / 32768.0
+    peak = float(np.max(np.abs(y))) if y.size else 0.0
+    if peak < MIN_SPEECH:
+        print("😴 Non ho colto parole distinte. Resto in attesa.")
+        return False
+    sf.write(path.as_posix(), y, sr)
+    print(f"✅ Registrazione completata ({len(y)/sr:.2f}s).")
+    return True
+
+
 def record_until_silence(
     path: Path,
     sr: int,
@@ -56,6 +121,9 @@ def record_until_silence(
             path.unlink()
     except Exception:
         pass
+
+    if recording_conf.get("use_webrtcvad") and webrtcvad is not None:
+        return _record_with_webrtcvad(path, sr, recording_conf, input_device_id)
 
     FRAME_MS = int(vad_conf.get("frame_ms", 30))
     START_MS = int(vad_conf.get("start_ms", 150))
@@ -171,8 +239,9 @@ def play_and_pulse(
     sr: int,
     lighting_conf: Dict[str, Any],
     output_device_id: Any | None = None,
+    duck_event: threading.Event | None = None,
 ) -> None:
-    """Play audio file and pulse the given light accordingly."""
+    """Play audio and drive lights, with optional volume ducking."""
     y, sr = load_audio_as_float(path, sr)
     stop = False
 
@@ -198,7 +267,20 @@ def play_and_pulse(
     t = threading.Thread(target=worker, daemon=True)
     t.start()
     try:
-        sd.play(y, sr, blocking=True, device=output_device_id)
+        frame = int(0.02 * sr)
+        pos = 0
+        volume = 1.0
+        with sd.OutputStream(
+            samplerate=sr, channels=1, dtype="float32", device=output_device_id
+        ) as stream:
+            while pos < len(y):
+                seg = y[pos : pos + frame]
+                if duck_event is not None and duck_event.is_set():
+                    volume *= 0.7
+                    if volume <= 0.05:
+                        break
+                stream.write(seg * volume)
+                pos += frame
     except sd.PortAudioError as e:
         print(f"⚠️ Impossibile riprodurre audio: {e}")
     finally:
