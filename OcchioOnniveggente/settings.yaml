@@ -15,7 +15,7 @@ openai:
 
   # ⬇️ NUOVO: modello di embedding per controllo pertinenza/RAG
   # (usato da src/domain.py se abilitato)
-  embed_model: text-embedding-3-small   # opzionale; se mancante, niente embeddings
+  embed_model: text-embedding-3-large   # opzionale; se mancante, niente embeddings
 
 audio:
   # Audio I/O e file temporanei
@@ -113,26 +113,21 @@ domain:
   # Lista parole-chiave del tuo dominio (usate per keyword-overlap)
   enabled: true
   topic: ""
-  keywords:
-    - neuroscienze
-    - neuroestetica
-    - arte contemporanea
-    - cervello
-    - sinapsi
-    - intelligenza artificiale
-    - IA
-    - universo
-    - stelle
-    - luce
-    - destino
+  keywords: []
   weights:
-    kw: 0.4
-    emb: 0.3
-    rag: 0.3
-  accept_threshold: 0.5      # soglia per accettare la domanda
+    kw: 0.45
+    emb: 0.25
+    rag: 0.30
+  accept_threshold: 0.50      # soglia per accettare la domanda
   clarify_margin: 0.15       # margine per chiedere chiarimenti
   always_accept_wake: true   # accetta sempre saluti/hotword
   emb_min_sim: 0.22          # soglia minima di similarità coseno (0..1)
+
+retrieval:
+  hybrid: true            # BM25 + embedding
+  rerank: true
+  max_chunks: 6
+  chunk_strategy: semantic   # semantic|fixed_overlap
 
 # ⬇️ NUOVO: parametri per client Realtime/WebSocket (usati da realtime_oracolo.py / UI)
 realtime:
@@ -142,6 +137,8 @@ realtime:
   input_device: null
   output_device: null
   barge_rms_threshold: 500.0     # soglia RMS per barge-in (parlo sopra al TTS)
+  barge_in_threshold: 0.55
+  ducking_db: -12
   ping_interval: 20              # opzionale, se il server richiede ping WS
   ping_timeout: 20
 
@@ -151,6 +148,9 @@ chat:
   max_turns: 10
   reset_on_hotword: true
   persist_jsonl: data/logs/chat_sessions.jsonl
+  inactivity_timeout_s: 60
+  remember_turns: 8
+  pinned: []
 
 # RAG: dove sono i documenti indicizzati e quanti frammenti prendere
 docstore_path: DataBase/index.json
