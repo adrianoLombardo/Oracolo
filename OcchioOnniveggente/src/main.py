@@ -373,22 +373,22 @@ def main() -> None:
     try:
         while True:
             try:
-            CURRENT_CFG = yaml.safe_load(cfg_path.read_text(encoding="utf-8")) or {}
-        except Exception:
-            CURRENT_CFG = {}
-        prof_name, prof = get_active_profile(CURRENT_CFG, session_profile_name)
-        if CHAT_ENABLED:
-            chat = chat_histories[session_profile_name]
-        else:
-            chat = None
-            if not args.autostart:
-                try:
-                    cmd = input("\nPremi INVIO per ascoltare (q per uscire)… ")
-                    dlg.refresh_deadline()
-                    if cmd.strip().lower() == "q":
-                        break
-                except EOFError:
-                    pass
+                CURRENT_CFG = yaml.safe_load(cfg_path.read_text(encoding="utf-8")) or {}
+            except Exception:
+                CURRENT_CFG = {}
+            prof_name, prof = get_active_profile(CURRENT_CFG, session_profile_name)
+            if CHAT_ENABLED:
+                chat = chat_histories[session_profile_name]
+            else:
+                chat = None
+                if not args.autostart:
+                    try:
+                        cmd = input("\nPremi INVIO per ascoltare (q per uscire)… ")
+                        dlg.refresh_deadline()
+                        if cmd.strip().lower() == "q":
+                            break
+                    except EOFError:
+                        pass
 
             now = time.time()
 
