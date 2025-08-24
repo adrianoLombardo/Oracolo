@@ -268,8 +268,17 @@ def validate_question(
         "ia", "intelligenza artificiale", "ai",
         "cosmo", "universo", "stella", "stelle", "mare",
     ]
-    if any(bt in q_norm for bt in boost_terms):
-        ctx = _try_retrieve(question, settings, docstore_path, top_k, use_topic, client, emb_model or embed_model)
+    has_boost = any(bt in q_norm for bt in boost_terms)
+    if has_boost:
+        ctx = _try_retrieve(
+            question,
+            settings,
+            docstore_path,
+            top_k,
+            use_topic,
+            client,
+            emb_model or embed_model,
+        )
         return True, ctx, False, "boost", None
 
     # ---- Overlap parole chiave ----
@@ -322,6 +331,13 @@ def validate_question(
     reason = f"kw={kw_score:.2f} emb={emb_sim:.2f} rag={rag_score:.2f} score={score:.2f} thr={thr:.2f}"
 
     topic_suggestion = ""
+    # Se non c'è alcuna parola-chiave e non ci sono boost terms,
+    # la domanda è considerata fuori dominio anche se il punteggio totale supera la soglia.
+    if kw_score == 0 and not has_boost:
+        ok = False
+        clarify = score >= (thr - clarify_margin)
+        ctx = []
+        reason += " kw0"
     if clarify and docstore_path:
         try:
             alt_ctx = _try_retrieve(
