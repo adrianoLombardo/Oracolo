@@ -1722,14 +1722,39 @@ class OracoloUI(tk.Tk):
             messagebox.showinfo("Collezione", "Topic aggiornato dalla selezione.")
 
         def clear_library() -> None:
+            script = self._find_ingest_script()
+            if not script:
+                messagebox.showwarning(
+                    "Libreria", "Script di ingest non trovato (scripts/ingest_docs.py)."
+                )
+                return
             path = self.settings.get("docstore_path", "DataBase/index.json")
+            cmd = [sys.executable, "-m", "scripts.ingest_docs", "--clear"]
+            if path:
+                cmd.extend(["--path", path])
             try:
-                Path(path).write_text("[]", encoding="utf-8")
+                proc = subprocess.run(
+                    cmd,
+                    check=True,
+                    cwd=self.root_dir,
+                    capture_output=True,
+                    text=True,
+                )
+                self._append_log(proc.stdout, "DOCS")
+                if proc.stderr:
+                    self._append_log(proc.stderr, "DOCS")
                 for i in tree.get_children():
                     tree.delete(i)
                 messagebox.showinfo("Libreria", "Libreria svuotata.")
-            except Exception as e:
-                messagebox.showerror("Libreria", f"Impossibile svuotare la libreria: {e}")
+            except subprocess.CalledProcessError as exc:
+                if exc.stdout:
+                    self._append_log(exc.stdout, "DOCS")
+                if exc.stderr:
+                    self._append_log(exc.stderr, "DOCS")
+                self._append_log(str(exc) + "\n", "DOCS")
+                messagebox.showerror(
+                    "Libreria", f"Impossibile svuotare la libreria: {exc}"
+                )
 
         ttk.Button(btn_frame, text="Crea Collezione da selezione", command=make_collection).pack(side="left")
         ttk.Button(btn_frame, text="Svuota libreria", command=clear_library).pack(side="right")
