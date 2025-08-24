@@ -675,6 +675,26 @@ class OracoloUI(tk.Tk):
         )
         self.chat_view.pack(fill="both", expand=True, padx=4, pady=(4, 0))
 
+        # Configurazione dei tag per simulare le bolle della chat
+        self.chat_view.tag_config(
+            "user_msg",
+            background="#2d3e4e",
+            foreground="#d7fff9",
+            borderwidth=2,
+            relief="solid",
+            padx=6,
+            pady=4,
+        )
+        self.chat_view.tag_config(
+            "assistant_msg",
+            background="#394b59",
+            foreground="#ffffff",
+            borderwidth=2,
+            relief="solid",
+            padx=6,
+            pady=4,
+        )
+
         input_frame = ttk.Frame(chat_frame)
         input_frame.pack(fill="x", padx=4, pady=(4, 0))
         ttk.Checkbutton(input_frame, text="Usa microfono", variable=self.use_mic_var).pack(side="left")
@@ -778,7 +798,11 @@ class OracoloUI(tk.Tk):
         clean = re.sub("<[^<]+?>", "", html)
         self.chat_view.configure(state="normal")
         prefix = "👤" if role == "user" else ("🔮" if role == "assistant" else "ℹ️")
-        self.chat_view.insert("end", f"{prefix} {clean}\n")
+        tag = "user_msg" if role == "user" else ("assistant_msg" if role == "assistant" else None)
+        if tag:
+            self.chat_view.insert("end", f"{prefix} {clean}\n", tag)
+        else:
+            self.chat_view.insert("end", f"{prefix} {clean}\n")
         self.chat_view.see("end")
         self.chat_view.configure(state="disabled")
         if role == "assistant":
