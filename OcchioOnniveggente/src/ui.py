@@ -549,8 +549,23 @@ class OracoloUI(tk.Tk):
 
     # --------------------------- Layout / Widgets ------------------------- #
     def _build_layout(self) -> None:
-        header = ttk.Frame(self)
-        header.pack(fill="x", padx=16, pady=(12, 8))
+        nav_bar = ttk.Frame(self)
+        nav_bar.pack(fill="x", padx=16, pady=(12, 8))
+
+        self._sections: dict[str, tk.Frame] = {}
+        for name in ("Museo", "Galleria", "Conferenze", "Didattica"):
+            frame = ttk.Frame(self)
+            self._sections[name] = frame
+            ttk.Button(nav_bar, text=name, command=lambda n=name: self._show_section(n)).pack(
+                side="left", padx=(0, 4)
+            )
+
+        self._current_section: str | None = None
+        self._show_section("Museo")
+        container = self._sections["Museo"]
+
+        header = ttk.Frame(container)
+        header.pack(fill="x", padx=16, pady=(0, 8))
         ttk.Label(header, text="Occhio Onniveggente", font=("Helvetica", 18, "bold")).pack(side="left")
         if self.profile_names:
             ttk.Label(header, text="Profilo:").pack(side="left", padx=(16, 4))
@@ -559,7 +574,7 @@ class OracoloUI(tk.Tk):
             cb.bind("<<ComboboxSelected>>", self._on_profile_change)
             self.profile_cb = cb
 
-        bar = ttk.Frame(self)
+        bar = ttk.Frame(container)
         bar.pack(fill="x", padx=16, pady=(0, 8))
         self.start_btn = ttk.Button(bar, text="Avvia", command=self.start_oracolo)
         self.stop_btn = ttk.Button(bar, text="Ferma", command=self.stop_oracolo, state="disabled")
@@ -575,7 +590,7 @@ class OracoloUI(tk.Tk):
         self.status_var = tk.StringVar(value="🟡 In attesa")
         ttk.Label(bar, textvariable=self.status_var).pack(side="right")
 
-        opts = ttk.Frame(self)
+        opts = ttk.Frame(container)
         opts.pack(fill="x", padx=16, pady=(0, 8))
         ttk.Checkbutton(opts, text="Stile poetico", variable=self.style_var).pack(side="left")
         ttk.Label(opts, text="Lingua:").pack(side="left", padx=(8, 4))
@@ -614,7 +629,7 @@ class OracoloUI(tk.Tk):
         self.tts_speed = tk.DoubleVar(value=1.0)
         ttk.Scale(opts, from_=0.5, to=2.0, variable=self.tts_speed, orient="horizontal", length=100).pack(side="left")
 
-        notebook = ttk.Notebook(self)
+        notebook = ttk.Notebook(container)
         notebook.pack(fill="both", expand=True, padx=16, pady=(0, 12))
 
         chat_frame = ttk.Frame(notebook)
@@ -693,7 +708,7 @@ class OracoloUI(tk.Tk):
         for kw in self.keywords:
             self.keyword_listbox.insert("end", kw)
 
-        status = ttk.Frame(self)
+        status = ttk.Frame(container)
         status.pack(fill="x", padx=16, pady=(0, 4))
         ttk.Progressbar(
             status, orient="horizontal", length=80, mode="determinate", variable=self.in_level, maximum=1.0
@@ -710,9 +725,19 @@ class OracoloUI(tk.Tk):
         ttk.Checkbutton(status, text="Auto-reconnect", variable=self.ws_reconnect_var).pack(side="left", padx=(8, 0))
         ttk.Label(status, textvariable=self.doc_index).pack(side="right")
 
-        footer = ttk.Frame(self)
+        footer = ttk.Frame(container)
         footer.pack(fill="x", padx=16, pady=(0, 12))
         ttk.Button(footer, text="Esci", command=self._on_close).pack(side="right")
+
+    def _show_section(self, name: str) -> None:
+        if not hasattr(self, "_sections"):
+            return
+        for frame in self._sections.values():
+            frame.pack_forget()
+        sel = self._sections.get(name)
+        if sel is not None:
+            sel.pack(fill="both", expand=True)
+            self._current_section = name
 
     # --------------------------- Chat helpers ------------------------------ #
     def _append_chat(self, role: str, text: str) -> None:
