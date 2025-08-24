@@ -883,7 +883,17 @@ class OracoloUI(tk.Tk):
             self._append_chat("system", f"Topic: {' '.join(args)}")
         elif base == "/docs" and args:
             if args[0] == "add":
-                self._add_documents()
+                dom = self.settings.get("domain", {}) or {}
+                prof_val = dom.get("profile", {})
+                if isinstance(prof_val, dict):
+                    current_profile = prof_val.get("current", "")
+                else:
+                    current_profile = prof_val or ""
+                profiles = dom.get("profiles", {}) or {}
+                docstore_path = profiles.get(current_profile, {}).get(
+                    "docstore_path", self.settings.get("docstore_path")
+                )
+                self._add_documents(current_profile, docstore_path)
             elif args[0] == "reindex":
                 self._reindex_documents()
         elif base == "/realtime" and args:
@@ -1330,6 +1340,20 @@ class OracoloUI(tk.Tk):
         return p if p.exists() else None
 
     def _add_documents(self, topic: str = "", docstore_path: str | None = None) -> None:
+        dom = self.settings.get("domain", {}) or {}
+        prof_val = dom.get("profile", {})
+        if isinstance(prof_val, dict):
+            current_profile = prof_val.get("current", "")
+        else:
+            current_profile = prof_val or ""
+        if not topic:
+            topic = current_profile
+        if docstore_path is None:
+            profiles = dom.get("profiles", {}) or {}
+            docstore_path = profiles.get(current_profile, {}).get(
+                "docstore_path", self.settings.get("docstore_path")
+            )
+
         paths = list(filedialog.askopenfilenames(parent=self))
         if not paths:
             directory = filedialog.askdirectory(parent=self)
@@ -1343,9 +1367,8 @@ class OracoloUI(tk.Tk):
             return
         self._append_log("Aggiunta documenti:\n" + "\n".join(paths) + "\n", "DOCS")
         cmd = [sys.executable, "-m", "scripts.ingest_docs", "--add", *paths]
-        target = docstore_path or self.settings.get("docstore_path")
-        if target:
-            cmd.extend(["--path", target])
+        if docstore_path:
+            cmd.extend(["--path", docstore_path])
         if topic:
             cmd.extend(["--topic", topic])
         try:
