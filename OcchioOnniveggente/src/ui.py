@@ -1408,14 +1408,11 @@ class OracoloUI(tk.Tk):
         for args in tried:
             self._append_log(f"Reindex: tentativo {' '.join(args)}\n", "DOCS")
             try:
-                result = subprocess.run(
-            self._append_log(
-                f"Aggiorna indice: {' '.join(args)} in {self.root_dir}\n",
-                "DOCS",
-            )
-            try:
+                self._append_log(
+                    f"Aggiorna indice: {' '.join(args)} in {self.root_dir}\n",
+                    "DOCS",
+                )
                 proc = subprocess.run(
-
                     [sys.executable, "-m", "scripts.ingest_docs", *args],
                     check=True,
                     cwd=self.root_dir,
@@ -1423,7 +1420,7 @@ class OracoloUI(tk.Tk):
                     text=True,
                 )
 
-                output = (result.stdout or "") + (result.stderr or "")
+                output = (proc.stdout or "") + (proc.stderr or "")
                 match = re.search(r"(\d+)\s+doc", output, re.IGNORECASE)
                 if match:
                     self._append_log(
