@@ -1314,17 +1314,31 @@ class OracoloUI(tk.Tk):
             return
         tried = (["--reindex"], ["--rebuild"], ["--refresh"])
         for args in tried:
+            self._append_log(f"Reindex: tentativo {' '.join(args)}\n", "DOCS")
             try:
-                subprocess.run(
+                result = subprocess.run(
                     [sys.executable, "-m", "scripts.ingest_docs", *args],
                     check=True,
                     cwd=self.root_dir,
+                    capture_output=True,
+                    text=True,
                 )
+                output = (result.stdout or "") + (result.stderr or "")
+                match = re.search(r"(\d+)\s+doc", output, re.IGNORECASE)
+                if match:
+                    self._append_log(
+                        f"Indice aggiornato ({match.group(1)} documenti)\n", "DOCS"
+                    )
+                else:
+                    self._append_log("Indice aggiornato\n", "DOCS")
                 messagebox.showinfo("Indice", f"Indice aggiornato ({' '.join(args)}).")
                 return
             except subprocess.CalledProcessError:
                 continue
-        messagebox.showerror("Indice", "Impossibile aggiornare l'indice (nessuna delle opzioni supportata).")
+        self._append_log("Reindex: fallito\n", "DOCS")
+        messagebox.showerror(
+            "Indice", "Impossibile aggiornare l'indice (nessuna delle opzioni supportata)."
+        )
 
     def _open_library_dialog(self) -> None:
         win = tk.Toplevel(self)
