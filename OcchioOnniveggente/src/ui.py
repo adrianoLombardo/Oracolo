@@ -17,6 +17,7 @@ import json
 import csv
 import os
 import queue
+import logging
 import subprocess
 import sys
 import threading
@@ -508,6 +509,8 @@ class OracoloUI(tk.Tk):
         self.after(500, self._poll_status)
         self.after(1000, self._poll_idle)
         self.protocol("WM_DELETE_WINDOW", self._on_close)
+
+        logging.getLogger().addHandler(UILogHandler(self))
 
     # --------------------------- Menubar & dialogs ------------------------ #
     def _build_menubar(self) -> None:
@@ -1030,10 +1033,31 @@ class OracoloUI(tk.Tk):
         if now - self.last_activity > timeout:
             self.status_var.set("😴 Dormiente — dì Ciao Oracolo per riattivarmi")
         elif self.status_var.get().startswith("😴"):
-            self.status_var.set("🟡 In attesa")
+        self.status_var.set("🟡 In attesa")
         self.after(1000, self._poll_idle)
 
     # --------------------------- Log helpers ------------------------------ #
+    class UILogHandler(logging.Handler):
+        """Inoltra i log della libreria standard al widget della UI."""
+
+        _LEVEL_MAP = {
+            "INFO": "MISC",
+            "ERROR": "ERR",
+            "WARNING": "WARN",
+            "DEBUG": "DBG",
+        }
+
+        def __init__(self, ui: "OracoloUI") -> None:
+            super().__init__()
+            self.ui = ui
+
+        def emit(self, record: logging.LogRecord) -> None:  # pragma: no cover - UI side effect
+            msg = record.getMessage()
+            if not msg.endswith("\n"):
+                msg += "\n"
+            cat = self._LEVEL_MAP.get(record.levelname, record.name)
+            self.ui._append_log(msg, cat)
+
     def _append_log(self, text: str, category: str = "MISC") -> None:
         if self.sandbox_var.get():
             return
@@ -2215,6 +2239,9 @@ class OracoloUI(tk.Tk):
         finally:
             self.destroy()
 
+
+# Alias per accesso esterno al gestore di log della UI
+UILogHandler = OracoloUI.UILogHandler
 
 # ----------------------------- entry point -------------------------------- #
 def main() -> None:
