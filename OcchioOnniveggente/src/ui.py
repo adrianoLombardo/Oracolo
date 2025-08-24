@@ -321,6 +321,30 @@ class RealtimeWSClient:
         self.loop = None
 
 
+# ------------------------------ Orb widget ------------------------------- #
+class OrbWidget(tk.Canvas):
+    """Canvas che visualizza un orbe pulsante in base ai livelli audio."""
+
+    def __init__(self, master: tk.Widget, size: int = 48, **kwargs: Any) -> None:
+        super().__init__(master, width=size, height=size, highlightthickness=0, **kwargs)
+        self.size = size
+        self._in = 0.0
+        self._out = 0.0
+        self._orb = self.create_oval(0, 0, size, size, fill="#00ffe1", outline="")
+
+    def set_levels(self, in_level: float, out_level: float) -> None:
+        """Aggiorna i livelli audio e ridisegna l'orbe."""
+        self._in = in_level
+        self._out = out_level
+        self._redraw()
+
+    def _redraw(self) -> None:
+        level = max(self._in, self._out)
+        r = (self.size / 2) * (0.3 + 0.7 * level)
+        cx = cy = self.size / 2
+        self.coords(self._orb, cx - r, cy - r, cx + r, cy + r)
+
+
 # ------------------------------- UI class -------------------------------- #
 class OracoloUI(tk.Tk):
     """Interfaccia grafica per l'Oracolo."""
@@ -564,11 +588,14 @@ class OracoloUI(tk.Tk):
         self.stop_btn.pack(side="left")
         self.ws_start_btn.pack(side="left", padx=(8, 8))
         self.ws_stop_btn.pack(side="left")
+        self.orb = OrbWidget(bar, size=32, bg=self._bg)
+        self.orb.pack(side="left", padx=(8, 0))
         self.in_level = tk.DoubleVar(value=0.0)
         self.out_level = tk.DoubleVar(value=0.0)
 
         self.status_var = tk.StringVar(value="🟡 In attesa")
         ttk.Label(bar, textvariable=self.status_var).pack(side="right")
+        self.after(100, self._update_orb)
 
         opts = ttk.Frame(self)
         opts.pack(fill="x", padx=16, pady=(0, 8))
@@ -708,6 +735,12 @@ class OracoloUI(tk.Tk):
         footer = ttk.Frame(self)
         footer.pack(fill="x", padx=16, pady=(0, 12))
         ttk.Button(footer, text="Esci", command=self._on_close).pack(side="right")
+    
+    def _update_orb(self) -> None:
+        """Aggiorna l'OrbWidget con i livelli audio correnti."""
+        if hasattr(self, "orb"):
+            self.orb.set_levels(self.in_level.get(), self.out_level.get())
+        self.after(100, self._update_orb)
 
     # --------------------------- Chat helpers ------------------------------ #
     def _append_chat(self, role: str, text: str) -> None:
