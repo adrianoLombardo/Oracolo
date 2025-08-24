@@ -34,7 +34,7 @@ def transcribe(path: Path, client, stt_model: str, *, debug: bool = False) -> Tu
             tx = client.audio.transcriptions.create(
                 model=stt_model,
                 file=f,
-                response_format="verbose_json",
+                response_format="json",
             )
     except openai.OpenAIError as e:
         print(f"Errore OpenAI: {e}")
