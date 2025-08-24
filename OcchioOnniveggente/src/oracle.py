@@ -1,14 +1,13 @@
 from __future__ import annotations
 
-import re
 from datetime import datetime
 import io
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
 import openai
-from langdetect import DetectorFactory, detect
 from .utils import retry_with_backoff
+
 
 DetectorFactory.seed = 42
 
@@ -47,6 +46,7 @@ def _score_lang(text: str, lang: str, *, debug: bool = False) -> float:
     return score
 
 
+
 def transcribe(audio: Path | bytes, client, stt_model: str, *, debug: bool = False) -> Tuple[str, str]:
     """Trascrivi ``audio`` restituendo testo e lingua stimata.
 
@@ -79,9 +79,25 @@ def transcribe(audio: Path | bytes, client, stt_model: str, *, debug: bool = Fal
         prompt=(
             "Language is either Italian or English. Focus on neuroscience, "
             "neuroaesthetics, contemporary art, the universe, and "
-            "neuroscientific AI. Ignore any other language."
+
+def fast_transcribe(path_or_bytes, client, stt_model: str, lang_hint: str | None = None) -> str:
+    """Perform a single transcription call with optional language hint."""
+
+    kwargs = {}
+    if lang_hint in ("it", "en"):
+        kwargs["language"] = lang_hint
+
+    if isinstance(path_or_bytes, (str, Path)):
+        with open(path_or_bytes, "rb") as f:
+            tx = client.audio.transcriptions.create(
+                model=stt_model, file=f, **kwargs
+            )
+    else:
+        tx = client.audio.transcriptions.create(
+            model=stt_model, file=path_or_bytes, **kwargs
+main
         )
-    )
+    return (getattr(tx, "text", "") or "").strip()
 
     s_it = _score_lang(text, "it", debug=debug)
     s_en = _score_lang(text, "en", debug=debug)
@@ -106,6 +122,39 @@ def transcribe(audio: Path | bytes, client, stt_model: str, *, debug: bool = Fal
 
     print("🌐 Lingua rilevata: IT" if lang == "it" else "🌐 Lingua rilevata: EN")
     return text, lang
+
+
+
+main
+def transcribe(path: Path, client, stt_model: str, *, debug: bool = False) -> Tuple[str, str]:
+    """Trascrive una singola volta e restituisce testo e lingua rilevata."""
+
+    try:
+        with open(path, "rb") as f:
+            tx = client.audio.transcriptions.create(
+                model=stt_model,
+                file=f,
+                response_format="verbose_json",
+            )
+    except openai.OpenAIError as e:
+        print(f"Errore OpenAI: {e}")
+        return "", ""
+
+    text = (getattr(tx, "text", "") or "").strip()
+    lang = getattr(tx, "language", "") or ""
+
+    if lang.startswith("it"):
+        lang_code = "it"
+    elif lang.startswith("en"):
+        lang_code = "en"
+    else:
+        lang_code = ""
+
+    if debug and lang_code:
+        print(f"🌐 Lingua rilevata: {lang_code.upper()}")
+
+    return text, lang_code
+main
 
 
 def oracle_answer(
