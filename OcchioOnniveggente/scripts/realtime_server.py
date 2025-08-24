@@ -6,7 +6,7 @@ import sys
 import time
 import wave
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import numpy as np
 import websockets
@@ -18,7 +18,7 @@ if str(ROOT) not in sys.path:
 
 from src.config import Settings
 from src.hotword import strip_hotword_prefix
-from src.oracle import transcribe, oracle_answer, synthesize
+from src.oracle import transcribe, oracle_answer
 from src.retrieval import retrieve
 from src.chat import ChatState
 
@@ -57,7 +57,6 @@ class RTSession:
 
         self.tmp = ROOT / "data" / "temp"
         self.in_wav = self.tmp / "rt_input.wav"
-        self.out_wav = self.tmp / "rt_answer.wav"
 
         self.active_until = 0.0
         self.wake_phrases = []
@@ -129,14 +128,19 @@ class RTSession:
         self.barge = False
 
         for sent in sentences:
-            synthesize(
-                sent,
-                self.out_wav,
-                client,
-                self.SET.openai.tts_model,
-                self.SET.openai.tts_voice,
-            )
-            await self.stream_file(self.out_wav, chunk_bytes=960)
+            try:
+                with client.audio.speech.with_streaming_response.create(
+                    model=self.SET.openai.tts_model,
+                    voice=self.SET.openai.tts_voice,
+                    input=sent,
+                    response_format="pcm",
+                    sample_rate=self.client_sr,
+                ) as resp:
+                    for chunk in resp.iter_bytes(chunk_size=960):
+                        await self.ws.send(chunk)
+                        await asyncio.sleep(0)
+            except Exception:
+                break
             if self.barge:
                 break
 
