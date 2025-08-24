@@ -55,3 +55,13 @@ def test_disabled_returns_full_tuple():
     assert ok
     assert reason == "disabled"
     assert sugg is None
+
+
+def test_off_topic_rejected():
+    dom = SimpleNamespace(enabled=True, keywords=["arte", "collezione"], accept_threshold=0.5)
+    settings = SimpleNamespace(domain=dom)
+    q = "Parli della squadra di calcio del Milan"
+    ok, ctx, clarify, reason, sugg = validate_question(q, settings=settings)
+    assert not ok
+    assert not clarify
+    assert ctx == []
