@@ -601,12 +601,22 @@ class OracoloUI(tk.Tk):
         bar = ttk.Frame(container)
         bar.pack(fill="x", padx=16, pady=(0, 8))
         img_dir = self.root_dir / "img"
-        if Image and ImageTk:
-            self.start_icon = ImageTk.PhotoImage(Image.open(img_dir / "start.png"))
-            self.stop_icon = ImageTk.PhotoImage(Image.open(img_dir / "stop.png"))
-        else:  # pragma: no cover - fallback senza Pillow
-            self.start_icon = tk.PhotoImage(file=str(img_dir / "start.png"))
-            self.stop_icon = tk.PhotoImage(file=str(img_dir / "stop.png"))
+
+        def load_icon(name: str, size: tuple[int, int]) -> tk.PhotoImage:
+            path = img_dir / name
+            if Image and ImageTk:
+                resample = getattr(getattr(Image, "Resampling", Image), "LANCZOS")
+                img = Image.open(path).resize(size, resample)
+                return ImageTk.PhotoImage(img)
+            icon = tk.PhotoImage(file=str(path))
+            w, h = icon.width(), icon.height()
+            # riduzione best-effort se l'immagine è più grande del target
+            if w > size[0] and h > size[1]:
+                icon = icon.subsample(max(1, w // size[0]), max(1, h // size[1]))
+            return icon
+
+        self.start_icon = load_icon("start.png", (32, 32))
+        self.stop_icon = load_icon("stop.png", (32, 32))
 
         self.start_btn = ttk.Button(bar, image=self.start_icon, command=self.start_oracolo)
         self.stop_btn = ttk.Button(bar, image=self.stop_icon, command=self.stop_oracolo, state="disabled")
@@ -710,8 +720,8 @@ class OracoloUI(tk.Tk):
 
         input_frame = ttk.Frame(chat_frame)
         input_frame.pack(fill="x", padx=4, pady=(4, 0))
-        self.mic_on_icon = tk.PhotoImage(file=str(self.root_dir / "img" / "mic_on.png"))
-        self.mic_off_icon = tk.PhotoImage(file=str(self.root_dir / "img" / "mic_off.png"))
+        self.mic_on_icon = load_icon("mic_on.png", (24, 24))
+        self.mic_off_icon = load_icon("mic_off.png", (24, 24))
 
         self.mic_canvas = tk.Canvas(input_frame, width=24, height=24, highlightthickness=0)
         self.mic_canvas.pack(side="left")
