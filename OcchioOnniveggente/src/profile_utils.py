@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from typing import Any, Dict, Tuple
 
 
@@ -59,3 +61,25 @@ def make_domain_settings(base_settings: Any, prof_name: str, prof: Dict) -> Any:
         except Exception:
             pass
         return base_settings
+
+
+def save_profile(profile: Dict, path: str | Path = "data/profile.json") -> Path:
+    """Persist ``profile`` to ``path`` as JSON.
+
+    Parameters
+    ----------
+    profile:
+        Mapping with the profile information to store.
+    path:
+        Destination file.  Missing directories are created automatically.
+
+    Returns
+    -------
+    Path
+        The location where the profile has been written.
+    """
+
+    p = Path(path)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps(profile, ensure_ascii=False, indent=2), encoding="utf-8")
+    return p
