@@ -35,17 +35,18 @@ class RecordingConfig(BaseModel):
     mode: Literal["vad", "timed"] = "vad"
     timed_seconds: int = 10
     fallback_to_timed: bool = False
-    min_speech_level: float = 0.01
+    min_speech_level: float = 0.02
+    hold_off_after_tts_ms: int = 500
     use_webrtcvad: bool = False
 
 
 class VadConfig(BaseModel):
     frame_ms: int = 30
-    start_ms: int = 150
+    start_ms: int = 200
     end_ms: int = 800
     max_ms: int = 15_000
     preroll_ms: int = 300
-    noise_window_ms: int = 800
+    noise_window_ms: int = 1_000
     start_mult: float = 1.8
     end_mult: float = 1.3
     base_start: float = 0.006
