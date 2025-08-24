@@ -28,6 +28,7 @@ from typing import Any
 
 from src.retrieval import retrieve
 from src.chat import ChatState
+from src.conversation import ConversationManager
 from src.oracle import oracle_answer, synthesize
 from src.domain import validate_question
 
@@ -446,7 +447,8 @@ class OracoloUI(tk.Tk):
         self.style_var = tk.BooleanVar(value=True)
         self.use_mic_var = tk.BooleanVar(value=True)
         chat_conf = self.settings.get("chat", {})
-        self.chat_state = ChatState()
+        self.conv = ConversationManager()
+        self.chat_state = self.conv.chat
         self.chat_state.max_turns = int(chat_conf.get("max_turns", 10)) if chat_conf.get("enabled", True) else 0
         pj = chat_conf.get("persist_jsonl")
         if pj:
@@ -828,7 +830,7 @@ class OracoloUI(tk.Tk):
     def _send_chat(self, text: str) -> None:
         self.last_activity = time.time()
         self._append_chat("user", text)
-        self.chat_state.push_user(text)
+        self.conv.push_user(text)
         self.last_sources = []
         try:
             openai_conf = self.settings.get("openai", {})
@@ -872,7 +874,7 @@ class OracoloUI(tk.Tk):
                         ans = f"Richiesta fuori dominio (score {score:.2f} < {thr:.2f})."
                     else:
                         ans = "Richiesta fuori dominio."
-                self.chat_state.push_assistant(ans)
+                self.conv.push_assistant(ans)
                 self._append_chat("assistant", ans)
                 self._append_citations([])
                 self.last_activity = time.time()
@@ -903,7 +905,7 @@ class OracoloUI(tk.Tk):
             self.last_sources = used_ctx
         except Exception as e:
             ans = f"Errore: {e}"
-        self.chat_state.push_assistant(ans)
+        self.conv.push_assistant(ans)
         self._append_chat("assistant", ans)
         self._append_citations(self.last_sources)
         self.last_activity = time.time()
@@ -1934,11 +1936,11 @@ class OracoloUI(tk.Tk):
             )
             if text.startswith("…"):
                 msg = text.lstrip("…").strip()
-                self.chat_state.push_user(msg)
+                self.conv.push_user(msg)
                 self.after(0, lambda m=msg: self._append_chat("user", m))
             elif text.startswith("🔮"):
                 msg = text.lstrip("🔮").strip()
-                self.chat_state.push_assistant(msg)
+                self.conv.push_assistant(msg)
                 self.after(0, lambda m=msg: self._append_chat("assistant", m))
         rest = f.read()
         if rest:
@@ -2011,12 +2013,12 @@ class OracoloUI(tk.Tk):
             self._append_log(f"… {text}\n", "STT")
             if final:
                 self._append_chat("user", text)
-                self.chat_state.push_user(text)
+                self.conv.push_user(text)
 
         def _handle_answer(text: str) -> None:
             self._append_log(f"🔮 {text}\n", "LLM")
             self._append_chat("assistant", text)
-            self.chat_state.push_assistant(text)
+            self.conv.push_assistant(text)
 
         self.ws_client = RealtimeWSClient(
             url,

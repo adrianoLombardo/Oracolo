@@ -34,7 +34,7 @@ from src.oracle import (
 from src.domain import validate_question
 from src.hotword import is_wake, matches_hotword_text
 from src.chat import ChatState
-from src.dialogue import DialogueManager, DialogState
+from src.conversation import ConversationManager, DialogState
 from src.logging_utils import setup_logging
 from src.language_session import update_language
 
@@ -322,7 +322,7 @@ def main() -> None:
         session_lang = LANG_PREF
     
     # --------------------------- STATE MACHINE --------------------------- #
-    dlg = DialogueManager(IDLE_TIMEOUT)
+    dlg = ConversationManager(IDLE_TIMEOUT)
     wake_lang = "it"
     pending_q = ""
     pending_lang = ""
