@@ -153,6 +153,8 @@ def validate_question(
     clarify_margin = 0.15
     emb_min_sim = 0.22  # conservato per compatibilità (non usato come soglia dura qui)
     dom_topic = ""
+    dom_profile = ""
+    profiles: dict[str, Any] = {}
     always_accept_wake = True
 
     if dom:
@@ -203,7 +205,7 @@ def validate_question(
                 clarify_margin = float(val)  # type: ignore[arg-type]
             elif var_name == "emb_min_sim":
                 emb_min_sim = float(val)  # type: ignore[arg-type]
-        # topic
+        # topic/profile
         try:
             dom_topic = str(getattr(dom, "topic", "") or "")
         except Exception:
@@ -211,6 +213,20 @@ def validate_question(
                 dom_topic = str(dom.get("topic", "") or "")
             except Exception:
                 dom_topic = ""
+        try:
+            dom_profile = str(getattr(dom, "profile", "") or "")
+        except Exception:
+            try:
+                dom_profile = str(dom.get("profile", "") or "")  # type: ignore[attr-defined]
+            except Exception:
+                dom_profile = ""
+        try:
+            profiles = dict(getattr(dom, "profiles", {}) or {})
+        except Exception:
+            try:
+                profiles = dict(dom.get("profiles", {}) or {})  # type: ignore[attr-defined]
+            except Exception:
+                profiles = {}
         # always_accept_wake
         try:
             always_accept_wake = bool(getattr(dom, "always_accept_wake", True))
@@ -219,6 +235,38 @@ def validate_question(
                 always_accept_wake = bool(dom.get("always_accept_wake", True))  # type: ignore[attr-defined]
             except Exception:
                 always_accept_wake = True
+
+    if not keywords and dom_profile and profiles:
+        prof_obj = profiles.get(dom_profile, {})
+        try:
+            keywords = list(getattr(prof_obj, "keywords", []) or [])
+        except Exception:
+            try:
+                keywords = list(prof_obj.get("keywords", []) or [])  # type: ignore[attr-defined]
+            except Exception:
+                keywords = []
+        # override weights/thresholds if profile provides them
+        try:
+            w = getattr(prof_obj, "weights", None) or prof_obj.get("weights")  # type: ignore[attr-defined]
+            if w:
+                weights = dict(w)
+        except Exception:
+            pass
+        try:
+            at = getattr(prof_obj, "accept_threshold", None) or prof_obj.get("accept_threshold")  # type: ignore[attr-defined]
+            if at is not None:
+                accept_threshold = float(at)
+        except Exception:
+            pass
+        try:
+            cm = getattr(prof_obj, "clarify_margin", None) or prof_obj.get("clarify_margin")  # type: ignore[attr-defined]
+            if cm is not None:
+                clarify_margin = float(cm)
+        except Exception:
+            pass
+
+    if not dom_topic:
+        dom_topic = dom_profile
 
     use_topic = dom_topic or topic
 
@@ -260,26 +308,7 @@ def validate_question(
         ctx = _try_retrieve(question, settings, docstore_path, top_k, use_topic, client, emb_model or embed_model)
         return True, ctx, False, "no keywords", None
 
-    # ---- Boost terms (accettazione immediata se compaiono) ----
-    boost_terms = [
-        "neuro", "neuroscienze", "neuroscience", "cervello", "sinaps",
-        "brain", "cortex", "neurone", "neuroni", "neuroestetica",
-        "arte", "estetica", "percezione",
-        "ia", "intelligenza artificiale", "ai",
-        "cosmo", "universo", "stella", "stelle", "mare",
-    ]
-    has_boost = any(bt in q_norm for bt in boost_terms)
-    if has_boost:
-        ctx = _try_retrieve(
-            question,
-            settings,
-            docstore_path,
-            top_k,
-            use_topic,
-            client,
-            emb_model or embed_model,
-        )
-        return True, ctx, False, "boost", None
+    has_boost = False
 
     # ---- Overlap parole chiave ----
     kw_score = _keyword_overlap_score(question, keywords)
