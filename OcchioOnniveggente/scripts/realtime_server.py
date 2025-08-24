@@ -301,6 +301,9 @@ class RTSession:
         if not self.buf:
             return
         audio_bytes = bytes(self.buf)
+        # Convert the raw PCM buffer to a temporary WAV file so that
+        # OpenAI's transcription API receives a supported format.
+        write_wav(self.in_wav, self.client_sr, audio_bytes)
 
         from openai import OpenAI
 
@@ -309,7 +312,7 @@ class RTSession:
         client = OpenAI(api_key=api_key) if api_key else OpenAI()
 
         text, lang = transcribe(
-            audio_bytes, client, self.SET.openai.stt_model, debug=self.SET.debug
+            self.in_wav, client, self.SET.openai.stt_model, debug=self.SET.debug
         )
         if not text.strip():
             await self.send_partial("…silenzio…")
