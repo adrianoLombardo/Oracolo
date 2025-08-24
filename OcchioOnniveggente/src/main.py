@@ -36,6 +36,7 @@ from src.hotword import is_wake, matches_hotword_text
 from src.chat import ChatState
 from src.dialogue import DialogueManager, DialogState
 from src.logging_utils import setup_logging
+from src.language_session import update_language
 
 
 # --------------------------- console helpers --------------------------- #
@@ -316,7 +317,7 @@ def main() -> None:
         # se non c'è la sezione wake, rimaniamo con i default sopra
         pass
 
-    session_lang = "it"
+    session_lang: str | None = None
     if LANG_PREF in ("it", "en"):
         session_lang = LANG_PREF
     
@@ -445,8 +446,7 @@ def main() -> None:
                     if DEBUG:
                         say("…hotword non riconosciuta, continuo l'attesa.")
                     continue
-                if lang in ("it", "en"):
-                    session_lang = lang
+                session_lang = update_language(session_lang, lang, "")
                 wake_lang = session_lang or lang or "it"
 
                 # prova trascrizione forzando IT/EN per maggiore robustezza
@@ -454,28 +454,27 @@ def main() -> None:
                 text_en = fast_transcribe(INPUT_WAV, client, STT_MODEL, lang_hint="en")
                 is_en = matches_hotword_text(text_en, WAKE_EN)
                 is_it = matches_hotword_text(text_it, WAKE_IT)
-                if is_en:
-                    text = text_en
-                    session_lang = "en"
-                elif is_it:
-                    text = text_it
-                    session_lang = "it"
+                if session_lang in ("it", "en"):
+                    text = text_en if session_lang == "en" else text_it
                 else:
-                    text = text_en or text_it
-                    if text_en:
+                    if is_en:
+                        text = text_en
                         session_lang = "en"
-                    elif text_it:
+                    elif is_it:
+                        text = text_it
                         session_lang = "it"
+                    else:
+                        text = text_en or text_it
+                        if text_en:
+                            session_lang = "en"
+                        elif text_it:
+                            session_lang = "it"
                 say(f"📝 Riconosciuto: {text}")
                 if not (is_it or is_en):
                     if DEBUG:
                         say("…hotword non riconosciuta, continuo l'attesa.")
                     continue
-                wake_lang = (
-                    "en"
-                    if is_en and not is_it
-                    else "it" if is_it and not is_en else (session_lang or "it")
-                )
+                wake_lang = session_lang or ("en" if is_en and not is_it else "it")
 
                 dlg.transition(DialogState.AWAKE)
                 continue
@@ -541,17 +540,8 @@ def main() -> None:
                 say(f"📝 Domanda: {q}")
                 if not q:
                     continue
-                if session_lang not in ("it", "en"):
-                    session_lang = qlang if qlang in ("it", "en") else "it"
+                session_lang = update_language(session_lang, qlang, q)
                 eff_lang = session_lang
-                low_q = q.lower()
-                if qlang != session_lang:
-                    if "inglese" in low_q or "english" in low_q:
-                        session_lang = "en"
-                        eff_lang = "en"
-                    elif "italiano" in low_q or "italian" in low_q:
-                        session_lang = "it"
-                        eff_lang = "it"
                 if PROF.contains_profanity(q):
                     if FILTER_MODE == "block":
                         say("🚫 Linguaggio offensivo/bestemmie non ammessi. Riformula in italiano o inglese.")
