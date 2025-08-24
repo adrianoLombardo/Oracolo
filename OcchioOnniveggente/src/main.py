@@ -32,7 +32,7 @@ from src.oracle import (
     extract_summary,
 )
 from src.domain import validate_question
-from src.hotword import is_wake
+from src.hotword import is_wake, matches_hotword_text
 from src.chat import ChatState
 from src.dialogue import DialogueManager, DialogState
 from src.logging_utils import setup_logging
@@ -452,8 +452,8 @@ def main() -> None:
                 # prova trascrizione forzando IT/EN per maggiore robustezza
                 text_it = fast_transcribe(INPUT_WAV, client, STT_MODEL, lang_hint="it")
                 text_en = fast_transcribe(INPUT_WAV, client, STT_MODEL, lang_hint="en")
-                is_en = _match_hotword(text_en, WAKE_EN)
-                is_it = _match_hotword(text_it, WAKE_IT)
+                is_en = matches_hotword_text(text_en, WAKE_EN)
+                is_it = matches_hotword_text(text_it, WAKE_IT)
                 if is_en:
                     text = text_en
                     session_lang = "en"
