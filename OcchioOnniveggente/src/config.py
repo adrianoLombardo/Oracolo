@@ -93,7 +93,6 @@ class DomainConfig(BaseModel):
     enabled: bool = True
     profile: str = "museo"
     topic: str = ""
-    profile: str = ""
     keywords: List[str] = Field(default_factory=list)
     kw_min_overlap: float = 0.04
     emb_min_sim: float = 0.22
