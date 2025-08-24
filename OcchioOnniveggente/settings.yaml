@@ -113,7 +113,7 @@ wake:
 domain:
   enabled: true
 
-  profile: "museo"        # scelto dalla UI (museo | conferenze | gallerie | didattica)
+  profile: "museo"        # scelto dalla UI (museo | conferenze | gallerie | didattica | them | cryptomadonne | adriano_lombardo)
   accept_threshold: 0.75  # soglia più severa
   profile: "museo"        # profilo scelto dalla UI
   accept_threshold: 0.75  # soglia più severa per accettare la domanda
@@ -184,6 +184,42 @@ domain:
         - valutazione
       docstore_path: "DataBase/didattica/index.json"
       system_hint: "Spiega in modo chiaro, con esempi adatti a studenti."
+      retrieval_top_k: 4
+
+    them:
+
+      label: "Them"
+      keywords:
+        - them
+        - identità
+        - collettivo
+        - futuro
+      docstore_path: "DataBase/them/index.json"
+      system_hint: "Rispondi come curatore del progetto THEM su identità e collettività."
+      retrieval_top_k: 4
+
+    cryptomadonne:
+
+      label: "CryptoMadonne"
+      keywords:
+        - nft
+        - criptoarte
+        - madonne
+        - blockchain
+      docstore_path: "DataBase/cryptomadonne/index.json"
+      system_hint: "Rispondi come esperto di cripto-arte legata alle Madonne."
+      retrieval_top_k: 4
+
+    adriano_lombardo:
+
+      label: "Adriano Lombardo"
+      keywords:
+        - adriano lombardo
+        - installazione
+        - scultura
+        - concettuale
+      docstore_path: "DataBase/adriano_lombardo/index.json"
+      system_hint: "Rispondi come l'artista Adriano Lombardo, con riferimenti a installazioni e sculture concettuali."
       retrieval_top_k: 4
 
 retrieval:

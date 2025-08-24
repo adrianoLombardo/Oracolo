@@ -1507,7 +1507,7 @@ class OracoloUI(tk.Tk):
         ttk.Button(win, text="Sfoglia", command=browse).grid(row=0, column=2, padx=6, pady=6)
 
         tk.Label(win, text="Sezione", fg=self._fg, bg=self._bg).grid(row=1, column=0, padx=6, pady=6, sticky="e")
-        tk.OptionMenu(win, topic_var, topic_var.get(), "gallerie", "museo", "conferenze", "didattica").grid(
+        tk.OptionMenu(win, topic_var, topic_var.get(), "gallerie", "museo", "conferenze", "didattica", "them", "cryptomadonne", "adriano_lombardo").grid(
             row=1, column=1, padx=6, pady=6, sticky="w"
         )
 
