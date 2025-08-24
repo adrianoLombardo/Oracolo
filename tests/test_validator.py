@@ -65,3 +65,27 @@ def test_off_topic_rejected():
     assert not ok
     assert not clarify
     assert ctx == []
+    assert "rag_hits=0" in reason
+
+
+def test_rag_hits_allow_without_keywords(tmp_path):
+    index = tmp_path / "index.json"
+    data = {
+        "documents": [
+            {"id": "1", "text": "Cats are animals", "topic": "animals"},
+        ]
+    }
+    index.write_text(json.dumps(data), encoding="utf-8")
+
+    dom = SimpleNamespace(
+        enabled=True,
+        keywords=["football"],
+        accept_threshold=0.1,
+        weights={"kw": 0.0, "emb": 0.0, "rag": 1.0},
+    )
+    settings = SimpleNamespace(domain=dom)
+    ok, ctx, clarify, reason, sugg = validate_question(
+        "Cats", settings=settings, docstore_path=index, top_k=1
+    )
+    assert ok
+    assert ctx

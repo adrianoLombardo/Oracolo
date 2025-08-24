@@ -410,13 +410,14 @@ def validate_question(
     reason = f"kw={kw_score:.2f} emb={emb_sim:.2f} rag={rag_score:.2f} score={score:.2f} thr={thr:.2f}"
 
     topic_suggestion = ""
-    # Se non c'è alcuna parola-chiave e non ci sono boost terms,
-    # la domanda è considerata fuori dominio anche se il punteggio totale supera la soglia.
-    if kw_score == 0 and not has_boost:
+    # Se non c'è alcuna parola-chiave e non ci sono boost terms
+    # e il retrieval non ha restituito alcun risultato, la domanda
+    # è considerata fuori dominio anche se il punteggio totale supera la soglia.
+    if kw_score == 0 and rag_hits == 0 and not has_boost:
         ok = False
         clarify = score >= (thr - clarify_margin)
         ctx = []
-        reason += " kw0"
+        reason += f" kw0 rag_hits={rag_hits}"
     if clarify and docstore_path:
         try:
             alt_ctx = _try_retrieve(
