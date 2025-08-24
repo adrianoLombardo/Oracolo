@@ -161,7 +161,6 @@ def main() -> None:
     say("Occhio Onniveggente · Oracolo ✨", quiet=args.quiet)
 
     load_dotenv()
-    client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
     cfg_path = Path("settings.yaml")
     if cfg_path.exists():
@@ -174,6 +173,9 @@ def main() -> None:
     else:
         print("⚠️ settings.yaml non trovato, uso impostazioni di default.")
         SET = Settings()
+
+    api_key = os.environ.get("OPENAI_API_KEY") or getattr(SET.openai, "api_key", "")
+    client = OpenAI(api_key=api_key) if api_key else OpenAI()
 
     DEBUG = bool(SET.debug) and (not args.quiet)
 
