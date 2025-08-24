@@ -26,6 +26,12 @@ try:
 except Exception:
     docx = None
 
+# language detection opzionale
+try:
+    from langdetect import detect
+except Exception:
+    detect = None
+
 # settings opzionali
 try:
     from src.config import Settings  # se disponibile
@@ -182,6 +188,40 @@ def _read_file_text(file: Path) -> str:
     return ""
 
 
+def _extract_title(file: Path) -> str:
+    ext = file.suffix.lower()
+    if ext == ".pdf" and PdfReader is not None:
+        try:
+            with warnings.catch_warnings():
+                warnings.filterwarnings("ignore", category=UserWarning)
+                reader = PdfReader(str(file), strict=False)
+            meta = getattr(reader, "metadata", None)
+            if meta:
+                title = getattr(meta, "title", "") or meta.get("/Title", "")
+                if isinstance(title, str) and title.strip():
+                    return title.strip()
+        except Exception:
+            pass
+    if ext == ".docx" and docx is not None:
+        try:
+            d = docx.Document(str(file))
+            title = getattr(d.core_properties, "title", "")
+            if title:
+                return title
+        except Exception:
+            pass
+    return file.stem
+
+
+def _detect_language(text: str) -> str:
+    if detect is None:
+        return ""
+    try:
+        return detect(text)
+    except Exception:
+        return ""
+
+
 # ----------------------------- DB loader ------------------------------------- #
 def _load_db(path: str) -> object:
     # prova a caricare un DocumentDB custom
@@ -202,7 +242,9 @@ def _add(paths: Iterable[str], docstore_path: str, topic: str | None = None) -> 
     documents = []
     for file in files:
         text = _read_file_text(file)
-        doc = {"id": str(file), "text": text}
+        title = _extract_title(file)
+        lang = _detect_language(text)
+        doc = {"id": str(file), "text": text, "title": title, "lang": lang}
         if topic:
             doc["topic"] = topic
         documents.append(doc)
