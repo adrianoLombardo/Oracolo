@@ -6,6 +6,7 @@ import json
 import logging
 import shutil
 import sys
+import warnings
 from pathlib import Path
 from typing import Iterable, List, Optional
 
@@ -136,14 +137,19 @@ def _extract_pdf_text(pdf_path: Path) -> str:
         logging.warning("pypdf non installato: salto estrazione testo per %s", pdf_path.name)
         return ""
     try:
-        reader = PdfReader(str(pdf_path))
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=UserWarning)
+            reader = PdfReader(str(pdf_path), strict=False)
         parts = []
         for page in reader.pages:
             try:
                 parts.append(page.extract_text() or "")
             except Exception:
                 continue
-        return "\n".join(parts).strip()
+        text = "\n".join(parts).strip()
+        if not text:
+            logging.info("Nessun testo estratto da %s", pdf_path.name)
+        return text
     except Exception as e:
         logging.error("PDF read error for %s: %s", pdf_path.name, e)
         return ""
