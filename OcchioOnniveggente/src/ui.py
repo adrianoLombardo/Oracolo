@@ -844,13 +844,7 @@ class OracoloUI(tk.Tk):
                 top_k=top_k,
                 embed_model=openai_conf.get("embed_model", "text-embedding-3-small"),
                 topic=self.chat_state.topic_text,
-
-                embed_model=openai_conf.get("embed_model", "text-embedding-3-small"),
-                topic=(self.settings.get("domain", {}) or {}).get("profile"),
-                topic=(self.settings.get("domain", {}).get("profile")),
-                embed_model=openai_conf.get("embed_model", "text-embedding-3-small"),
                 history=self.chat_state.history,
-main
             )
             if not ok:
                 if needs_clar:
