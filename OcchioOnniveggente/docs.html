@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Documenti indicizzati</title>
+  <style>
+    table { border-collapse: collapse; width: 100%; }
+    th, td { border: 1px solid #ccc; padding: 4px 8px; }
+    th { background: #eee; }
+  </style>
+</head>
+<body>
+  <h1>Documenti indicizzati</h1>
+  <table id="docs-table">
+    <thead>
+      <tr>
+        <th>Titolo</th>
+        <th>Dominio</th>
+        <th>Regola</th>
+        <th>Stato</th>
+        <th>Confidenza</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+  <script>
+    async function loadDocs() {
+      const params = new URLSearchParams(window.location.search);
+      const resp = await fetch('/api/docs?' + params.toString());
+      const data = await resp.json();
+      const tbody = document.querySelector('#docs-table tbody');
+      tbody.innerHTML = '';
+      data.forEach(doc => {
+        const tr = document.createElement('tr');
+        ['title','domain','rule','status','confidence'].forEach(key => {
+          const td = document.createElement('td');
+          td.textContent = doc[key] ?? '';
+          tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+      });
+    }
+    loadDocs();
+  </script>
+</body>
+</html>
