@@ -442,8 +442,6 @@ def main() -> None:
                     wake, lang = is_wake(text_en, WAKE_IT, WAKE_EN)
                     if wake:
                         text = text_en
-                say(f"📝 Riconosciuto: {text}")
-                logging.info("Hotword riconosciuta: %s (lang=%s)", text, lang)
                 if not wake:
                     if DEBUG:
                         say("…hotword non riconosciuta, continuo l'attesa.")
