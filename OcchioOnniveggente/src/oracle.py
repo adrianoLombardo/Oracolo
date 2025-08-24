@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 import io
+import re
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
@@ -261,4 +262,27 @@ def append_log(
         )
     with log_path.open("a", encoding="utf-8") as f:
         f.write(line)
+
+
+def extract_summary(answer: str) -> str:
+    """Extract the summary part from a structured oracle answer.
+
+    The oracle answer is expected to follow the structure:
+    "1) Sintesi: ... 2) ... 3) ...". This function returns only the
+    text inside the first section, without the leading "1)" or
+    "Sintesi:" labels. If the expected pattern is not found, the
+    original text is returned unchanged.
+    """
+
+    match = re.search(
+        r"1\)\s*(?:Sintesi:)?\s*(.*?)(?:\n\s*2\)|$)", answer, flags=re.S | re.I
+    )
+    if match:
+        return match.group(1).strip()
+
+    match = re.search(r"Sintesi:\s*(.*)", answer, flags=re.S | re.I)
+    if match:
+        return match.group(1).strip()
+
+    return answer.strip()
 
