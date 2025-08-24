@@ -1058,7 +1058,7 @@ class OracoloUI(tk.Tk):
         if now - self.last_activity > timeout:
             self.status_var.set("😴 Dormiente — dì Ciao Oracolo per riattivarmi")
         elif self.status_var.get().startswith("😴"):
-        self.status_var.set("🟡 In attesa")
+            self.status_var.set("🟡 In attesa")
         self.after(1000, self._poll_idle)
 
     # --------------------------- Log helpers ------------------------------ #
