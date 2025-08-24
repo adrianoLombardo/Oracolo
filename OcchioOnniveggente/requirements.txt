@@ -1,4 +1,4 @@
-# Qt QML modules required: Qt5Compat.GraphicalEffects or QtQuick.Effects
+# Qt QML modules required: QtQuick.Effects (MultiEffect)
 openai>=1.40.0
 python-dotenv>=1.0.1
 numpy>=1.26.0
@@ -16,3 +16,5 @@ pydantic>=2
 markdown2>=2.4.12
 fastapi>=0.110.0
 PySide6>=6.6
+PySide6-Addons>=6.6
+shiboken6>=6.6

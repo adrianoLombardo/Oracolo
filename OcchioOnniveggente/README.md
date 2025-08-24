@@ -96,30 +96,27 @@ configurare la luce via Art-Net/sACN o WLED.
 
 
 
-### Moduli Qt richiesti
+### Modulo Qt richiesto
 
-L'interfaccia QML utilizza i moduli `Qt5Compat.GraphicalEffects` o `QtQuick.Effects`.
+L'interfaccia QML utilizza `QtQuick.Effects` e l'elemento `MultiEffect` per
+gestire ombre e altri effetti.
 
 #### Installazione con pip
 
-I moduli sono inclusi in `PySide6` e si installano con:
+Il modulo è incluso in `PySide6` e si installa con:
 
 ```bash
-pip install PySide6
+pip install PySide6 PySide6-Addons shiboken6
 ```
 
 #### Pacchetti di sistema
 
-Su Debian/Ubuntu è possibile installarli con:
+Su Debian/Ubuntu è possibile installarlo con:
 
 ```bash
-sudo apt install qml6-module-qt5compat-graphicaleffects qml6-module-qtquick-effects
+sudo apt install qml6-module-qtquick-effects
 ```
 
 Per altre distribuzioni consulta la documentazione dei pacchetti Qt.
-
-L'interfaccia QML richiede il modulo **Qt5Compat.GraphicalEffects** per
-rendere l'effetto `DropShadow`: assicurati che sia presente nella tua
-installazione di Qt (è incluso in PySide6).
 
 
