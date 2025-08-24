@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+
+<meta charset="utf-8" />
+<title>Docs Options</title>
+</head>
+<body>
+<h1>Documentation Options</h1>
+<label>
+  <input type="checkbox" id="use_verified" />
+  Use verified documents
+</label>
+<br />
+<label>
+  <input type="checkbox" id="allow_citations" />
+  Allow citations
+</label>
+<br />
+<label>
+  <input type="checkbox" id="block_pii" />
+  Block PII
+</label>
+<br />
+<label for="min_confidence">Minimum confidence:</label>
+<input type="range" id="min_confidence" min="0" max="1" step="0.01" value="0.0" />
+<span id="min_conf_val">0.00</span>
+<br />
+<button id="save">Save</button>
+
+<script>
+const minConf = document.getElementById('min_confidence');
+const minVal = document.getElementById('min_conf_val');
+minConf.addEventListener('input', () => {
+  minVal.textContent = Number(minConf.value).toFixed(2);
+});
+
+function sendOptions() {
+  const payload = {
+    use_verified: document.getElementById('use_verified').checked,
+    allow_citations: document.getElementById('allow_citations').checked,
+    block_pii: document.getElementById('block_pii').checked,
+    min_confidence: parseFloat(document.getElementById('min_confidence').value)
+  };
+  fetch('/api/docs/options', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  }).catch(err => console.error('Options update failed', err));
+}
+
+document.getElementById('save').addEventListener('click', sendOptions);
+</script>
+
+  <meta charset="utf-8" />
+  <title>Documenti indicizzati</title>
+  <style>
+    table { border-collapse: collapse; width: 100%; }
+    th, td { border: 1px solid #ccc; padding: 4px 8px; }
+    th { background: #eee; }
+  </style>
+</head>
+<body>
+  <h1>Documenti indicizzati</h1>
+  <table id="docs-table">
+    <thead>
+      <tr>
+        <th>Titolo</th>
+        <th>Dominio</th>
+        <th>Regola</th>
+        <th>Stato</th>
+        <th>Confidenza</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+  <script>
+    async function loadDocs() {
+      const params = new URLSearchParams(window.location.search);
+      const resp = await fetch('/api/docs?' + params.toString());
+      const data = await resp.json();
+      const tbody = document.querySelector('#docs-table tbody');
+      tbody.innerHTML = '';
+      data.forEach(doc => {
+        const tr = document.createElement('tr');
+        ['title','domain','rule','status','confidence'].forEach(key => {
+          const td = document.createElement('td');
+          td.textContent = doc[key] ?? '';
+          tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+      });
+    }
+    loadDocs();
+  </script>
+
+</body>
+</html>
