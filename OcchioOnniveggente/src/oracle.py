@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from datetime import datetime
-import io
 import json
 import re
 import uuid
@@ -297,27 +296,31 @@ def append_log(
         with log_path.open("a", newline="", encoding="utf-8") as f:
             writer = csv.writer(f, quoting=csv.QUOTE_ALL)
             if is_new:
-                writer.writerow([
-                    "timestamp",
-                    "session_id",
-                    "lang",
-                    "topic",
-                    "question",
-                    "answer",
-                    "sources",
-                ])
+                writer.writerow(
+                    [
+                        "timestamp",
+                        "session_id",
+                        "lang",
+                        "topic",
+                        "question",
+                        "answer",
+                        "sources",
+                    ]
+                )
             src_str = ";".join(
-                f"{s.get('id','')}:{s.get('score',0):.2f}" for s in (sources or [])
+                f"{s.get('id','')}:{s.get('score',0):.2f}" for s in record["sources"]
             )
-            writer.writerow([
-                ts,
-                session_id,
-                lang,
-                topic or "",
-                q,
-                a,
-                src_str,
-            ])
+            writer.writerow(
+                [
+                    record["timestamp"],
+                    record["session_id"],
+                    record["lang"],
+                    record["topic"],
+                    record["question"],
+                    record["answer"],
+                    src_str,
+                ]
+            )
 
     return session_id
 
