@@ -480,7 +480,10 @@ class OracoloUI(tk.Tk):
 
         # sandbox and log state
         self.sandbox_var = tk.BooleanVar(value=False)
-        self.log_filters = {c: tk.BooleanVar(value=True) for c in ["STT", "LLM", "TTS", "WS", "DOMAIN"]}
+        self.log_filters = {
+            c: tk.BooleanVar(value=True)
+            for c in ["STT", "LLM", "TTS", "WS", "DOMAIN", "DOCS"]
+        }
         self.log_entries: list[tuple[str, str]] = []
 
         self.profile_cb: ttk.Combobox | None = None
@@ -1299,14 +1302,25 @@ class OracoloUI(tk.Tk):
         if not script:
             messagebox.showwarning("Documento", "Script di ingest non trovato (scripts/ingest_docs.py).")
             return
+        self._append_log("Aggiunta documenti:\n" + "\n".join(paths) + "\n", "DOCS")
         try:
-            subprocess.run(
+            proc = subprocess.run(
                 [sys.executable, "-m", "scripts.ingest_docs", "--add", *paths],
                 check=True,
                 cwd=self.root_dir,
+                capture_output=True,
+                text=True,
             )
+            self._append_log(proc.stdout, "DOCS")
+            if proc.stderr:
+                self._append_log(proc.stderr, "DOCS")
             messagebox.showinfo("Successo", "Documenti aggiunti.")
         except subprocess.CalledProcessError as exc:
+            if exc.stdout:
+                self._append_log(exc.stdout, "DOCS")
+            if exc.stderr:
+                self._append_log(exc.stderr, "DOCS")
+            self._append_log(str(exc) + "\n", "DOCS")
             messagebox.showerror("Errore", f"Ingest fallito: {exc}")
 
     def _remove_documents(self) -> None:
@@ -1321,14 +1335,25 @@ class OracoloUI(tk.Tk):
         if not script:
             messagebox.showwarning("Documento", "Script di ingest non trovato (scripts/ingest_docs.py).")
             return
+        self._append_log("Rimozione documenti:\n" + "\n".join(paths) + "\n", "DOCS")
         try:
-            subprocess.run(
+            proc = subprocess.run(
                 [sys.executable, "-m", "scripts.ingest_docs", "--remove", *paths],
                 check=True,
                 cwd=self.root_dir,
+                capture_output=True,
+                text=True,
             )
+            self._append_log(proc.stdout, "DOCS")
+            if proc.stderr:
+                self._append_log(proc.stderr, "DOCS")
             messagebox.showinfo("Successo", "Documenti rimossi.")
         except subprocess.CalledProcessError as exc:
+            if exc.stdout:
+                self._append_log(exc.stdout, "DOCS")
+            if exc.stderr:
+                self._append_log(exc.stderr, "DOCS")
+            self._append_log(str(exc) + "\n", "DOCS")
             messagebox.showerror("Errore", f"Rimozione fallita: {exc}")
 
     def _reindex_documents(self) -> None:
@@ -1338,15 +1363,29 @@ class OracoloUI(tk.Tk):
             return
         tried = (["--reindex"], ["--rebuild"], ["--refresh"])
         for args in tried:
+            self._append_log(
+                f"Aggiorna indice: {' '.join(args)} in {self.root_dir}\n",
+                "DOCS",
+            )
             try:
-                subprocess.run(
+                proc = subprocess.run(
                     [sys.executable, "-m", "scripts.ingest_docs", *args],
                     check=True,
                     cwd=self.root_dir,
+                    capture_output=True,
+                    text=True,
                 )
+                self._append_log(proc.stdout, "DOCS")
+                if proc.stderr:
+                    self._append_log(proc.stderr, "DOCS")
                 messagebox.showinfo("Indice", f"Indice aggiornato ({' '.join(args)}).")
                 return
-            except subprocess.CalledProcessError:
+            except subprocess.CalledProcessError as exc:
+                if exc.stdout:
+                    self._append_log(exc.stdout, "DOCS")
+                if exc.stderr:
+                    self._append_log(exc.stderr, "DOCS")
+                self._append_log(str(exc) + "\n", "DOCS")
                 continue
         messagebox.showerror("Indice", "Impossibile aggiornare l'indice (nessuna delle opzioni supportata).")
 
