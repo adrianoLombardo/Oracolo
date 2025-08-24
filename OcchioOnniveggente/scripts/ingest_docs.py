@@ -101,6 +101,10 @@ class SimpleDocumentDB:
         self._data["documents"] = new_docs
         self._save()
 
+    def clear(self) -> None:
+        self._data["documents"] = []
+        self._save()
+
 
 # ----------------------------- Utilità I/O ----------------------------------- #
 ALLOWED_EXTS = {".pdf", ".docx", ".txt", ".md"}
@@ -195,6 +199,16 @@ def _load_db(path: str) -> object:
         return SimpleDocumentDB(path)
 
 
+def _backup_index(index_path: str) -> None:
+    src = Path(index_path)
+    if not src.exists():
+        logging.warning("Indice %s non trovato: backup saltato", src)
+        return
+    dst = src.with_name(src.name + ".bak")
+    shutil.copy2(src, dst)
+    logging.info("Backup creato: %s", dst)
+
+
 # ----------------------------- Operazioni ------------------------------------ #
 def _add(paths: Iterable[str], docstore_path: str, topic: str | None = None) -> None:
     db = _load_db(docstore_path)
@@ -234,6 +248,15 @@ def _reindex(docstore_path: str) -> None:
         logging.warning("DocumentDB non supporta reindex().")
 
 
+def _clear(docstore_path: str) -> None:
+    db = _load_db(docstore_path)
+    if hasattr(db, "clear"):
+        db.clear()
+        logging.info("Indice svuotato.")
+    else:
+        logging.warning("DocumentDB non supporta clear().")
+
+
 # ----------------------------- Entry point ------------------------------------ #
 def _default_docstore_path() -> str:
     # Se hai Settings, prova a usarlo; altrimenti default sensato
@@ -257,18 +280,32 @@ def main() -> None:
         help="Path al document store (default: settings.yaml docstore_path o data/index.json)",
     )
     parser.add_argument("--topic", help="Etichetta topic da associare ai documenti aggiunti")
+    parser.add_argument(
+        "--no-backup",
+        action="store_true",
+        help="Non creare index.bak prima di remove/clear/reindex",
+    )
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--add", nargs="+", help="File o cartelle da indicizzare (PDF/DOCX/TXT/MD)")
     group.add_argument("--remove", nargs="+", help="File o cartelle da rimuovere dall'indice")
     group.add_argument("--reindex", action="store_true", help="Rigenera l'indice rileggendo i file già noti")
+    group.add_argument("--clear", action="store_true", help="Svuota completamente l'indice")
     args = parser.parse_args()
 
     if args.add:
         _add(args.add, args.path, args.topic)
     elif args.remove:
+        if not args.no_backup:
+            _backup_index(args.path)
         _remove(args.remove, args.path)
     elif args.reindex:
+        if not args.no_backup:
+            _backup_index(args.path)
         _reindex(args.path)
+    elif args.clear:
+        if not args.no_backup:
+            _backup_index(args.path)
+        _clear(args.path)
 
 
 if __name__ == "__main__":

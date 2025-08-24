@@ -161,9 +161,21 @@ python scripts/ingest_docs.py --remove path/to/file_or_dir
 
 # Rigenera l'indice rileggendo i file già noti
 python scripts/ingest_docs.py --reindex
+
+# Svuota completamente l'indice
+python scripts/ingest_docs.py --clear
 ```
 
 Il percorso dell'indice è configurabile con `docstore_path` in `settings.yaml`.
+Prima di `--remove`, `--clear` o `--reindex` lo script crea un backup
+`index.json.bak`. Per ripristinare l'indice basta copiare il file di backup
+al nome originale:
+
+```bash
+cp index.json.bak index.json
+```
+
+È possibile saltare la creazione del backup aggiungendo il flag `--no-backup`.
 Il recupero ora combina **BM25 + embedding** e, se configurato, applica un
 mini **cross-encoder** per il reranking. Prima della ricerca la query può
 essere riscritta automaticamente in 1–2 varianti (IT/EN) per migliorarne la
