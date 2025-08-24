@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 import io
+import json
 import re
 import uuid
 from pathlib import Path
@@ -252,6 +253,7 @@ def append_log(
     a: str,
     log_path: Path,
     *,
+    session_id: str,
     lang: str = "",
     topic: str | None = None,
     sources: list[dict[str, str]] | None = None,
@@ -261,13 +263,40 @@ def append_log(
 
     If ``session_id`` is not provided, a new one is generated and returned.
     """
+
+) -> None:
+
+    """Append a JSON line with optional metadata.
+
+    Parameters are logged along with a computed ``summary`` extracted from
+    ``a`` using :func:`extract_summary`.
+    """
+
+
     log_path.parent.mkdir(parents=True, exist_ok=True)
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     if session_id is None:
         session_id = uuid.uuid4().hex
 
-    def clean(s: str) -> str:
-        return s.replace('"', "'")
+    entry = {
+        "timestamp": ts,
+
+    """Append one JSON object per line with optional metadata."""
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    record = {
+        "timestamp": ts,
+        "session_id": session_id,
+
+        "lang": lang,
+        "topic": topic or "",
+        "question": q,
+        "answer": a,
+        "summary": extract_summary(a),
+        "sources": sources or [],
+    }
+
 
     src_str = ";".join(
         f"{s.get('id','')}:{s.get('score',0):.2f}" for s in (sources or [])
@@ -284,6 +313,10 @@ def append_log(
     with log_path.open("a", encoding="utf-8") as f:
         f.write(line)
     return session_id
+    with log_path.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+        f.write(json.dumps(record, ensure_ascii=False) + "\n")
+
 
 
 def extract_summary(answer: str) -> str:
