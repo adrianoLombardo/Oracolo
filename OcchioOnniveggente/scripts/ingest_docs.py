@@ -71,35 +71,50 @@ class SimpleDocumentDB:
         )
 
     def add_documents(self, documents: List[dict]) -> None:
-        # sostituisce per id
+        """Aggiunge o sostituisce documenti conservando anche l'mtime."""
+
         existing = {d["id"]: i for i, d in enumerate(self._data["documents"]) if "id" in d}
         for doc in documents:
             doc_id = doc.get("id")
             if not doc_id:
                 continue
+            if "mtime" not in doc:
+                p = Path(doc_id)
+                if p.exists():
+                    doc["mtime"] = p.stat().st_mtime
             if doc_id in existing:
                 self._data["documents"][existing[doc_id]] = doc
             else:
                 self._data["documents"].append(doc)
         self._save()
 
+    def get_documents(self) -> List[dict]:
+        """Restituisce i documenti memorizzati."""
+
+        return list(self._data["documents"])
+
     def delete_documents(self, ids: List[str]) -> None:
         self._data["documents"] = [d for d in self._data["documents"] if d.get("id") not in ids]
         self._save()
 
-    # Comodo per il bottone "Aggiorna indice": rilegge i file dai path id
+    # Comodo per il bottone "Aggiorna indice": rilegge i file solo se cambiati
     def reindex(self) -> None:
-        new_docs = []
-        for d in self._data["documents"]:
+        updated: List[dict] = []
+        for d in self.get_documents():
             fid = d.get("id")
             if not fid:
                 continue
             p = Path(fid)
             if p.exists() and p.is_file():
-                txt = _read_file_text(p)
-                new_docs.append({"id": str(p), "text": txt, "topic": d.get("topic")})
-        self._data["documents"] = new_docs
-        self._save()
+                current = p.stat().st_mtime
+                if d.get("mtime") != current:
+                    txt = _read_file_text(p)
+                    nd = {"id": str(p), "text": txt, "mtime": current}
+                    if "topic" in d:
+                        nd["topic"] = d["topic"]
+                    updated.append(nd)
+        if updated:
+            self.add_documents(updated)
 
 
 # ----------------------------- Utilità I/O ----------------------------------- #
@@ -202,7 +217,7 @@ def _add(paths: Iterable[str], docstore_path: str, topic: str | None = None) -> 
     documents = []
     for file in files:
         text = _read_file_text(file)
-        doc = {"id": str(file), "text": text}
+        doc = {"id": str(file), "text": text, "mtime": file.stat().st_mtime}
         if topic:
             doc["topic"] = topic
         documents.append(doc)
@@ -227,11 +242,32 @@ def _remove(paths: Iterable[str], docstore_path: str) -> None:
 
 def _reindex(docstore_path: str) -> None:
     db = _load_db(docstore_path)
-    if hasattr(db, "reindex"):
-        db.reindex()
-        logging.info("Reindex completed.")
+    if hasattr(db, "get_documents"):
+        docs = db.get_documents()
+    elif hasattr(db, "_data") and isinstance(db._data, dict):
+        docs = db._data.get("documents", [])
     else:
         logging.warning("DocumentDB non supporta reindex().")
+        return
+
+    updated: List[dict] = []
+    for d in docs:
+        fid = d.get("id")
+        if not fid:
+            continue
+        p = Path(fid)
+        if p.exists() and p.is_file():
+            current = p.stat().st_mtime
+            if d.get("mtime") != current:
+                txt = _read_file_text(p)
+                nd = {"id": str(p), "text": txt, "mtime": current}
+                if "topic" in d:
+                    nd["topic"] = d["topic"]
+                updated.append(nd)
+
+    if updated:
+        db.add_documents(updated)
+    logging.info("Reindex completed (%d documenti aggiornati).", len(updated))
 
 
 # ----------------------------- Entry point ------------------------------------ #
