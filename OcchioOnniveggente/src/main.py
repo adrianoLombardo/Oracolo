@@ -11,9 +11,11 @@ import threading
 import uuid
 from pathlib import Path
 from typing import Any, Iterable
+from collections import defaultdict
 
 import numpy as np
 import sounddevice as sd
+import yaml
 from dotenv import load_dotenv
 from openai import OpenAI
 from pydantic import ValidationError
@@ -157,6 +159,43 @@ def oracle_greeting(lang: str) -> str:
     return "Ciao, sono l'Oracolo. Fai pure la tua domanda?"
 
 
+def get_active_profile(SETTINGS):
+    if isinstance(SETTINGS, dict):
+        prof_name = (SETTINGS.get("profile") or {}).get("current", "museo")
+        profiles = SETTINGS.get("profiles") or {}
+        prof = profiles.get(prof_name, {})
+    else:
+        prof_name = getattr(getattr(SETTINGS, "profile", {}), "current", "museo")
+        profiles = getattr(SETTINGS, "profiles", {}) or {}
+        prof = profiles.get(prof_name, {})
+    return prof_name, prof
+
+
+def make_domain_settings(base_settings, prof):
+    if isinstance(base_settings, dict):
+        new_s = dict(base_settings)
+        new_s["domain"] = {
+            "enabled": True,
+            "keywords": prof.get("keywords", []),
+            "weights": prof.get("weights", {}),
+            "accept_threshold": prof.get("accept_threshold"),
+            "clarify_margin": prof.get("clarify_margin"),
+        }
+        return new_s
+    else:
+        try:
+            base_settings.domain.enabled = True
+            base_settings.domain.keywords = prof.get("keywords", [])
+            base_settings.domain.weights = prof.get("weights", {})
+            if prof.get("accept_threshold") is not None:
+                base_settings.domain.accept_threshold = prof.get("accept_threshold")
+            if prof.get("clarify_margin") is not None:
+                base_settings.domain.clarify_margin = prof.get("clarify_margin")
+        except Exception:
+            pass
+        return base_settings
+
+
 # --------------------------- main ------------------------------------- #
 def main() -> None:
     _ensure_utf8_stdout()
@@ -181,15 +220,19 @@ def main() -> None:
     load_dotenv()
 
     cfg_path = Path("settings.yaml")
+    raw_settings = {}
     if cfg_path.exists():
         try:
-            SET = Settings.model_validate_yaml(cfg_path)
-        except ValidationError as e:
+            raw_settings = yaml.safe_load(cfg_path.read_text(encoding="utf-8")) or {}
+            SET = Settings.model_validate(raw_settings)
+        except (ValidationError, yaml.YAMLError) as e:
             print("⚠️ Configurazione non valida:", e)
             print("Uso impostazioni di default.")
+            raw_settings = {}
             SET = Settings()
     else:
         print("⚠️ settings.yaml non trovato, uso impostazioni di default.")
+        raw_settings = {}
         SET = Settings()
 
     api_key = os.environ.get("OPENAI_API_KEY") or getattr(SET.openai, "api_key", "")
@@ -226,18 +269,23 @@ def main() -> None:
 
     # Chat state
     CHAT_ENABLED = bool(getattr(getattr(SET, "chat", None), "enabled", False))
-    chat = ChatState(
-        max_turns=int(getattr(getattr(SET, "chat", None), "max_turns", 10)),
-        persist_jsonl=Path(
-            getattr(
-                getattr(SET, "chat", None),
-                "persist_jsonl",
-                "data/logs/chat_sessions.jsonl",
+
+    def _new_chat():
+        return ChatState(
+            max_turns=int(getattr(getattr(SET, "chat", None), "max_turns", 10)),
+            persist_jsonl=Path(
+                getattr(
+                    getattr(SET, "chat", None),
+                    "persist_jsonl",
+                    "data/logs/chat_sessions.jsonl",
+                )
             )
+            if CHAT_ENABLED
+            else None,
         )
-        if CHAT_ENABLED
-        else None,
-    )
+
+    chat_histories: defaultdict[str, ChatState] = defaultdict(_new_chat)
+    chat: ChatState | None = None
     CHAT_RESET_ON_WAKE = bool(
         getattr(getattr(SET, "chat", None), "reset_on_hotword", True)
     )
@@ -344,6 +392,15 @@ def main() -> None:
 
     try:
         while True:
+            try:
+                CURRENT_CFG = yaml.safe_load(cfg_path.read_text(encoding="utf-8")) or {}
+            except Exception:
+                CURRENT_CFG = {}
+            prof_name, prof = get_active_profile(CURRENT_CFG)
+            if CHAT_ENABLED:
+                chat = chat_histories[prof_name]
+            else:
+                chat = None
             if not args.autostart:
                 try:
                     cmd = input("\nPremi INVIO per ascoltare (q per uscire)… ")
@@ -430,7 +487,7 @@ def main() -> None:
                 )
                 evt.set()
                 mon.join()
-                if CHAT_ENABLED and CHAT_RESET_ON_WAKE:
+                if CHAT_ENABLED and CHAT_RESET_ON_WAKE and chat is not None:
                     chat.reset()
                 dlg.refresh_deadline()
                 session_lang = wake_lang
@@ -485,7 +542,7 @@ def main() -> None:
                         say("⚠️ Testo filtrato: " + q)
                 pending_q = q
                 pending_lang = eff_lang
-                if CHAT_ENABLED:
+                if CHAT_ENABLED and chat is not None:
                     chat.push_user(q)
                     changed = chat.update_topic(q, client, EMB_MODEL)
                     if changed:
@@ -501,55 +558,69 @@ def main() -> None:
 
             # ---------------------- THINKING: genera risposta ---------------------- #
             if dlg.state == DialogState.THINKING:
-                try:
-                    DOCSTORE_PATH = getattr(SET, "docstore_path", "DataBase/index.json")
-                    TOPK = int(getattr(SET, "retrieval_top_k", 3))
-                except Exception:
-                    DOCSTORE_PATH = "DataBase/index.json"
-                    TOPK = 3
+                embed_model = getattr(SET.openai, "embed_model", None)
+                effective_docstore = prof.get("docstore_path") or getattr(
+                    SET, "docstore_path", "DataBase/index.json"
+                )
+                effective_top_k = int(
+                    prof.get("retrieval_top_k") or getattr(SET, "retrieval_top_k", 3)
+                )
+                settings_for_domain = make_domain_settings(SET, prof)
                 ok, context, clarify, reason, suggestion = validate_question(
                     pending_q,
+                    pending_lang,
+                    settings=settings_for_domain,
                     client=client,
-                    emb_model=EMB_MODEL,
-                    docstore_path=DOCSTORE_PATH,
-                    top_k=TOPK,
-                    topic=pending_topic,
+                    docstore_path=effective_docstore,
+                    top_k=effective_top_k,
+                    embed_model=embed_model,
+                    topic=prof.get("topic"),
                     history=pending_history,
                 )
                 if DEBUG:
                     say(f"[VAL] {reason}")
-                if not ok and clarify and suggestion and suggestion != pending_topic:
-                    say(f"Vuoi cambiare argomento in: {suggestion}?")
-                    dlg.end_processing()
-                    dlg.transition(DialogState.LISTENING)
-                    continue
-                if not ok and clarify:
-                    say("🤔 Puoi chiarire meglio la tua domanda?")
-                    dlg.end_processing()
-                    dlg.transition(DialogState.LISTENING)
-                    continue
                 if not ok:
-                    pending_answer = "Domanda non pertinente"
+                    if clarify:
+                        pending_answer = (
+                            "La domanda non è chiarissima per questo contesto: puoi riformularla brevemente?"
+                        )
+                    else:
+                        pending_answer = (
+                            f"Tema non pertinente rispetto al profilo «{prof.get('label', prof_name)}»."
+                        )
                     pending_full_answer = pending_answer
-                    if CHAT_ENABLED:
+                    if CHAT_ENABLED and chat is not None:
                         chat.push_assistant(pending_full_answer)
-                else:
-                    pending_answer, pending_sources = oracle_answer(
-                        pending_q,
-                        pending_lang,
-                        client,
-                        LLM_MODEL,
-                        ORACLE_SYSTEM if STYLE_ENABLED else "",
-                        context=context,
-                        history=pending_history,
-                        topic=pending_topic,
-                        policy_prompt=ORACLE_POLICY,
-                        mode=ANSWER_MODE,
+                    if dlg.turn_id != processing_turn:
+                        continue
+                    dlg.transition(DialogState.SPEAKING)
+                    continue
+                context_texts = [
+                    item.get("text", "") for item in (context or []) if isinstance(item, dict)
+                ]
+                profile_hint = prof.get("system_hint", "")
+                if profile_hint:
+                    effective_system = (
+                        f"{ORACLE_SYSTEM}\n\n[Profilo: {prof.get('label', prof_name)}]\n{profile_hint}"
                     )
-                    pending_full_answer = pending_answer
-                    if CHAT_ENABLED:
-                        chat.push_assistant(pending_full_answer)
-                    pending_answer = extract_summary(pending_full_answer)
+                else:
+                    effective_system = ORACLE_SYSTEM
+                pending_answer, pending_sources = oracle_answer(
+                    pending_q,
+                    pending_lang,
+                    client,
+                    LLM_MODEL,
+                    effective_system if STYLE_ENABLED else "",
+                    context=context_texts,
+                    history=pending_history,
+                    topic=prof.get("topic"),
+                    policy_prompt=ORACLE_POLICY,
+                    mode=ANSWER_MODE,
+                )
+                pending_full_answer = pending_answer
+                if CHAT_ENABLED and chat is not None:
+                    chat.push_assistant(pending_full_answer)
+                pending_answer = extract_summary(pending_full_answer)
                 if dlg.turn_id != processing_turn:
                     continue
                 dlg.transition(DialogState.SPEAKING)

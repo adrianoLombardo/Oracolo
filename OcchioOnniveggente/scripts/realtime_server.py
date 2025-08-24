@@ -18,41 +18,54 @@ if str(ROOT) not in sys.path:
 from src.config import Settings
 from src.hotword import strip_hotword_prefix
 from src.oracle import transcribe, oracle_answer
-from src.retrieval import retrieve
 from src.chat import ChatState
-
-# soglia più permissiva per captare parlato anche con microfoni poco sensibili
-START_LEVEL = 300
+from src.domain import validate_question
+import yaml
 
 import wave
-from pathlib import Path
-from typing import Any
-
-import numpy as np
-import websockets
-from dotenv import load_dotenv
-
-ROOT = Path(__file__).resolve().parents[1]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
-
-from src.config import Settings
-from src.hotword import strip_hotword_prefix
-from src.oracle import fast_transcribe, oracle_answer
-from src.retrieval import retrieve
-from src.chat import ChatState
-from langdetect import detect
 
 CHUNK_MS = 20
-
-
-CHUNK_MS = 20
-main
 # soglia più permissiva per captare parlato anche con microfoni poco sensibili
 START_LEVEL = 300
-main
 END_SIL_MS = 700
 MAX_UTT_MS = 15_000
+
+
+def get_active_profile(SETTINGS):
+    if isinstance(SETTINGS, dict):
+        prof_name = (SETTINGS.get("profile") or {}).get("current", "museo")
+        profiles = SETTINGS.get("profiles") or {}
+        prof = profiles.get(prof_name, {})
+    else:
+        prof_name = getattr(getattr(SETTINGS, "profile", {}), "current", "museo")
+        profiles = getattr(SETTINGS, "profiles", {}) or {}
+        prof = profiles.get(prof_name, {})
+    return prof_name, prof
+
+
+def make_domain_settings(base_settings, prof):
+    if isinstance(base_settings, dict):
+        new_s = dict(base_settings)
+        new_s["domain"] = {
+            "enabled": True,
+            "keywords": prof.get("keywords", []),
+            "weights": prof.get("weights", {}),
+            "accept_threshold": prof.get("accept_threshold"),
+            "clarify_margin": prof.get("clarify_margin"),
+        }
+        return new_s
+    else:
+        try:
+            base_settings.domain.enabled = True
+            base_settings.domain.keywords = prof.get("keywords", [])
+            base_settings.domain.weights = prof.get("weights", {})
+            if prof.get("accept_threshold") is not None:
+                base_settings.domain.accept_threshold = prof.get("accept_threshold")
+            if prof.get("clarify_margin") is not None:
+                base_settings.domain.clarify_margin = prof.get("clarify_margin")
+        except Exception:
+            pass
+        return base_settings
 
 def rms_level(pcm_bytes: bytes) -> float:
     if not pcm_bytes:
@@ -120,9 +133,10 @@ async def stream_tts_pcm(ws, client, text: str, tts_model: str, tts_voice: str, 
 
 class RTSession:
 
-    def __init__(self, ws, setts: Settings) -> None:
+    def __init__(self, ws, setts: Settings, raw: dict) -> None:
         self.ws = ws
         self.SET = setts
+        self.raw = raw
         self.client_sr = setts.audio.sample_rate
         self.buf = bytearray()
         self.state = "idle"
@@ -130,6 +144,15 @@ class RTSession:
         self.ms_since_voice = 0
         self.barge = False
 
+        self.profiles = raw.get("profiles", {})
+        self.profile = (raw.get("profile") or {}).get("current", "")
+        prof = self.profiles.get(self.profile, {})
+        self.docstore_path = prof.get("docstore_path", getattr(setts, "docstore_path", "DataBase/index.json"))
+        self.topic = prof.get("topic", "")
+        self.domain_keywords = prof.get("keywords", [])
+        self.domain_weights = prof.get("weights", {})
+        self.system_hint = prof.get("system_hint", "")
+        self.retrieval_top_k = int(prof.get("retrieval_top_k") or getattr(setts, "retrieval_top_k", 3))
 
         self.active_until = 0.0
         self.wake_phrases = []
@@ -155,29 +178,6 @@ class RTSession:
 
         self.tmp = ROOT / "data" / "temp"
         self.in_wav = self.tmp / "rt_input.wav"
-
-        self.active_until = 0.0
-        self.wake_phrases = []
-        if setts.wake:
-            self.wake_phrases = list(getattr(setts.wake, "it_phrases", [])) + list(
-                getattr(setts.wake, "en_phrases", [])
-            )
-        self.idle_timeout = float(getattr(setts.wake, "idle_timeout", 50.0))
-
-        self.chat_enabled = bool(getattr(getattr(setts, "chat", None), "enabled", False))
-        self.chat = ChatState(
-            max_turns=int(getattr(getattr(setts, "chat", None), "max_turns", 10)),
-            persist_jsonl=Path(
-                getattr(
-                    getattr(setts, "chat", None),
-                    "persist_jsonl",
-                    "data/logs/chat_sessions.jsonl",
-                )
-            )
-            if self.chat_enabled
-            else None,
-        )
- main
 
     async def send_json(self, obj: dict) -> None:
         try:
@@ -357,28 +357,6 @@ class RTSession:
                 self.ms_since_voice = 0
 
     async def _finalize_utterance(self) -> None:
-        if not self.buf:
-            return
-        ts_end = time.time()
-        print(f"[diag] end_of_speech {ts_end:.3f}", flush=True)
-        write_wav(self.in_wav, self.client_sr, bytes(self.buf))
-
-        from openai import OpenAI
-        load_dotenv()
-        client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
-
-        text, lang = transcribe(
-            self.in_wav, client, self.SET.openai.stt_model, debug=self.SET.debug
-        )
-        ts_stt = time.time()
-        print(f"[diag] stt_done {ts_stt:.3f}", flush=True)
-        if not text.strip():
-            await self.send_partial("…silenzio…")
-            return
-
-        print(f"🗣️ {text.strip()}", flush=True)
-
-    async def _finalize_utterance(self) -> None:
 
         if not self.buf:
             return
@@ -397,31 +375,6 @@ class RTSession:
 
         print(f"🗣️ {text.strip()}", flush=True)
 
-        if not self.buf:
-            return
-        write_wav(self.in_wav, self.client_sr, bytes(self.buf))
-
-        from openai import OpenAI
-        load_dotenv()
-        client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
-
-        text = fast_transcribe(
-            self.in_wav, client, self.SET.openai.stt_model
-        )
-        if not text.strip():
-            await self.send_partial("…silenzio…")
-            return
-
-        try:
-            lang = detect(text)
-        except Exception:
-            lang = "it"
-        if lang not in ("it", "en"):
-            lang = "it"
-
-        print(f"🗣️ {text.strip()}", flush=True)
-        main
-
         now = time.time()
         if now > self.active_until:
             self.active_until = 0.0
@@ -437,76 +390,59 @@ class RTSession:
                 self.active_until = now + self.idle_timeout
                 return
 
-
         self.active_until = now + self.idle_timeout
 
-        # RAG
-        try:
-            ctx = retrieve(
-                text,
-                getattr(self.SET, "docstore_path", "DataBase/index.json"),
-                top_k=int(getattr(self.SET, "retrieval_top_k", 3)),
-            )
-        except Exception:
-            ctx = []
-
-        if self.chat_enabled:
-            self.chat.push_user(text)
-        llm_start = time.time()
-        print(f"[diag] llm_start {llm_start:.3f}", flush=True)
-        ans = oracle_answer(
+        embed_model = getattr(self.SET.openai, "embed_model", None)
+        settings_for_domain = make_domain_settings(
+            self.SET, {"keywords": self.domain_keywords, "weights": self.domain_weights}
+        )
+        ok, ctx, clarify, reason, _ = validate_question(
             text,
             lang,
-            client,
-            self.SET.openai.llm_model,
-            self.SET.oracle_system,
-            context=ctx,
+            settings=settings_for_domain,
+            client=client,
+            docstore_path=self.docstore_path,
+            top_k=self.retrieval_top_k,
+            embed_model=embed_model,
+            topic=self.topic,
             history=(self.chat.history if self.chat_enabled else None),
         )
-        llm_done = time.time()
-        print(f"[diag] llm_done {llm_done:.3f}", flush=True)
-        if self.chat_enabled:
-            self.chat.push_assistant(ans)
-        await self.send_answer(ans)
+        if not ok:
+            if clarify:
+                ans = "La domanda non è chiarissima per questo contesto: puoi riformularla brevemente?"
+            else:
+                ans = f"Tema non pertinente rispetto al profilo «{self.profile}»."
+            await self.send_answer(ans)
+            await self.stream_sentences(ans, client)
+            return
 
-        await self.stream_sentences(ans, client)
-
-        self.active_until = now + self.idle_timeout
-
-        # RAG
-        try:
-            ctx = retrieve(
-                text,
-                getattr(self.SET, "docstore_path", "DataBase/index.json"),
-                top_k=int(getattr(self.SET, "retrieval_top_k", 3)),
-            )
-        except Exception:
-            ctx = []
-
-        if self.chat_enabled:
-            self.chat.push_user(text)
+        context_texts = [item.get("text", "") for item in (ctx or []) if isinstance(item, dict)]
+        profile_hint = self.system_hint
+        base_system = self.SET.oracle_system
+        if profile_hint:
+            effective_system = f"{base_system}\n\n[Profilo: {self.profile}]\n{profile_hint}"
+        else:
+            effective_system = base_system
         ans, _ = oracle_answer(
             text,
             lang,
             client,
             self.SET.openai.llm_model,
-            self.SET.oracle_system,
-            context=ctx,
+            effective_system,
+            context=context_texts,
             history=(self.chat.history if self.chat_enabled else None),
+            topic=self.topic,
         )
         if self.chat_enabled:
+            self.chat.push_user(text)
             self.chat.push_assistant(ans)
-
-        first_words = " ".join(ans.split()[:5])
-        await self.send_partial(first_words)
-        tts_task = asyncio.create_task(self.stream_tts_pcm(ans, client))
         await self.send_answer(ans)
-        await tts_task
-        main
+        await self.stream_sentences(ans, client)
 
 async def handler(ws):
-    SET = Settings.model_validate_yaml(ROOT / "settings.yaml")
-    sess = RTSession(ws, SET)
+    raw_cfg = yaml.safe_load((ROOT / "settings.yaml").read_text(encoding="utf-8")) or {}
+    SET = Settings.model_validate(raw_cfg)
+    sess = RTSession(ws, SET, raw_cfg)
 
     try:
         hello_raw = await ws.recv()
@@ -547,6 +483,20 @@ async def handler(ws):
                 elif data.get("type") == "reset":
                     sess.chat.reset()
                     await sess.send_json({"type": "reset_ok"})
+                elif data.get("type") == "profile":
+                    sess.profile = data.get("value", "")
+                    prof = sess.profiles.get(sess.profile, {})
+                    sess.docstore_path = prof.get(
+                        "docstore_path", getattr(sess.SET, "docstore_path", "DataBase/index.json")
+                    )
+                    sess.topic = prof.get("topic", "")
+                    sess.domain_keywords = prof.get("keywords", [])
+                    sess.domain_weights = prof.get("weights", {})
+                    sess.system_hint = prof.get("system_hint", "")
+                    sess.retrieval_top_k = int(
+                        prof.get("retrieval_top_k") or getattr(sess.SET, "retrieval_top_k", 3)
+                    )
+                    await sess.send_json({"type": "info", "text": f"Profilo attivo: {sess.profile}"})
     except websockets.ConnectionClosed:
         pass
 
