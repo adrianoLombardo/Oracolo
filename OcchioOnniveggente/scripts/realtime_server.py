@@ -4,7 +4,6 @@ import json
 import os
 import sys
 import time
-import wave
 from pathlib import Path
 from typing import Any
 
@@ -22,7 +21,6 @@ from src.oracle import transcribe, oracle_answer
 from src.retrieval import retrieve
 from src.chat import ChatState
 
-CHUNK_MS = 20
 # soglia più permissiva per captare parlato anche con microfoni poco sensibili
 START_LEVEL = 300
 END_SIL_MS = 700
@@ -36,14 +34,6 @@ def rms_level(pcm_bytes: bytes) -> float:
         return 0.0
     return float(np.sqrt(np.mean(x * x)))
 
-def write_wav(path: Path, sr: int, pcm: bytes) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with wave.open(str(path), "wb") as w:
-        w.setnchannels(1)
-        w.setsampwidth(2)
-        w.setframerate(sr)
-        w.writeframes(pcm)
-
 class RTSession:
     def __init__(self, ws, setts: Settings) -> None:
         self.ws = ws
@@ -54,9 +44,6 @@ class RTSession:
         self.ms_in_state = 0
         self.ms_since_voice = 0
         self.barge = False
-
-        self.tmp = ROOT / "data" / "temp"
-        self.in_wav = self.tmp / "rt_input.wav"
 
         self.active_until = 0.0
         self.wake_phrases = []
@@ -174,14 +161,14 @@ class RTSession:
     async def _finalize_utterance(self) -> None:
         if not self.buf:
             return
-        write_wav(self.in_wav, self.client_sr, bytes(self.buf))
+        audio_bytes = bytes(self.buf)
 
         from openai import OpenAI
         load_dotenv()
         client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
         text, lang = transcribe(
-            self.in_wav, client, self.SET.openai.stt_model, debug=self.SET.debug
+            audio_bytes, client, self.SET.openai.stt_model, debug=self.SET.debug
         )
         if not text.strip():
             await self.send_partial("…silenzio…")

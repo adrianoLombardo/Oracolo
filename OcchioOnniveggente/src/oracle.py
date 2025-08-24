@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from datetime import datetime
+import io
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
@@ -46,11 +47,25 @@ def _score_lang(text: str, lang: str, *, debug: bool = False) -> float:
     return score
 
 
-def transcribe(path: Path, client, stt_model: str, *, debug: bool = False) -> Tuple[str, str]:
+def transcribe(audio: Path | bytes, client, stt_model: str, *, debug: bool = False) -> Tuple[str, str]:
+    """Trascrivi ``audio`` restituendo testo e lingua stimata.
+
+    Viene effettuata una chiamata "auto"; solo se il punteggio di lingua è
+    basso si ripete la stessa richiesta forzando ``language=``.
+    """
+
     def _call_transcription(**kwargs) -> str:
         def do_call() -> str:
-            with open(path, "rb") as f:
-                tx = client.audio.transcriptions.create(model=stt_model, file=f, **kwargs)
+            if isinstance(audio, (str, Path)):
+                with open(audio, "rb") as f:
+                    tx = client.audio.transcriptions.create(
+                        model=stt_model, file=f, **kwargs
+                    )
+            else:
+                bio = io.BytesIO(audio)
+                tx = client.audio.transcriptions.create(
+                    model=stt_model, file=bio, **kwargs
+                )
             return (tx.text or "").strip()
 
         try:
@@ -60,7 +75,7 @@ def transcribe(path: Path, client, stt_model: str, *, debug: bool = False) -> Tu
             return ""
 
     print("🧠 Trascrizione (auto)…")
-    text_auto = _call_transcription(
+    text = _call_transcription(
         prompt=(
             "Language is either Italian or English. Focus on neuroscience, "
             "neuroaesthetics, contemporary art, the universe, and "
@@ -68,45 +83,29 @@ def transcribe(path: Path, client, stt_model: str, *, debug: bool = False) -> Tu
         )
     )
 
-    print("↻ Trascrizione forzata IT…")
-    text_it = _call_transcription(
-        language="it",
-        prompt=(
+    s_it = _score_lang(text, "it", debug=debug)
+    s_en = _score_lang(text, "en", debug=debug)
+    lang = "it" if s_it >= s_en else "en"
+    best = max(s_it, s_en)
+
+    if best < 0.6:
+        print(f"↻ Trascrizione forzata {lang.upper()}…")
+        prompt = (
             "Lingua: italiano. Dominio: neuroscienze, neuroestetica, "
             "arte contemporanea, universo e IA neuroscientifica."
-        ),
-    )
-
-    print("↻ Trascrizione forzata EN…")
-    text_en = _call_transcription(
-        language="en",
-        prompt=(
-            "Language: English. Domain: neuroscience, neuroaesthetics, "
+            if lang == "it"
+            else "Language: English. Domain: neuroscience, neuroaesthetics, "
             "contemporary art, universe, and neuroscientific AI."
-        ),
-    )
+        )
+        text = _call_transcription(language=lang, prompt=prompt)
+        best = _score_lang(text, lang, debug=debug)
 
-    s_it = _score_lang(text_it, "it", debug=debug)
-    s_en = _score_lang(text_en, "en", debug=debug)
-
-    try:
-        auto_lang = detect(text_auto) if text_auto else None
-    except Exception:
-        auto_lang = None
-    if auto_lang == "it":
-        s_it += 0.05
-    elif auto_lang == "en":
-        s_en += 0.05
-
-    if s_it == 0 and s_en == 0:
+    if best == 0:
         print("⚠️ Per favore parla in italiano o inglese.")
         return "", ""
-    if s_it >= s_en:
-        print("🌐 Lingua rilevata: IT")
-        return text_it, "it"
-    else:
-        print("🌐 Lingua rilevata: EN")
-        return text_en, "en"
+
+    print("🌐 Lingua rilevata: IT" if lang == "it" else "🌐 Lingua rilevata: EN")
+    return text, lang
 
 
 def oracle_answer(
