@@ -38,6 +38,10 @@ from src.chat import ChatState
 from src.conversation import ConversationManager, DialogState
 from src.logging_utils import setup_logging
 from src.language_session import update_language
+from src.cli import _ensure_utf8_stdout, say, oracle_greeting
+from src.audio_device import pick_device, debug_print_devices
+from src.profile_utils import get_active_profile, make_domain_settings
+
 
 
 # --------------------------- console helpers --------------------------- #
@@ -160,6 +164,7 @@ def make_domain_settings(base_settings, prof_name: str, prof):
         except Exception:
             pass
         return base_settings
+
 
 
 # --------------------------- main ------------------------------------- #
