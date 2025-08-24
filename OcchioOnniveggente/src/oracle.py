@@ -37,27 +37,32 @@ def fast_transcribe(path_or_bytes, client, stt_model: str, lang_hint: str | None
 
 
 def transcribe(
-    path: Path,
+    path_or_bytes: str | Path | bytes,
     client,
     stt_model: str,
     *,
     debug: bool = False,
     lang_hint: str | None = None,
 ) -> Tuple[str, str]:
-    """Trascrive ``path`` e restituisce testo e lingua rilevata.
+    """Trascrive un percorso o dei ``bytes`` e restituisce testo e lingua.
 
     ``lang_hint`` forza la lingua ("it" o "en") migliorando l'accuratezza
     della trascrizione quando la lingua di conversazione è nota.
     """
     try:
-        with open(path, "rb") as f:
-            kwargs: Dict[str, Any] = {
-                "model": stt_model,
-                "file": f,
-                "response_format": "json",
-            }
-            if lang_hint in ("it", "en"):
-                kwargs["language"] = lang_hint
+        kwargs: Dict[str, Any] = {
+            "model": stt_model,
+            "response_format": "json",
+        }
+        if lang_hint in ("it", "en"):
+            kwargs["language"] = lang_hint
+
+        if isinstance(path_or_bytes, (str, Path)):
+            with open(path_or_bytes, "rb") as f:
+                kwargs["file"] = f
+                tx = client.audio.transcriptions.create(**kwargs)
+        else:
+            kwargs["file"] = path_or_bytes
             tx = client.audio.transcriptions.create(**kwargs)
     except openai.OpenAIError as e:
         logger.error("Errore OpenAI: %s", e)
