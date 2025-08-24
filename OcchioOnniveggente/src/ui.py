@@ -1541,6 +1541,11 @@ class OracoloUI(tk.Tk):
         def on_ok() -> None:
             audio["input_device"] = label_to_index(in_var.get())
             audio["output_device"] = label_to_index(out_var.get())
+            self._append_log(
+                f"Input: {in_var.get()}  Output: {out_var.get()}  "
+                f"Barge={barge_var.get():.1f}  VAD={vad_var.get():.3f}",
+                "AUDIO",
+            )
             rt_conf["barge_rms_threshold"] = float(barge_var.get())
             rec_conf["min_speech_level"] = float(vad_var.get())
             # applica immediatamente
