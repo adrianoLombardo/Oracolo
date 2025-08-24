@@ -950,7 +950,7 @@ class OracoloUI(tk.Tk):
                 history=self.chat_state.history,
                 topic=self.chat_state.topic_text,
                 mode=mode,
-
+            )
         try:
             ans, used_ctx = self.controller.send_chat(
                 text,
