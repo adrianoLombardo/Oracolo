@@ -684,23 +684,28 @@ class OracoloUI(tk.Tk):
         self.chat_view.pack(fill="both", expand=True, padx=4, pady=(4, 0))
 
         # Configurazione dei tag per simulare le bolle della chat
+        # Text.tag_config non supporta le opzioni ``padx`` e ``pady``;
+        # in sostituzione utilizziamo i margini e gli spazi verticali.
+        bubble_kwargs = dict(
+            borderwidth=2,
+            relief="solid",
+            lmargin1=6,
+            lmargin2=6,
+            rmargin=6,
+            spacing1=4,
+            spacing3=4,
+        )
         self.chat_view.tag_config(
             "user_msg",
             background="#2d3e4e",
             foreground="#d7fff9",
-            borderwidth=2,
-            relief="solid",
-            padx=6,
-            pady=4,
+            **bubble_kwargs,
         )
         self.chat_view.tag_config(
             "assistant_msg",
             background="#394b59",
             foreground="#ffffff",
-            borderwidth=2,
-            relief="solid",
-            padx=6,
-            pady=4,
+            **bubble_kwargs,
         )
 
         input_frame = ttk.Frame(chat_frame)
