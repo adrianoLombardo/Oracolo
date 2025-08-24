@@ -25,7 +25,7 @@ import time
 import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox, scrolledtext, simpledialog, ttk
-from typing import Any
+from typing import Any, Callable
 
 from src.retrieval import retrieve
 from src.chat import ChatState
@@ -109,12 +109,20 @@ def load_settings_pair(root: Path) -> tuple[dict, dict, dict]:
     return base, local, merged
 
 
-def routed_save(base_now: dict, local_now: dict, merged_new: dict, root: Path) -> None:
+def routed_save(
+    base_now: dict,
+    local_now: dict,
+    merged_new: dict,
+    root: Path,
+    log_fn: Callable[[str, str], None] | None = None,
+) -> None:
     """
     Salva split:
       - In settings.local.yaml: debug, audio.input_device, audio.output_device
       - In settings.yaml: tutto il resto
     Mantiene eventuali altre chiavi locali preesistenti.
+
+    Se ``log_fn`` è fornito, emette un log per ogni file aggiornato.
     """
     local_out = deep_copy(local_now)
     local_out.setdefault("audio", {})
@@ -136,12 +144,19 @@ def routed_save(base_now: dict, local_now: dict, merged_new: dict, root: Path) -
         base_out["audio"].pop("input_device", None)
         base_out["audio"].pop("output_device", None)
 
+    base_changed = base_out != base_now
+    local_changed = local_out != local_now
+
     (root / "settings.yaml").write_text(
         yaml.safe_dump(base_out, sort_keys=False, allow_unicode=True), encoding="utf-8"
     )
+    if base_changed and log_fn is not None:
+        log_fn("Aggiornato settings.yaml\n", "MISC")
     (root / "settings.local.yaml").write_text(
         yaml.safe_dump(local_out, sort_keys=False, allow_unicode=True), encoding="utf-8"
     )
+    if local_changed and log_fn is not None:
+        log_fn("Aggiornato settings.local.yaml\n", "MISC")
 
 
 # ------------------------- Realtime WS client ---------------------------- #
@@ -805,7 +820,14 @@ class OracoloUI(tk.Tk):
 
     def _apply_profile(self, name: str) -> None:
         self.settings.setdefault("domain", {})["profile"] = name
-        routed_save(self.base_settings, self.local_settings, self.settings, self.root_dir)
+        routed_save(
+            self.base_settings,
+            self.local_settings,
+            self.settings,
+            self.root_dir,
+            self._append_log,
+        )
+        self._append_log(f"Profilo attivo: {name}\n", "DOMAIN")
         if self.ws_client is not None:
             self.ws_client.profile_name = name
             if self.ws_client.ws is not None:
@@ -1130,6 +1152,10 @@ class OracoloUI(tk.Tk):
                 client = OpenAI(api_key=api_key) if api_key else OpenAI()
             except Exception:
                 client = None
+            dom = self.settings.get("domain", {}) or {}
+            prof = dom.get("profile", "")
+            if isinstance(prof, dict):
+                prof = prof.get("current", "")
             ok, ctx, _clar, reason, _ = validate_question(
                 question,
                 lang,
@@ -1140,10 +1166,6 @@ class OracoloUI(tk.Tk):
                 embed_model=openai_conf.get("embed_model", "text-embedding-3-small")
                 if openai_conf
                 else None,
-                dom = self.settings.get("domain", {}) or {}
-                prof = dom.get("profile", "")
-                if isinstance(prof, dict):
-                    prof = prof.get("current", "")
                 topic=prof,
             )
             end = time.time()
@@ -1523,6 +1545,10 @@ class OracoloUI(tk.Tk):
             rec_conf["min_speech_level"] = float(vad_var.get())
             # applica immediatamente
             sd.default.device = (audio["input_device"], audio["output_device"])
+            self._append_log(
+                f"Audio: in={audio['input_device']} out={audio['output_device']} barge={rt_conf['barge_rms_threshold']} vad={rec_conf['min_speech_level']}\n",
+                "MISC",
+            )
             win.destroy()
 
         ttk.Button(win, text="OK", command=on_ok).grid(row=5, column=0, columnspan=2, pady=10)
@@ -1678,6 +1704,10 @@ class OracoloUI(tk.Tk):
                     vad[key] = cast(var.get())
                 except Exception:
                     vad[key] = default
+            self._append_log(
+                f"Recording: mode={rec['mode']} timed={rec['timed_seconds']} fallback={rec['fallback_to_timed']} min_level={rec['min_speech_level']}\n",
+                "MISC",
+            )
             win.destroy()
 
         ttk.Button(win, text="OK", command=on_ok).grid(row=r, column=0, columnspan=2, pady=10)
@@ -1714,6 +1744,10 @@ class OracoloUI(tk.Tk):
             openai_conf["tts_voice"] = tts_voice_var.get().strip()
             if openai_conf["api_key"]:
                 self.chat_entry.configure(state="normal")
+            self._append_log(
+                f"OpenAI: key={openai_conf['api_key']} stt={openai_conf['stt_model']} llm={openai_conf['llm_model']} tts={openai_conf['tts_model']} voice={openai_conf['tts_voice']}\n",
+                "MISC",
+            )
             win.destroy()
 
         ttk.Button(win, text="OK", command=on_ok).grid(row=len(rows), column=0, columnspan=2, pady=10)
@@ -1769,6 +1803,10 @@ class OracoloUI(tk.Tk):
             dom["accept_threshold"] = float(acc_var.get())
             dom["clarify_margin"] = float(clar_var.get())
             dom["always_accept_wake"] = bool(wake_var.get())
+            self._append_log(
+                f"Domain: topic={dom['topic']} kw={dom['keywords']} weights={dom['weights']} acc={dom['accept_threshold']} clar={dom['clarify_margin']} wake={dom['always_accept_wake']}\n",
+                "DOMAIN",
+            )
             win.destroy()
 
         ttk.Button(win, text="OK", command=on_ok).grid(row=8, column=0, columnspan=2, pady=10)
@@ -1794,6 +1832,10 @@ class OracoloUI(tk.Tk):
             wake["idle_timeout"] = int(timeout_var.get())
             wake["it_phrases"] = [p.strip() for p in it_var.get().split(",") if p.strip()]
             wake["en_phrases"] = [p.strip() for p in en_var.get().split(",") if p.strip()]
+            self._append_log(
+                f"Wake: timeout={wake['idle_timeout']} it={wake['it_phrases']} en={wake['en_phrases']}\n",
+                "MISC",
+            )
             win.destroy()
 
         ttk.Button(win, text="OK", command=on_ok).grid(row=3, column=0, columnspan=2, pady=10)
@@ -1894,6 +1936,10 @@ class OracoloUI(tk.Tk):
                 self.settings["retrieval_top_k"] = int(topk_var.get())
             except Exception:
                 pass
+            self._append_log(
+                f"Knowledge: index={self.settings['docstore_path']} top_k={self.settings.get('retrieval_top_k')}\n",
+                "MISC",
+            )
             win.destroy()
 
         ttk.Button(win, text="OK", command=on_ok).grid(row=5, column=0, columnspan=3, pady=10)
@@ -1956,6 +2002,10 @@ class OracoloUI(tk.Tk):
             except Exception:
                 pass
             wled_conf["host"] = wled_host.get().strip()
+            self._append_log(
+                f"Lighting: mode={lighting['mode']} sacn={sacn_conf} wled={wled_conf}\n",
+                "MISC",
+            )
             win.destroy()
 
         ttk.Button(win, text="OK", command=on_ok).grid(row=3, column=0, columnspan=2, pady=10)
@@ -1966,7 +2016,13 @@ class OracoloUI(tk.Tk):
         self.settings["topic_threshold"] = float(self.topic_threshold.get())
         self.settings["keywords"] = self.keywords
         try:
-            routed_save(self.base_settings, self.local_settings, self.settings, self.root_dir)
+            routed_save(
+                self.base_settings,
+                self.local_settings,
+                self.settings,
+                self.root_dir,
+                self._append_log,
+            )
             self.base_settings, self.local_settings, self.settings = load_settings_pair(self.root_dir)
             self.keywords = list(self.settings.get("keywords", []))
             self.keyword_listbox.delete(0, "end")
@@ -1974,6 +2030,10 @@ class OracoloUI(tk.Tk):
                 self.keyword_listbox.insert("end", kw)
             self.topic_threshold.set(float(self.settings.get("topic_threshold", self.topic_threshold.get())))
             messagebox.showinfo("Impostazioni", "Salvate correttamente.")
+            self._append_log(
+                f"Impostazioni salvate: topic_threshold={self.settings.get('topic_threshold')} debug={self.settings.get('debug')}\n",
+                "MISC",
+            )
         except Exception as e:
             messagebox.showerror("Impostazioni", f"Errore nel salvataggio: {e}")
 
