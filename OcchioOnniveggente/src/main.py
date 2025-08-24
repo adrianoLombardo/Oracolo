@@ -24,6 +24,7 @@ from src.audio import record_until_silence, play_and_pulse
 from src.lights import SacnLight, WledLight, color_from_text
 from src.oracle import (
     transcribe,
+    fast_transcribe,
     oracle_answer,
     synthesize,
     append_log,
@@ -384,7 +385,16 @@ def main() -> None:
                 )
                 if not ok:
                     continue
-                text, lang = transcribe(INPUT_WAV, client, STT_MODEL, debug=DEBUG and (not args.quiet))
+                # prova trascrizione forzando IT/EN per maggiore robustezza
+                text_it = fast_transcribe(INPUT_WAV, client, STT_MODEL, lang_hint="it")
+                text_en = fast_transcribe(INPUT_WAV, client, STT_MODEL, lang_hint="en")
+                if _match_hotword(text_it, WAKE_IT):
+                    text, lang = text_it, "it"
+                elif _match_hotword(text_en, WAKE_EN):
+                    text, lang = text_en, "en"
+                else:
+                    text = text_it or text_en
+                    lang = "it" if text_it else "en" if text_en else ""
                 say(f"📝 Riconosciuto: {text}")
                 if lang in ("it", "en"):
                     session_lang = lang
@@ -445,7 +455,13 @@ def main() -> None:
                 if not ok:
                     continue
                 dlg.refresh_deadline()
-                q, qlang = transcribe(INPUT_WAV, client, STT_MODEL, debug=DEBUG and (not args.quiet))
+                q, qlang = transcribe(
+                    INPUT_WAV,
+                    client,
+                    STT_MODEL,
+                    debug=DEBUG and (not args.quiet),
+                    lang_hint=session_lang,
+                )
                 say(f"📝 Domanda: {q}")
                 if not q:
                     continue
