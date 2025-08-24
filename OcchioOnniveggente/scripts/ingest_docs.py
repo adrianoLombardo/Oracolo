@@ -26,6 +26,12 @@ try:
 except Exception:
     docx = None
 
+# language detection opzionale
+try:
+    from langdetect import detect
+except Exception:
+    detect = None
+
 # settings opzionali
 try:
     from src.config import Settings  # se disponibile
@@ -186,6 +192,40 @@ def _read_file_text(file: Path) -> str:
     return ""
 
 
+def _extract_title(file: Path) -> str:
+    ext = file.suffix.lower()
+    if ext == ".pdf" and PdfReader is not None:
+        try:
+            with warnings.catch_warnings():
+                warnings.filterwarnings("ignore", category=UserWarning)
+                reader = PdfReader(str(file), strict=False)
+            meta = getattr(reader, "metadata", None)
+            if meta:
+                title = getattr(meta, "title", "") or meta.get("/Title", "")
+                if isinstance(title, str) and title.strip():
+                    return title.strip()
+        except Exception:
+            pass
+    if ext == ".docx" and docx is not None:
+        try:
+            d = docx.Document(str(file))
+            title = getattr(d.core_properties, "title", "")
+            if title:
+                return title
+        except Exception:
+            pass
+    return file.stem
+
+
+def _detect_language(text: str) -> str:
+    if detect is None:
+        return ""
+    try:
+        return detect(text)
+    except Exception:
+        return ""
+
+
 # ----------------------------- DB loader ------------------------------------- #
 def _load_db(path: str) -> object:
     # prova a caricare un DocumentDB custom
@@ -216,7 +256,9 @@ def _add(paths: Iterable[str], docstore_path: str, topic: str | None = None) -> 
     documents = []
     for file in files:
         text = _read_file_text(file)
-        doc = {"id": str(file), "text": text}
+        title = _extract_title(file)
+        lang = _detect_language(text)
+        doc = {"id": str(file), "text": text, "title": title, "lang": lang}
         if topic:
             doc["topic"] = topic
         documents.append(doc)
@@ -256,6 +298,22 @@ def _clear(docstore_path: str) -> None:
     else:
         logging.warning("DocumentDB non supporta clear().")
 
+    """Svuota completamente il DocumentDB."""
+    db = _load_db(docstore_path)
+    if hasattr(db, "clear"):
+        db.clear()  # type: ignore[call-arg]
+    elif isinstance(db, SimpleDocumentDB):
+        db._data = {"documents": []}
+        db._save()
+    else:
+        index_path = Path(docstore_path)
+        index_path.write_text(
+            json.dumps({"documents": []}, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+    logging.info("Cleared document store.")
+
+
 
 # ----------------------------- Entry point ------------------------------------ #
 def _default_docstore_path() -> str:
@@ -290,6 +348,7 @@ def main() -> None:
     group.add_argument("--remove", nargs="+", help="File o cartelle da rimuovere dall'indice")
     group.add_argument("--reindex", action="store_true", help="Rigenera l'indice rileggendo i file già noti")
     group.add_argument("--clear", action="store_true", help="Svuota completamente l'indice")
+    group.add_argument("--clear", action="store_true", help="Svuota completamente l’indice")
     args = parser.parse_args()
 
     if args.add:
@@ -303,8 +362,10 @@ def main() -> None:
             _backup_index(args.path)
         _reindex(args.path)
     elif args.clear:
+
         if not args.no_backup:
             _backup_index(args.path)
+
         _clear(args.path)
 
 
