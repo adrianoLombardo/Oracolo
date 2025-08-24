@@ -158,8 +158,6 @@ def main() -> None:
     session_id = uuid.uuid4().hex
     listener = setup_logging(Path("data/logs/oracolo.log"), session_id=session_id)
 
-
-       main
     parser = argparse.ArgumentParser(description="Occhio Onniveggente · Oracolo")
     parser.add_argument("--autostart", action="store_true", help="Avvia direttamente senza prompt input()")
     parser.add_argument(
