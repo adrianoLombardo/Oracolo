@@ -5,12 +5,26 @@ import sounddevice as sd
 
 logger = logging.getLogger(__name__)
 
+
 def validate_device_config(cfg: Dict[str, Any]) -> None:
     """Validate audio device configuration.
+
+    Non-`None` values are checked against the list of available devices. When
+    both devices are ``None`` the function returns early, allowing
+    ``sounddevice`` to use the system defaults.
 
     Raises:
         ValueError: if configuration is invalid.
     """
+
+    input_dev = cfg.get("input_device")
+    output_dev = cfg.get("output_device")
+    if input_dev is None and output_dev is None:
+        logger.info(
+            "Input e output device non configurati: verranno usati quelli di default"
+        )
+        return
+
     try:
         devices = sd.query_devices()
     except Exception as exc:
@@ -21,7 +35,7 @@ def validate_device_config(cfg: Dict[str, Any]) -> None:
     for key, kind in (("input_device", "input"), ("output_device", "output")):
         dev = cfg.get(key)
         if dev is None:
-            errors.append(f"{kind} device non configurato")
+            logger.info("%s device non configurato: uso del device predefinito", kind)
             continue
         if isinstance(dev, int):
             if dev < 0 or dev >= len(devices):
