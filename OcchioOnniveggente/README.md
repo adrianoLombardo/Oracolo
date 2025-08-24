@@ -94,3 +94,7 @@ python -m src.ui
 Dal menu **Impostazioni** è possibile selezionare i dispositivi audio e
 configurare la luce via Art-Net/sACN o WLED.
 
+L'interfaccia QML richiede il modulo **Qt5Compat.GraphicalEffects** per
+rendere l'effetto `DropShadow`: assicurati che sia presente nella tua
+installazione di Qt (è incluso in PySide6).
+

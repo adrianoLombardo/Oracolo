@@ -1,7 +1,7 @@
 import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
-import QtQuick.Effects 1.15
+import Qt5Compat.GraphicalEffects 1.0 as Effects
 
 Rectangle {
     id: root
@@ -13,7 +13,7 @@ Rectangle {
 
     // neon glow effect
     layer.enabled: true
-    layer.effect: DropShadow {
+    layer.effect: Effects.DropShadow {
         color: "#3df5ff"
         radius: 20
         samples: 25
