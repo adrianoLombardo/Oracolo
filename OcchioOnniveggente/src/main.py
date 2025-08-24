@@ -5,12 +5,11 @@ import sys
 import re
 import time
 import difflib
-import unicodedata
 import argparse
 import threading
 import uuid
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 from collections import defaultdict
 
 import numpy as np
@@ -33,6 +32,7 @@ from src.oracle import (
     extract_summary,
 )
 from src.domain import validate_question
+from src.hotword import is_wake
 from src.chat import ChatState
 from src.dialogue import DialogueManager, DialogState
 from src.logging_utils import setup_logging
@@ -98,59 +98,6 @@ def debug_print_devices() -> None:
         print(f"{idx:>3}  {name:<40}  {in_ch}/{out_ch}")
 
 
-# --------------------------- hotword (testuale) ------------------------ #
-def _strip_accents(s: str) -> str:
-    nf = unicodedata.normalize("NFD", s or "")
-    return "".join(ch for ch in nf if not unicodedata.combining(ch))
-
-
-def _normalize_lang(s: str) -> str:
-    return _strip_accents(s).lower()
-
-
-def _phrase_to_regex_tokens(phrase: str) -> re.Pattern:
-    """
-    "ciao oracolo" -> regex tollerante a punteggiatura/spazi:
-    r"\bciao[\W_]*oracolo\b"
-    """
-    phrase = _normalize_lang(phrase)
-    tokens = re.split(r"\s+", phrase.strip())
-    parts = [re.escape(t) for t in tokens if t]
-    if not parts:
-        parts = [re.escape(phrase.strip())]
-    pattern = r"\b" + r"[\W_]*".join(parts) + r"\b"
-    return re.compile(pattern, flags=re.IGNORECASE)
-
-
-def _match_hotword(text: str, phrases: Iterable[str]) -> bool:
-    """
-    Match robusto:
-    1) regex tollerante (spazi/punteggiatura/maiuscole/accenti)
-    2) fallback fuzzy: consente piccoli errori (es. “oràcolo”, “oraccolo”)
-    """
-    norm = _normalize_lang(text or "")
-
-    # 1) regex tollerante
-    for p in phrases or []:
-        if _phrase_to_regex_tokens(p).search(norm):
-            return True
-
-    # 2) fuzzy: confronta stringhe senza simboli
-    letters = re.sub(r"[\W_]+", "", norm)
-    if not letters:
-        return False
-
-    for p in phrases or []:
-        cand = re.sub(r"[\W_]+", "", _normalize_lang(p))
-        if not cand:
-            continue
-        if cand in letters:
-            return True
-        ratio = difflib.SequenceMatcher(None, letters, cand).ratio()
-        if ratio >= 0.86:
-            return True
-
-    return False
 
 
 def oracle_greeting(lang: str) -> str:
@@ -176,6 +123,7 @@ def make_domain_settings(base_settings, prof):
         new_s = dict(base_settings)
         new_s["domain"] = {
             "enabled": True,
+            "profile": prof.get("topic", ""),
             "keywords": prof.get("keywords", []),
             "weights": prof.get("weights", {}),
             "accept_threshold": prof.get("accept_threshold"),
@@ -185,6 +133,7 @@ def make_domain_settings(base_settings, prof):
     else:
         try:
             base_settings.domain.enabled = True
+            base_settings.domain.profile = prof.get("topic", "")
             base_settings.domain.keywords = prof.get("keywords", [])
             base_settings.domain.weights = prof.get("weights", {})
             if prof.get("accept_threshold") is not None:
@@ -447,26 +396,30 @@ def main() -> None:
                 )
                 if not ok:
                     continue
-                # prova trascrizione forzando IT/EN per maggiore robustezza
-                text_it = fast_transcribe(INPUT_WAV, client, STT_MODEL, lang_hint="it")
-                text_en = fast_transcribe(INPUT_WAV, client, STT_MODEL, lang_hint="en")
-                if _match_hotword(text_it, WAKE_IT):
-                    text, lang = text_it, "it"
-                elif _match_hotword(text_en, WAKE_EN):
-                    text, lang = text_en, "en"
-                else:
-                    text = text_it or text_en
-                    lang = "it" if text_it else "en" if text_en else ""
+                text = fast_transcribe(INPUT_WAV, client, STT_MODEL)
+                wake, lang = is_wake(text, WAKE_IT, WAKE_EN)
+                if not wake:
+                    text_it = fast_transcribe(
+                        INPUT_WAV, client, STT_MODEL, lang_hint="it"
+                    )
+                    wake, lang = is_wake(text_it, WAKE_IT, WAKE_EN)
+                    if wake:
+                        text = text_it
+                if not wake:
+                    text_en = fast_transcribe(
+                        INPUT_WAV, client, STT_MODEL, lang_hint="en"
+                    )
+                    wake, lang = is_wake(text_en, WAKE_IT, WAKE_EN)
+                    if wake:
+                        text = text_en
                 say(f"📝 Riconosciuto: {text}")
-                if lang in ("it", "en"):
-                    session_lang = lang
-                is_it = _match_hotword(text, WAKE_IT)
-                is_en = _match_hotword(text, WAKE_EN)
-                if not (is_it or is_en):
+                if not wake:
                     if DEBUG:
                         say("…hotword non riconosciuta, continuo l'attesa.")
                     continue
-                wake_lang = "it" if is_it and not is_en else "en" if is_en and not is_it else (session_lang or "it")
+                if lang in ("it", "en"):
+                    session_lang = lang
+                wake_lang = session_lang or lang or "it"
                 dlg.transition(DialogState.AWAKE)
                 continue
 
@@ -549,6 +502,35 @@ def main() -> None:
                     else:
                         q = PROF.mask(q)
                         say("⚠️ Testo filtrato: " + q)
+                m = re.search(r"cambia profilo in\s+(.+)", low_q)
+                if m:
+                    new_prof = m.group(1).strip().lower()
+                    profiles = CURRENT_CFG.get("profiles", {})
+                    target = None
+                    for name in profiles:
+                        if new_prof == name.lower():
+                            target = name
+                            break
+                    if target is None:
+                        matches = difflib.get_close_matches(new_prof, list(profiles.keys()), n=1, cutoff=0.6)
+                        if matches:
+                            target = matches[0]
+                    if target:
+                        CURRENT_CFG.setdefault("profile", {})["current"] = target
+                        CURRENT_CFG.setdefault("domain", {})["profile"] = profiles.get(target, {}).get("topic") or target
+                        try:
+                            cfg_path.write_text(
+                                yaml.safe_dump(CURRENT_CFG, allow_unicode=True),
+                                encoding="utf-8",
+                            )
+                        except Exception:
+                            pass
+                        pending_answer = f"Profilo cambiato in {profiles.get(target, {}).get('label', target)}."
+                    else:
+                        pending_answer = "Profilo non trovato."
+                    pending_full_answer = pending_answer
+                    dlg.transition(DialogState.SPEAKING)
+                    continue
                 pending_q = q
                 pending_lang = eff_lang
                 if CHAT_ENABLED and chat is not None:
@@ -575,6 +557,10 @@ def main() -> None:
                     prof.get("retrieval_top_k") or getattr(SET, "retrieval_top_k", 3)
                 )
                 settings_for_domain = make_domain_settings(SET, prof)
+                topic = (
+                    getattr(getattr(settings_for_domain, "domain", {}), "profile", None)
+                )
+                pending_topic = topic
                 ok, context, clarify, reason, suggestion = validate_question(
                     pending_q,
                     pending_lang,
@@ -583,7 +569,7 @@ def main() -> None:
                     docstore_path=effective_docstore,
                     top_k=effective_top_k,
                     embed_model=embed_model,
-                    topic=prof.get("topic"),
+                    topic=topic,
                     history=pending_history,
                 )
                 if DEBUG:
@@ -591,11 +577,11 @@ def main() -> None:
                 if not ok:
                     if clarify:
                         pending_answer = (
-                            "La domanda non è chiarissima per questo contesto: puoi riformularla brevemente?"
+                            "Domanda un po’ fuori ambito per questo profilo. Puoi riformularla in tema, oppure dire “cambia profilo”?"
                         )
                     else:
                         pending_answer = (
-                            f"Tema non pertinente rispetto al profilo «{prof.get('label', prof_name)}»."
+                            "Questa domanda è fuori dall’ambito selezionato. Per proseguire, resta sul tema o dì “cambia profilo”."
                         )
                     pending_full_answer = pending_answer
                     if CHAT_ENABLED and chat is not None:
@@ -622,7 +608,7 @@ def main() -> None:
                     effective_system if STYLE_ENABLED else "",
                     context=context_texts,
                     history=pending_history,
-                    topic=prof.get("topic"),
+                    topic=topic,
                     policy_prompt=ORACLE_POLICY,
                     mode=ANSWER_MODE,
                 )

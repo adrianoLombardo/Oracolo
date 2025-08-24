@@ -83,6 +83,7 @@ class PaletteItem(BaseModel):
 class DomainConfig(BaseModel):
     enabled: bool = True
     topic: str = ""
+    profile: str = ""
     keywords: List[str] = Field(default_factory=list)
     kw_min_overlap: float = 0.04
     emb_min_sim: float = 0.22

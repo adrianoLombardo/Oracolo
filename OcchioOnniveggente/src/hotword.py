@@ -12,6 +12,7 @@ from typing import Iterable, Optional, Tuple
 import os
 import re
 import unicodedata
+import difflib
 
 
 # ----------------------------- TEXT MATCH HELPERS ----------------------------- #
@@ -58,6 +59,39 @@ def strip_hotword_prefix(text: str, phrases: Iterable[str]) -> Tuple[bool, str]:
             remainder = text[cut_norm_len:].lstrip(" ,;:.-–—\n\t")
             return True, remainder
     return False, text or ""
+
+
+# ----------------------------- SIMPLE WAKE CHECK ----------------------------- #
+
+IT_WAKES = ["ciao oracolo", "ehi oracolo", "ok oracolo", "oracolo"]
+EN_WAKES = ["hello oracle", "hey oracle", "hi oracle", "ok oracle", "oracle"]
+
+
+def _norm(s: str) -> str:
+    s = unicodedata.normalize("NFD", s or "").encode("ascii", "ignore").decode("ascii")
+    s = re.sub(r"[^\w\s]", " ", s.lower())
+    return re.sub(r"\s+", " ", s).strip()
+
+
+def is_wake(
+    text: str,
+    it_phrases: Iterable[str] | None = None,
+    en_phrases: Iterable[str] | None = None,
+) -> Tuple[bool, Optional[str]]:
+    """Return (True, lang) if ``text`` contains a wake phrase."""
+    it_list = list(it_phrases) if it_phrases is not None else IT_WAKES
+    en_list = list(en_phrases) if en_phrases is not None else EN_WAKES
+    t = _norm(text)
+    for p in it_list:
+        if p in t:
+            return True, "it"
+    for p in en_list:
+        if p in t:
+            return True, "en"
+    for p in it_list + en_list:
+        if difflib.SequenceMatcher(None, t, p).ratio() >= 0.82:
+            return True, "it" if p in it_list else "en"
+    return False, None
 
 
 # ----------------------------- PORCUPINE ENGINE ------------------------------ #
