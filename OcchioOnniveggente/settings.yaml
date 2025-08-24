@@ -23,6 +23,7 @@ audio:
   ask_seconds: 10
   input_wav: "data/temp/input.wav"
   output_wav: "data/temp/answer.wav"
+  barge_rms_threshold: 0.25   # soglia RMS per barge-in (0..1)
 
   # Selezione dispositivi audio
   # Metti l'indice numerico (es. 1) oppure una parte del nome (es. "USB Microphone").
