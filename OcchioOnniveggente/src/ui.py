@@ -600,8 +600,16 @@ class OracoloUI(tk.Tk):
 
         bar = ttk.Frame(container)
         bar.pack(fill="x", padx=16, pady=(0, 8))
-        self.start_btn = ttk.Button(bar, text="Avvia", command=self.start_oracolo)
-        self.stop_btn = ttk.Button(bar, text="Ferma", command=self.stop_oracolo, state="disabled")
+        img_dir = self.root_dir / "img"
+        if Image and ImageTk:
+            self.start_icon = ImageTk.PhotoImage(Image.open(img_dir / "start.png"))
+            self.stop_icon = ImageTk.PhotoImage(Image.open(img_dir / "stop.png"))
+        else:  # pragma: no cover - fallback senza Pillow
+            self.start_icon = tk.PhotoImage(file=str(img_dir / "start.png"))
+            self.stop_icon = tk.PhotoImage(file=str(img_dir / "stop.png"))
+
+        self.start_btn = ttk.Button(bar, image=self.start_icon, command=self.start_oracolo)
+        self.stop_btn = ttk.Button(bar, image=self.stop_icon, command=self.stop_oracolo, state="disabled")
         self.ws_start_btn = ttk.Button(bar, text="Avvia WS", command=self.start_realtime)
         self.ws_stop_btn = ttk.Button(bar, text="Ferma WS", command=self.stop_realtime, state="disabled")
         self.start_btn.pack(side="left", padx=(0, 8))
@@ -697,7 +705,32 @@ class OracoloUI(tk.Tk):
 
         input_frame = ttk.Frame(chat_frame)
         input_frame.pack(fill="x", padx=4, pady=(4, 0))
-        ttk.Checkbutton(input_frame, text="Usa microfono", variable=self.use_mic_var).pack(side="left")
+        self.mic_on_icon = tk.PhotoImage(file=str(self.root_dir / "img" / "mic_on.png"))
+        self.mic_off_icon = tk.PhotoImage(file=str(self.root_dir / "img" / "mic_off.png"))
+
+        self.mic_canvas = tk.Canvas(input_frame, width=24, height=24, highlightthickness=0)
+        self.mic_canvas.pack(side="left")
+        self.mic_btn = ttk.Checkbutton(
+            self.mic_canvas,
+            image=self.mic_on_icon if self.use_mic_var.get() else self.mic_off_icon,
+            variable=self.use_mic_var,
+            command=self._toggle_mic,
+            style="Toolbutton",
+        )
+        self.mic_canvas.create_window(12, 12, window=self.mic_btn)
+        self.mic_level_arc = self.mic_canvas.create_arc(
+            2,
+            2,
+            22,
+            22,
+            start=90,
+            extent=0,
+            style="arc",
+            outline="#00ff00",
+            width=2,
+        )
+        self.in_level.trace_add("write", self._update_mic_indicator)
+
         self.chat_entry = tk.Entry(input_frame)
         self.chat_entry.pack(side="left", fill="x", expand=True, padx=(8, 8))
         self.chat_entry.bind("<Return>", self._on_chat_enter)
@@ -781,6 +814,22 @@ class OracoloUI(tk.Tk):
         if hasattr(self, "orb"):
             self.orb.set_levels(self.in_level.get(), self.out_level.get())
         self.after(100, self._update_orb)
+
+    def _toggle_mic(self) -> None:
+        """Toggle microphone usage and update icon."""
+        value = not self.use_mic_var.get()
+        self.use_mic_var.set(value)
+        self.mic_btn.configure(image=self.mic_on_icon if value else self.mic_off_icon)
+        if not value:
+            self.mic_canvas.itemconfigure(self.mic_level_arc, extent=0)
+
+    def _update_mic_indicator(self, *args) -> None:
+        """Show input level around the microphone icon."""
+        if not self.use_mic_var.get():
+            self.mic_canvas.itemconfigure(self.mic_level_arc, extent=0)
+            return
+        level = max(0.0, min(1.0, float(self.in_level.get())))
+        self.mic_canvas.itemconfigure(self.mic_level_arc, extent=-level * 360)
 
     def _show_section(self, name: str) -> None:
         if not hasattr(self, "_sections"):
