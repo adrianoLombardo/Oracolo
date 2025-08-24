@@ -830,7 +830,19 @@ class OracoloUI(tk.Tk):
         try:
             openai_conf = self.settings.get("openai", {})
             api_key = openai_conf.get("api_key") or os.environ.get("OPENAI_API_KEY")
-            client = OpenAI(api_key=api_key) if api_key else OpenAI()
+            if not api_key:
+                if messagebox.askyesno(
+                    "OpenAI", "È necessaria una API key OpenAI. Aprire le impostazioni?"
+                ):
+                    self._open_openai_dialog()
+                    openai_conf = self.settings.get("openai", {})
+                    api_key = openai_conf.get("api_key") or os.environ.get("OPENAI_API_KEY")
+                if not api_key:
+                    self.chat_entry.configure(state="disabled")
+                    return
+                else:
+                    self.chat_entry.configure(state="normal")
+            client = OpenAI(api_key=api_key)
             style_prompt = self.settings.get("style_prompt", "") if self.style_var.get() else ""
             lang = self.lang_map.get(self.lang_choice.get(), "auto")
             mode = self.mode_map.get(self.mode_choice.get(), "detailed")
@@ -1583,6 +1595,8 @@ class OracoloUI(tk.Tk):
             openai_conf["llm_model"] = llm_var.get().strip()
             openai_conf["tts_model"] = tts_model_var.get().strip()
             openai_conf["tts_voice"] = tts_voice_var.get().strip()
+            if openai_conf["api_key"]:
+                self.chat_entry.configure(state="normal")
             win.destroy()
 
         ttk.Button(win, text="OK", command=on_ok).grid(row=len(rows), column=0, columnspan=2, pady=10)
