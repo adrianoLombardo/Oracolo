@@ -614,17 +614,9 @@ def main() -> None:
                     prof.get("retrieval_top_k") or getattr(SET, "retrieval_top_k", 3)
                 )
 
-                settings_for_domain = make_domain_settings(SET, prof)
-                topic = (
-                    getattr(getattr(settings_for_domain, "domain", {}), "profile", None)
-                )
+                settings_for_domain = make_domain_settings(SET, prof_name, prof)
+                topic = getattr(getattr(settings_for_domain, "domain", {}), "profile", None)
                 pending_topic = topic
-
-
-                settings_for_domain = make_domain_settings(SET, prof_name)
-
-                settings_for_domain = make_domain_settings(SET, session_profile_name, prof)
-
 
                 ok, context, clarify, reason, suggestion = validate_question(
                     pending_q,
@@ -635,9 +627,6 @@ def main() -> None:
                     top_k=effective_top_k,
                     embed_model=embed_model,
                     topic=topic,
-                    topic=prof_name,
-                    topic=session_profile_name,
-
                     history=pending_history,
                 )
                 if DEBUG:
@@ -689,8 +678,6 @@ def main() -> None:
                     context=context_texts,
                     history=pending_history,
                     topic=topic,
-                    topic=prof_name,
-
                     policy_prompt=ORACLE_POLICY,
                     mode=ANSWER_MODE,
                 )
