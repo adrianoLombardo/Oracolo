@@ -951,27 +951,34 @@ class OracoloUI(tk.Tk):
                 topic=self.chat_state.topic_text,
                 mode=mode,
             )
-        try:
-            ans, used_ctx = self.controller.send_chat(
-                text,
-                self.lang_map.get(self.lang_choice.get(), "auto"),
-                self.mode_map.get(self.mode_choice.get(), "detailed"),
-                self.style_var.get(),
-                self.sandbox_var.get(),
+            try:
+                ans, used_ctx = self.controller.send_chat(
+                    text,
+                    self.lang_map.get(self.lang_choice.get(), "auto"),
+                    self.mode_map.get(self.mode_choice.get(), "detailed"),
+                    self.style_var.get(),
+                    self.sandbox_var.get(),
 
-            )
-            self.last_sources = used_ctx
+                )
+                self.last_sources = used_ctx
+            except Exception as e:
+                ans = f"Errore: {e}"
+                self.last_sources = []
+            self.conv.push_assistant(ans)
+
+            self._append_chat("assistant", ans)
+            self._append_citations(self.last_sources)
+            self.last_activity = time.time()
+            self.after(0, self._append_chat, "assistant", ans)
+            self.after(0, self._append_citations, self.last_sources)
+            self.after(0, self.status_var.set, "🟢 Attivo")
         except Exception as e:
             ans = f"Errore: {e}"
             self.last_sources = []
-        self.conv.push_assistant(ans)
-
-        self._append_chat("assistant", ans)
-        self._append_citations(self.last_sources)
-        self.last_activity = time.time()
-        self.after(0, self._append_chat, "assistant", ans)
-        self.after(0, self._append_citations, self.last_sources)
-        self.after(0, self.status_var.set, "🟢 Attivo")
+            self.conv.push_assistant(ans)
+            self.after(0, self._append_chat, "assistant", ans)
+            self.after(0, self._append_citations, [])
+            self.after(0, self.status_var.set, "🟢 Attivo")
 
     def _mute_tts(self) -> None:
         self.tts_muted = not self.tts_muted
