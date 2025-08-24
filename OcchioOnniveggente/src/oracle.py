@@ -257,6 +257,19 @@ def append_log(
     topic: str | None = None,
     sources: list[dict[str, str]] | None = None,
 ) -> None:
+
+    """Append a JSON line with optional metadata.
+
+    Parameters are logged along with a computed ``summary`` extracted from
+    ``a`` using :func:`extract_summary`.
+    """
+
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    entry = {
+        "timestamp": ts,
+
     """Append one JSON object per line with optional metadata."""
     log_path.parent.mkdir(parents=True, exist_ok=True)
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -264,14 +277,17 @@ def append_log(
     record = {
         "timestamp": ts,
         "session_id": session_id,
+
         "lang": lang,
         "topic": topic or "",
         "question": q,
         "answer": a,
+        "summary": extract_summary(a),
         "sources": sources or [],
     }
 
     with log_path.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(entry, ensure_ascii=False) + "\n")
         f.write(json.dumps(record, ensure_ascii=False) + "\n")
 
 
