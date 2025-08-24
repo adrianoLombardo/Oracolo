@@ -500,7 +500,7 @@ class OracoloUI(tk.Tk):
 
         # Documenti
         docs_menu = tk.Menu(menubar, tearoff=0)
-        docs_menu.add_command(label="Gestione…", command=self._open_doc_manager_dialog)
+        docs_menu.add_command(label="Gestione & Regole…", command=self._open_doc_manager_dialog)
         docs_menu.add_command(label="Libreria…", command=self._open_library_dialog)
         menubar.add_cascade(label="Documenti", menu=docs_menu)
 
@@ -512,7 +512,6 @@ class OracoloUI(tk.Tk):
         settings_menu.add_command(label="Recording…", command=self._open_recording_dialog)
         settings_menu.add_command(label="Luci…", command=self._open_lighting_dialog)
         settings_menu.add_command(label="OpenAI…", command=self._open_openai_dialog)
-        settings_menu.add_command(label="Argomenti & Regole…", command=self._open_domain_dialog)
         settings_menu.add_command(label="Wake…", command=self._open_wake_dialog)
         settings_menu.add_separator()
         settings_menu.add_command(label="Importa profili…", command=self._import_profiles)
@@ -1489,8 +1488,15 @@ class OracoloUI(tk.Tk):
             win = tkdnd.TkinterDnD.Toplevel(self)  # type: ignore[attr-defined]
         else:
             win = tk.Toplevel(self)
-        win.title("Gestione Documenti")
+        win.title("Gestione Documenti & Regole")
         win.configure(bg=self._bg)
+
+        notebook = ttk.Notebook(win)
+        notebook.pack(fill="both", expand=True)
+
+        # -------------------------- Tab Documenti ------------------------- #
+        doc_tab = ttk.Frame(notebook)
+        notebook.add(doc_tab, text="Documenti")
 
         dom = self.settings.get("domain", {})
         profiles = dom.get("profiles", {}) if isinstance(dom, dict) else {}
@@ -1503,8 +1509,8 @@ class OracoloUI(tk.Tk):
         topk_var = tk.StringVar(value=str(self.settings.get("retrieval_top_k", 3)))
         query_var = tk.StringVar()
 
-        tk.Label(win, text="Indice", fg=self._fg, bg=self._bg).grid(row=0, column=0, padx=6, pady=6, sticky="e")
-        tk.Entry(win, textvariable=doc_var, width=40).grid(row=0, column=1, padx=6, pady=6, sticky="w")
+        tk.Label(doc_tab, text="Indice", fg=self._fg, bg=self._bg).grid(row=0, column=0, padx=6, pady=6, sticky="e")
+        tk.Entry(doc_tab, textvariable=doc_var, width=40).grid(row=0, column=1, padx=6, pady=6, sticky="w")
 
         def browse() -> None:
             p = filedialog.askopenfilename(
@@ -1514,11 +1520,11 @@ class OracoloUI(tk.Tk):
                 doc_var.set(p)
                 refresh_tree()
 
-        ttk.Button(win, text="Sfoglia", command=browse).grid(row=0, column=2, padx=6, pady=6)
+        ttk.Button(doc_tab, text="Sfoglia", command=browse).grid(row=0, column=2, padx=6, pady=6)
 
-        tk.Label(win, text="Sezione", fg=self._fg, bg=self._bg).grid(row=1, column=0, padx=6, pady=6, sticky="e")
+        tk.Label(doc_tab, text="Sezione", fg=self._fg, bg=self._bg).grid(row=1, column=0, padx=6, pady=6, sticky="e")
         opts = [p for p in self.profile_names if p != current_profile]
-        tk.OptionMenu(win, topic_var, current_profile, *opts).grid(
+        tk.OptionMenu(doc_tab, topic_var, current_profile, *opts).grid(
             row=1, column=1, padx=6, pady=6, sticky="w"
         )
 
@@ -1530,8 +1536,9 @@ class OracoloUI(tk.Tk):
 
         topic_var.trace_add("write", _on_topic_change)
 
-        btn_frame = ttk.Frame(win)
+        btn_frame = ttk.Frame(doc_tab)
         btn_frame.grid(row=1, column=2, rowspan=2, padx=6, pady=6, sticky="n")
+
         def _add_from_topic() -> None:
             path = profiles.get(topic_var.get(), {}).get("docstore_path", doc_var.get())
             self._add_documents(topic_var.get(), path)
@@ -1550,13 +1557,13 @@ class OracoloUI(tk.Tk):
             command=lambda: (self._reindex_documents(doc_var.get()), refresh_tree()),
         ).pack(fill="x")
 
-        tree = ttk.Treeview(win, columns=("topic", "date", "size"), show="headings")
+        tree = ttk.Treeview(doc_tab, columns=("topic", "date", "size"), show="headings")
         tree.heading("topic", text="Sezione")
         tree.heading("date", text="Indicizzazione")
         tree.heading("size", text="Dim.")
         tree.grid(row=2, column=0, columnspan=3, padx=6, pady=6, sticky="nsew")
-        win.grid_rowconfigure(2, weight=1)
-        win.grid_columnconfigure(1, weight=1)
+        doc_tab.grid_rowconfigure(2, weight=1)
+        doc_tab.grid_columnconfigure(1, weight=1)
 
         def refresh_tree() -> None:
             for i in tree.get_children():
@@ -1576,15 +1583,15 @@ class OracoloUI(tk.Tk):
 
         refresh_tree()
 
-        tk.Label(win, text="Top-K", fg=self._fg, bg=self._bg).grid(row=3, column=0, padx=6, pady=6, sticky="e")
-        tk.Entry(win, textvariable=topk_var, width=6).grid(row=3, column=1, padx=6, pady=6, sticky="w")
+        tk.Label(doc_tab, text="Top-K", fg=self._fg, bg=self._bg).grid(row=3, column=0, padx=6, pady=6, sticky="e")
+        tk.Entry(doc_tab, textvariable=topk_var, width=6).grid(row=3, column=1, padx=6, pady=6, sticky="w")
 
-        tk.Label(win, text="Test query", fg=self._fg, bg=self._bg).grid(row=4, column=0, padx=6, pady=6, sticky="e")
-        tk.Entry(win, textvariable=query_var, width=40).grid(row=4, column=1, padx=6, pady=6, sticky="w")
+        tk.Label(doc_tab, text="Test query", fg=self._fg, bg=self._bg).grid(row=4, column=0, padx=6, pady=6, sticky="e")
+        tk.Entry(doc_tab, textvariable=query_var, width=40).grid(row=4, column=1, padx=6, pady=6, sticky="w")
 
-        result_box = scrolledtext.ScrolledText(win, width=50, height=8)
+        result_box = scrolledtext.ScrolledText(doc_tab, width=50, height=8)
         result_box.grid(row=5, column=0, columnspan=3, padx=6, pady=6, sticky="nsew")
-        win.grid_rowconfigure(5, weight=1)
+        doc_tab.grid_rowconfigure(5, weight=1)
 
         def run_test() -> None:
             result_box.delete("1.0", "end")
@@ -1605,21 +1612,83 @@ class OracoloUI(tk.Tk):
                 else:
                     result_box.insert("end", f"- {text}\n")
 
-        ttk.Button(win, text="Prova", command=run_test).grid(row=4, column=2, padx=6, pady=6)
+        ttk.Button(doc_tab, text="Prova", command=run_test).grid(row=4, column=2, padx=6, pady=6)
 
+        # --------------------- Tab Argomenti & Regole --------------------- #
+        domain_tab = ttk.Frame(notebook)
+        notebook.add(domain_tab, text="Argomenti & Regole")
+
+        dom = self.settings.setdefault("domain", {})
+
+        topic_box = scrolledtext.ScrolledText(domain_tab, width=40, height=4)
+        topic_box.insert("1.0", dom.get("topic", ""))
+        tk.Label(domain_tab, text="Topic", fg=self._fg, bg=self._bg).grid(row=0, column=0, padx=6, pady=6, sticky="ne")
+        topic_box.grid(row=0, column=1, padx=6, pady=6, sticky="w")
+
+        kw_var = tk.StringVar(value=", ".join(dom.get("keywords", [])))
+        tk.Label(domain_tab, text="Keywords", fg=self._fg, bg=self._bg).grid(row=1, column=0, padx=6, pady=6, sticky="e")
+        tk.Entry(domain_tab, textvariable=kw_var, width=40).grid(row=1, column=1, padx=6, pady=6, sticky="w")
+
+        weights = dom.get("weights", {})
+        ov_var = tk.DoubleVar(value=weights.get("kw", 0.4))
+        emb_var = tk.DoubleVar(value=weights.get("emb", 0.3))
+        rag_var = tk.DoubleVar(value=weights.get("rag", 0.3))
+        tk.Label(domain_tab, text="Peso Overlap", fg=self._fg, bg=self._bg).grid(row=2, column=0, padx=6, pady=6, sticky="e")
+        ttk.Scale(domain_tab, from_=0, to=1, variable=ov_var, orient="horizontal", length=180).grid(row=2, column=1, padx=6, pady=6, sticky="w")
+        tk.Label(domain_tab, text="Peso Embedding", fg=self._fg, bg=self._bg).grid(row=3, column=0, padx=6, pady=6, sticky="e")
+        ttk.Scale(domain_tab, from_=0, to=1, variable=emb_var, orient="horizontal", length=180).grid(row=3, column=1, padx=6, pady=6, sticky="w")
+        tk.Label(domain_tab, text="Peso RAG", fg=self._fg, bg=self._bg).grid(row=4, column=0, padx=6, pady=6, sticky="e")
+        ttk.Scale(domain_tab, from_=0, to=1, variable=rag_var, orient="horizontal", length=180).grid(row=4, column=1, padx=6, pady=6, sticky="w")
+
+        acc_var = tk.DoubleVar(value=dom.get("accept_threshold", 0.5))
+        clar_var = tk.DoubleVar(value=dom.get("clarify_margin", 0.15))
+        tk.Label(domain_tab, text="Accept threshold", fg=self._fg, bg=self._bg).grid(row=5, column=0, padx=6, pady=6, sticky="e")
+        ttk.Scale(domain_tab, from_=0, to=1, variable=acc_var, orient="horizontal", length=180).grid(row=5, column=1, padx=6, pady=6, sticky="w")
+        tk.Label(domain_tab, text="Clarify margin", fg=self._fg, bg=self._bg).grid(row=6, column=0, padx=6, pady=6, sticky="e")
+        ttk.Scale(domain_tab, from_=0, to=1, variable=clar_var, orient="horizontal", length=180).grid(row=6, column=1, padx=6, pady=6, sticky="w")
+
+        wake_var = tk.BooleanVar(value=dom.get("always_accept_wake", True))
+        tk.Checkbutton(
+            domain_tab,
+            text="Accetta sempre saluti/wake words",
+            variable=wake_var,
+            bg=self._bg,
+            fg=self._fg,
+            selectcolor=self._bg,
+        ).grid(row=7, column=0, columnspan=2, padx=6, pady=6, sticky="w")
+
+        # ----------------------------- Salvataggio ------------------------ #
         def on_ok() -> None:
             self.settings["docstore_path"] = doc_var.get().strip()
             try:
                 self.settings["retrieval_top_k"] = int(topk_var.get())
             except Exception:
                 pass
+            dom["topic"] = topic_box.get("1.0", "end").strip()
+            dom["keywords"] = [k.strip() for k in kw_var.get().split(",") if k.strip()]
+            self._append_log(
+                "Keywords aggiornate: " + ", ".join(dom["keywords"]),
+                "DOMAIN",
+            )
+            dom["weights"] = {"kw": float(ov_var.get()), "emb": float(emb_var.get()), "rag": float(rag_var.get())}
+            dom["accept_threshold"] = float(acc_var.get())
+            dom["clarify_margin"] = float(clar_var.get())
+            dom["always_accept_wake"] = bool(wake_var.get())
             self._append_log(
                 f"Gestione Documenti: index={self.settings['docstore_path']} top_k={self.settings.get('retrieval_top_k')} topic={topic_var.get()}\n",
                 "MISC",
             )
+            self._append_log(
+                f"Domain: topic={dom['topic']} kw={dom['keywords']} weights={dom['weights']} acc={dom['accept_threshold']} clar={dom['clarify_margin']} wake={dom['always_accept_wake']}\n",
+                "DOMAIN",
+            )
+            self.controller.save_settings(self._append_log)
+            self.base_settings = self.controller.base_settings
+            self.local_settings = self.controller.local_settings
+            self.settings = self.controller.settings
             win.destroy()
 
-        ttk.Button(win, text="OK", command=on_ok).grid(row=6, column=0, columnspan=3, pady=10)
+        ttk.Button(win, text="OK", command=on_ok).pack(pady=10)
     def _open_library_dialog(self) -> None:
         win = tk.Toplevel(self)
         win.title("Libreria")
@@ -1652,7 +1721,18 @@ class OracoloUI(tk.Tk):
             dom["topic"] = "\n".join(names)
             messagebox.showinfo("Collezione", "Topic aggiornato dalla selezione.")
 
+        def clear_library() -> None:
+            path = self.settings.get("docstore_path", "DataBase/index.json")
+            try:
+                Path(path).write_text("[]", encoding="utf-8")
+                for i in tree.get_children():
+                    tree.delete(i)
+                messagebox.showinfo("Libreria", "Libreria svuotata.")
+            except Exception as e:
+                messagebox.showerror("Libreria", f"Impossibile svuotare la libreria: {e}")
+
         ttk.Button(btn_frame, text="Crea Collezione da selezione", command=make_collection).pack(side="left")
+        ttk.Button(btn_frame, text="Svuota libreria", command=clear_library).pack(side="right")
         ttk.Button(btn_frame, text="Verifica indice", command=self._open_doc_manager_dialog).pack(side="right")
 
     def _load_doc_index(self) -> list[dict]:
