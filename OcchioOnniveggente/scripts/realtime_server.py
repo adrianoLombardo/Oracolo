@@ -4,6 +4,26 @@ import json
 import os
 import sys
 import time
+from pathlib import Path
+from typing import Any
+
+import numpy as np
+import websockets
+from dotenv import load_dotenv
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from src.config import Settings
+from src.hotword import strip_hotword_prefix
+from src.oracle import transcribe, oracle_answer
+from src.retrieval import retrieve
+from src.chat import ChatState
+
+# soglia più permissiva per captare parlato anche con microfoni poco sensibili
+START_LEVEL = 300
+
 import wave
 from pathlib import Path
 from typing import Any
@@ -30,6 +50,7 @@ CHUNK_MS = 20
 main
 # soglia più permissiva per captare parlato anche con microfoni poco sensibili
 START_LEVEL = 300
+main
 END_SIL_MS = 700
 MAX_UTT_MS = 15_000
 
@@ -40,6 +61,9 @@ def rms_level(pcm_bytes: bytes) -> float:
     if x.size == 0:
         return 0.0
     return float(np.sqrt(np.mean(x * x)))
+
+
+class RTSession:
 
 def write_wav(path: Path, sr: int, pcm: bytes) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -95,6 +119,7 @@ async def stream_tts_pcm(ws, client, text: str, tts_model: str, tts_voice: str, 
             await asyncio.sleep(0)
 
 class RTSession:
+
     def __init__(self, ws, setts: Settings) -> None:
         self.ws = ws
         self.SET = setts
@@ -104,6 +129,29 @@ class RTSession:
         self.ms_in_state = 0
         self.ms_since_voice = 0
         self.barge = False
+
+
+        self.active_until = 0.0
+        self.wake_phrases = []
+        if setts.wake:
+            self.wake_phrases = list(getattr(setts.wake, "it_phrases", [])) + list(
+                getattr(setts.wake, "en_phrases", [])
+            )
+        self.idle_timeout = float(getattr(setts.wake, "idle_timeout", 60.0))
+
+        self.chat_enabled = bool(getattr(getattr(setts, "chat", None), "enabled", False))
+        self.chat = ChatState(
+            max_turns=int(getattr(getattr(setts, "chat", None), "max_turns", 10)),
+            persist_jsonl=Path(
+                getattr(
+                    getattr(setts, "chat", None),
+                    "persist_jsonl",
+                    "data/logs/chat_sessions.jsonl",
+                )
+            )
+            if self.chat_enabled
+            else None,
+        )
 
         self.tmp = ROOT / "data" / "temp"
         self.in_wav = self.tmp / "rt_input.wav"
@@ -129,6 +177,7 @@ class RTSession:
             if self.chat_enabled
             else None,
         )
+ main
 
     async def send_json(self, obj: dict) -> None:
         try:
@@ -243,6 +292,24 @@ class RTSession:
                 self.ms_since_voice = 0
 
     async def _finalize_utterance(self) -> None:
+
+        if not self.buf:
+            return
+        audio_bytes = bytes(self.buf)
+
+        from openai import OpenAI
+        load_dotenv()
+        client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+
+        text, lang = transcribe(
+            audio_bytes, client, self.SET.openai.stt_model, debug=self.SET.debug
+        )
+        if not text.strip():
+            await self.send_partial("…silenzio…")
+            return
+
+        print(f"🗣️ {text.strip()}", flush=True)
+
         if not self.buf:
             return
         write_wav(self.in_wav, self.client_sr, bytes(self.buf))
@@ -266,6 +333,7 @@ class RTSession:
             lang = "it"
 
         print(f"🗣️ {text.strip()}", flush=True)
+        main
         now = time.time()
         if now > self.active_until:
             self.active_until = 0.0

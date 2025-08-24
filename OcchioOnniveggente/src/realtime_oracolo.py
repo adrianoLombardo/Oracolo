@@ -26,8 +26,8 @@ from src.dialogue import DialogueManager, DialogState
 
 
 SR = 24_000
-FRAME_MS = 20
-BLOCKSIZE = SR * FRAME_MS // 1000  # 480 campioni per 20ms @24k
+FRAME_MS = 10
+BLOCKSIZE = SR * FRAME_MS // 1000  # 240 campioni per 10ms @24k
 BYTES_PER_SAMPLE = 2  # int16
 CHANNELS = 1
 NEED_BYTES = BLOCKSIZE * BYTES_PER_SAMPLE * CHANNELS
@@ -53,8 +53,8 @@ async def _mic_worker(
         if not state.get("tts_playing"):
             send_q.put_nowait(data)
 
-        # BARGE-IN: richiedi ~200ms sopra soglia prima di inviare l'evento.
-        # (10 callback da 20ms = 200ms)
+        # BARGE-IN: richiedi ~250ms sopra soglia prima di inviare l'evento.
+        # (25 callback da 10ms = 250ms)
         samples = np.frombuffer(data, dtype=np.int16).astype(np.float32)
         level = float(np.sqrt(np.mean(samples ** 2)))
 
@@ -62,11 +62,13 @@ async def _mic_worker(
             # isteresi + cooldown per non spammare
             if level > state.get("barge_threshold", 500.0):
                 state["hot_frames"] = state.get("hot_frames", 0) + 1
+                state["ducking"] = True
             else:
                 state["hot_frames"] = 0
+                state["ducking"] = False
             now = time.monotonic()
             if (
-                state.get("hot_frames", 0) >= 10
+                state.get("hot_frames", 0) >= 25
                 and not state.get("barge_sent", False)
                 and now - state.get("last_barge_ts", 0) > 0.6
             ):
@@ -133,6 +135,10 @@ async def _player(
         else:
             state["tts_playing"] = True
 
+        if state.get("ducking"):
+            arr = np.frombuffer(outdata, dtype=np.int16)
+            arr[:] = (arr * 0.3).astype(np.int16)
+
     with sd.RawOutputStream(
         samplerate=sr,
         channels=1,
@@ -177,6 +183,7 @@ async def _run(url: str, sr: int, barge_threshold: float) -> None:
         "tts_playing": False,
         "barge_sent": False,
         "barge_threshold": barge_threshold,
+        "ducking": False,
     }
     dlg = DialogueManager(idle_timeout=60)
     dlg.transition(DialogState.LISTENING)
