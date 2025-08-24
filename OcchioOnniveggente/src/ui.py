@@ -827,7 +827,7 @@ class OracoloUI(tk.Tk):
             self.root_dir,
             self._append_log,
         )
-        self._append_log(f"Profilo attivo: {name}\n", "DOMAIN")
+        self._append_log(f"Profilo attivo: {name}", "DOMAIN")
         if self.ws_client is not None:
             self.ws_client.profile_name = name
             if self.ws_client.ws is not None:
