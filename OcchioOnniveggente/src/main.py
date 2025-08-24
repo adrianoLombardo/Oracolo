@@ -25,6 +25,7 @@ from src.oracle import transcribe, oracle_answer, synthesize, append_log
 from src.domain import validate_question
 from src.chat import ChatState
 from src.dialogue import DialogueManager, DialogState
+from src.logging_utils import setup_logging
 
 
 # --------------------------- console helpers --------------------------- #
@@ -152,6 +153,8 @@ def oracle_greeting(lang: str) -> str:
 # --------------------------- main ------------------------------------- #
 def main() -> None:
     _ensure_utf8_stdout()
+
+    listener = setup_logging(Path("data/logs/oracolo.log"))
 
     parser = argparse.ArgumentParser(description="Occhio Onniveggente · Oracolo")
     parser.add_argument("--autostart", action="store_true", help="Avvia direttamente senza prompt input()")
@@ -584,6 +587,7 @@ def main() -> None:
         except Exception:
             pass
         print("👁️  Arrivederci.")
+        listener.stop()
 
 
 if __name__ == "__main__":
