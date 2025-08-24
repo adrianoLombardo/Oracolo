@@ -5,8 +5,13 @@ import io
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
+import asyncio
+import logging
 import openai
 from .utils import retry_with_backoff
+
+
+logger = logging.getLogger(__name__)
 
 
 def fast_transcribe(path_or_bytes, client, stt_model: str, lang_hint: str | None = None) -> str:
@@ -37,7 +42,7 @@ def transcribe(path: Path, client, stt_model: str, *, debug: bool = False) -> Tu
                 response_format="json",
             )
     except openai.OpenAIError as e:
-        print(f"Errore OpenAI: {e}")
+        logger.error("Errore OpenAI: %s", e)
         return "", ""
 
     text = (getattr(tx, "text", "") or "").strip()
@@ -51,7 +56,7 @@ def transcribe(path: Path, client, stt_model: str, *, debug: bool = False) -> Tu
         lang_code = ""
 
     if debug and lang_code:
-        print(f"🌐 Lingua rilevata: {lang_code.upper()}")
+        logger.info("🌐 Lingua rilevata: %s", lang_code.upper())
 
     return text, lang_code
 
@@ -75,7 +80,7 @@ def oracle_answer(
     augments it with simple policy instructions and attempts the request up to
     three times to handle transient API errors gracefully.
     """
-    print("✨ Interrogo l’Oracolo…")
+    logger.info("✨ Interrogo l’Oracolo…")
 
     lang_clause = "Answer in English." if lang_hint == "en" else "Rispondi in italiano."
     topic_clause = (
@@ -129,12 +134,41 @@ def oracle_answer(
         ans = resp.output_text.strip()
         return ans, context or []
     except openai.OpenAIError as e:
-        print(f"Errore OpenAI: {e}")
+        logger.error("Errore OpenAI: %s", e)
         return "", context or []
 
 
+async def oracle_answer_async(
+    question: str,
+    lang_hint: str,
+    client: Any,
+    llm_model: str,
+    style_prompt: str,
+    *,
+    context: List[Dict[str, Any]] | None = None,
+    history: List[Dict[str, str]] | None = None,
+    topic: str | None = None,
+    policy_prompt: str = "",
+    mode: str = "detailed",
+) -> Tuple[str, List[Dict[str, Any]]]:
+    """Asynchronous wrapper around :func:`oracle_answer`."""
+    return await asyncio.to_thread(
+        oracle_answer,
+        question,
+        lang_hint,
+        client,
+        llm_model,
+        style_prompt,
+        context=context,
+        history=history,
+        topic=topic,
+        policy_prompt=policy_prompt,
+        mode=mode,
+    )
+
+
 def synthesize(text: str, out_path: Path, client, tts_model: str, tts_voice: str) -> None:
-    print("🎧 Sintesi vocale…")
+    logger.info("🎧 Sintesi vocale…")
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
     def do_call() -> Path:
@@ -154,11 +188,18 @@ def synthesize(text: str, out_path: Path, client, tts_model: str, tts_voice: str
 
     try:
         final_path = retry_with_backoff(do_call)
-        print(f"✅ Audio → {final_path.name}")
+        logger.info("✅ Audio → %s", final_path.name)
         return
     except openai.OpenAIError as e:
-        print(f"Errore OpenAI: {e}")
-    print("❌ Impossibile sintetizzare l'audio.")
+        logger.error("Errore OpenAI: %s", e)
+    logger.error("❌ Impossibile sintetizzare l'audio.")
+
+
+async def synthesize_async(
+    text: str, out_path: Path, client, tts_model: str, tts_voice: str
+) -> None:
+    """Asynchronously run :func:`synthesize` in a thread."""
+    await asyncio.to_thread(synthesize, text, out_path, client, tts_model, tts_voice)
 
 
 def export_audio_answer(
