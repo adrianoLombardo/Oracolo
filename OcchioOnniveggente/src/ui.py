@@ -30,8 +30,11 @@ from src.retrieval import retrieve
 from src.domain import validate_question
 from src.validators import validate_device_config
 from src.config import get_openai_api_key
+from src.ui_state import UIState
+from src.ui_controller import UIController
 from src.oracle import synthesize
 from src.ui_controller import UiController, _REASON_RE
+
 
 import asyncio
 import numpy as np
@@ -313,8 +316,14 @@ class RealtimeWSClient:
 class OracoloUI(tk.Tk):
     """Interfaccia grafica per l'Oracolo."""
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        state: UIState | None = None,
+        controller: UIController | None = None,
+    ) -> None:
         super().__init__()
+        self.state = state or UIState()
+        self.controller = controller
         self.root_dir = Path(__file__).resolve().parents[1]
         self.title("Occhio Onniveggente")
 
@@ -442,6 +451,32 @@ class OracoloUI(tk.Tk):
         self.protocol("WM_DELETE_WINDOW", self._on_close)
 
         logging.getLogger().addHandler(UILogHandler(self))
+
+    # ------------------------------ state props ---------------------------- #
+
+    @property
+    def settings(self) -> dict[str, Any]:
+        return self.state.settings
+
+    @settings.setter
+    def settings(self, value: dict[str, Any]) -> None:
+        self.state.settings = value
+
+    @property
+    def conv(self) -> ConversationManager | None:
+        return self.state.conversation
+
+    @conv.setter
+    def conv(self, value: ConversationManager) -> None:
+        self.state.conversation = value
+
+    @property
+    def audio(self) -> Any | None:
+        return self.state.audio
+
+    @audio.setter
+    def audio(self, value: Any | None) -> None:
+        self.state.audio = value
 
     # --------------------------- Menubar & dialogs ------------------------ #
     def _build_menubar(self) -> None:
@@ -2307,7 +2342,9 @@ UILogHandler = OracoloUI.UILogHandler
 
 # ----------------------------- entry point -------------------------------- #
 def main() -> None:
-    app = OracoloUI()
+    state = UIState()
+    controller = UIController(state)
+    app = OracoloUI(state=state, controller=controller)
     app.mainloop()
 
 
