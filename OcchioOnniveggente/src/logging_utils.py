@@ -4,7 +4,9 @@ from pathlib import Path
 from queue import Queue
 
 
-def setup_logging(log_path: Path, level: int = logging.INFO) -> QueueListener:
+def setup_logging(
+    log_path: Path, level: int = logging.INFO, *, console: bool = True
+) -> QueueListener:
     """Configure logging with a queue and rotating file handler.
 
     Parameters
@@ -32,7 +34,7 @@ def setup_logging(log_path: Path, level: int = logging.INFO) -> QueueListener:
     root.setLevel(level)
     root.addHandler(queue_handler)
 
-    # Rotating file handler and console handler run in listener thread
+    # Rotating file handler (and optional console handler) run in listener thread
     fmt = logging.Formatter(
         "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
@@ -42,9 +44,12 @@ def setup_logging(log_path: Path, level: int = logging.INFO) -> QueueListener:
     )
     file_handler.setFormatter(fmt)
 
-    console_handler = logging.StreamHandler()
-    console_handler.setFormatter(fmt)
+    handlers = [file_handler]
+    if console:
+        console_handler = logging.StreamHandler()
+        console_handler.setFormatter(fmt)
+        handlers.append(console_handler)
 
-    listener = QueueListener(queue, file_handler, console_handler)
+    listener = QueueListener(queue, *handlers)
     listener.start()
     return listener
