@@ -801,14 +801,35 @@ class OracoloUI(tk.Tk):
         if kw and kw not in self.keywords:
             self.keywords.append(kw)
             self.keyword_listbox.insert("end", kw)
+            self.settings["keywords"] = self.keywords
+            routed_save(
+                self.base_settings,
+                self.local_settings,
+                self.settings,
+                self.root_dir,
+                self._append_log,
+            )
+            self._append_log(f"Aggiunta keyword: {kw}", "DOMAIN")
         self.keyword_entry.delete(0, "end")
 
     def _remove_keyword(self) -> None:
         sel = list(self.keyword_listbox.curselection())
+        removed = False
         for idx in reversed(sel):
             kw = self.keyword_listbox.get(idx)
+            self._append_log(f"Rimossa keyword: {kw}", "DOMAIN")
             self.keywords.remove(kw)
             self.keyword_listbox.delete(idx)
+            removed = True
+        if removed:
+            self.settings["keywords"] = self.keywords
+            routed_save(
+                self.base_settings,
+                self.local_settings,
+                self.settings,
+                self.root_dir,
+                self._append_log,
+            )
 
     def _pin_last(self) -> None:
         self.chat_state.pin_last_user()
@@ -1806,6 +1827,10 @@ class OracoloUI(tk.Tk):
         def on_ok() -> None:
             dom["topic"] = topic_box.get("1.0", "end").strip()
             dom["keywords"] = [k.strip() for k in kw_var.get().split(",") if k.strip()]
+            self._append_log(
+                "Keywords aggiornate: " + ", ".join(dom["keywords"]),
+                "DOMAIN",
+            )
             dom["weights"] = {"kw": float(ov_var.get()), "emb": float(emb_var.get()), "rag": float(rag_var.get())}
             dom["accept_threshold"] = float(acc_var.get())
             dom["clarify_margin"] = float(clar_var.get())
@@ -1813,6 +1838,13 @@ class OracoloUI(tk.Tk):
             self._append_log(
                 f"Domain: topic={dom['topic']} kw={dom['keywords']} weights={dom['weights']} acc={dom['accept_threshold']} clar={dom['clarify_margin']} wake={dom['always_accept_wake']}\n",
                 "DOMAIN",
+            )
+            routed_save(
+                self.base_settings,
+                self.local_settings,
+                self.settings,
+                self.root_dir,
+                self._append_log,
             )
             win.destroy()
 
