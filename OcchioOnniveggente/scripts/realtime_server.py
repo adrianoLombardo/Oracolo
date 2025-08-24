@@ -99,6 +99,20 @@ def write_wav(path: Path, sr: int, pcm: bytes) -> None:
         w.writeframes(pcm)
 
 
+def off_topic_message(profile: str, keywords: list[str]) -> str:
+    """Compose a helpful message when the question is off-topic."""
+    tips = ", ".join(keywords[:3]) if keywords else ""
+    if tips:
+        return (
+            f"La domanda non sembra pertinente rispetto al profilo «{profile}». "
+            f"Puoi chiedermi, ad esempio, di {tips}."
+        )
+    return (
+        f"La domanda non sembra pertinente rispetto al profilo «{profile}». "
+        "Prova a riformularla o a specificare meglio il tema."
+    )
+
+
 async def stream_tts_pcm(
     ws, client, text: str, tts_model: str, tts_voice: str, sr: int = 24000
 ) -> None:
@@ -360,7 +374,7 @@ class RTSession:
             if clarify:
                 ans = "La domanda non è chiarissima per questo contesto: puoi riformularla brevemente?"
             else:
-                ans = f"Tema non pertinente rispetto al profilo «{self.profile}»."
+                ans = off_topic_message(self.profile, self.domain_keywords)
             await self.send_answer(ans)
             await self.stream_sentences(ans, client)
             return
