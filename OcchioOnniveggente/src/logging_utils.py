@@ -17,6 +17,7 @@ from typing import Optional
 class JsonFormatter(logging.Formatter):
     """Formatter che serializza i record in JSON."""
 
+
     def format(self, record: logging.LogRecord) -> str:  # type: ignore[override]
         log_record = {
             "timestamp": self.formatTime(record, self.datefmt),
@@ -34,6 +35,10 @@ def setup_logging(
     log_path: Path,
     level: int = logging.INFO,
     session_id: Optional[str] = None,
+
+def setup_logging(
+    log_path: Path, level: int = logging.INFO, *, console: bool = True
+        main
 ) -> QueueListener:
     """Configure logging with a queue and rotating file handler.
 
@@ -62,6 +67,7 @@ def setup_logging(
     root.setLevel(level)
     root.addHandler(queue_handler)
 
+
     # Ensure each record has a session identifier for context
     old_factory = logging.getLogRecordFactory()
 
@@ -74,10 +80,18 @@ def setup_logging(
 
     # Rotating file handler and console handler run in listener thread
     json_fmt = JsonFormatter(datefmt="%Y-%m-%dT%H:%M:%S")
+
+    # Rotating file handler (and optional console handler) run in listener thread
+    fmt = logging.Formatter(
+        "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+       main
     file_handler = RotatingFileHandler(
         log_path, maxBytes=1_000_000, backupCount=3, encoding="utf-8"
     )
     file_handler.setFormatter(json_fmt)
+
 
     console_fmt = logging.Formatter(
         "%(asctime)s [%(levelname)s] %(name)s [%(session_id)s]: %(message)s",
@@ -86,6 +100,13 @@ def setup_logging(
     console_handler = logging.StreamHandler()
     console_handler.setFormatter(console_fmt)
 
-    listener = QueueListener(queue, file_handler, console_handler)
+    handlers = [file_handler]
+    if console:
+        console_handler = logging.StreamHandler()
+        console_handler.setFormatter(fmt)
+        handlers.append(console_handler)
+        main
+
+    listener = QueueListener(queue, *handlers)
     listener.start()
     return listener
