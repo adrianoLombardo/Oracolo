@@ -17,6 +17,7 @@ import json
 import csv
 import os
 import queue
+import logging
 import subprocess
 import sys
 import threading
@@ -479,7 +480,10 @@ class OracoloUI(tk.Tk):
 
         # sandbox and log state
         self.sandbox_var = tk.BooleanVar(value=False)
-        self.log_filters = {c: tk.BooleanVar(value=True) for c in ["STT", "LLM", "TTS", "WS", "DOMAIN"]}
+        self.log_filters = {
+            c: tk.BooleanVar(value=True)
+            for c in ["STT", "LLM", "TTS", "WS", "DOMAIN", "DOCS"]
+        }
         self.log_entries: list[tuple[str, str]] = []
 
         self.profile_cb: ttk.Combobox | None = None
@@ -508,6 +512,8 @@ class OracoloUI(tk.Tk):
         self.after(500, self._poll_status)
         self.after(1000, self._poll_idle)
         self.protocol("WM_DELETE_WINDOW", self._on_close)
+
+        logging.getLogger().addHandler(UILogHandler(self))
 
     # --------------------------- Menubar & dialogs ------------------------ #
     def _build_menubar(self) -> None:
@@ -1030,10 +1036,31 @@ class OracoloUI(tk.Tk):
         if now - self.last_activity > timeout:
             self.status_var.set("😴 Dormiente — dì Ciao Oracolo per riattivarmi")
         elif self.status_var.get().startswith("😴"):
-            self.status_var.set("🟡 In attesa")
+        self.status_var.set("🟡 In attesa")
         self.after(1000, self._poll_idle)
 
     # --------------------------- Log helpers ------------------------------ #
+    class UILogHandler(logging.Handler):
+        """Inoltra i log della libreria standard al widget della UI."""
+
+        _LEVEL_MAP = {
+            "INFO": "MISC",
+            "ERROR": "ERR",
+            "WARNING": "WARN",
+            "DEBUG": "DBG",
+        }
+
+        def __init__(self, ui: "OracoloUI") -> None:
+            super().__init__()
+            self.ui = ui
+
+        def emit(self, record: logging.LogRecord) -> None:  # pragma: no cover - UI side effect
+            msg = record.getMessage()
+            if not msg.endswith("\n"):
+                msg += "\n"
+            cat = self._LEVEL_MAP.get(record.levelname, record.name)
+            self.ui._append_log(msg, cat)
+
     def _append_log(self, text: str, category: str = "MISC") -> None:
         if self.sandbox_var.get():
             return
@@ -1275,14 +1302,25 @@ class OracoloUI(tk.Tk):
         if not script:
             messagebox.showwarning("Documento", "Script di ingest non trovato (scripts/ingest_docs.py).")
             return
+        self._append_log("Aggiunta documenti:\n" + "\n".join(paths) + "\n", "DOCS")
         try:
-            subprocess.run(
+            proc = subprocess.run(
                 [sys.executable, "-m", "scripts.ingest_docs", "--add", *paths],
                 check=True,
                 cwd=self.root_dir,
+                capture_output=True,
+                text=True,
             )
+            self._append_log(proc.stdout, "DOCS")
+            if proc.stderr:
+                self._append_log(proc.stderr, "DOCS")
             messagebox.showinfo("Successo", "Documenti aggiunti.")
         except subprocess.CalledProcessError as exc:
+            if exc.stdout:
+                self._append_log(exc.stdout, "DOCS")
+            if exc.stderr:
+                self._append_log(exc.stderr, "DOCS")
+            self._append_log(str(exc) + "\n", "DOCS")
             messagebox.showerror("Errore", f"Ingest fallito: {exc}")
 
     def _remove_documents(self) -> None:
@@ -1297,14 +1335,25 @@ class OracoloUI(tk.Tk):
         if not script:
             messagebox.showwarning("Documento", "Script di ingest non trovato (scripts/ingest_docs.py).")
             return
+        self._append_log("Rimozione documenti:\n" + "\n".join(paths) + "\n", "DOCS")
         try:
-            subprocess.run(
+            proc = subprocess.run(
                 [sys.executable, "-m", "scripts.ingest_docs", "--remove", *paths],
                 check=True,
                 cwd=self.root_dir,
+                capture_output=True,
+                text=True,
             )
+            self._append_log(proc.stdout, "DOCS")
+            if proc.stderr:
+                self._append_log(proc.stderr, "DOCS")
             messagebox.showinfo("Successo", "Documenti rimossi.")
         except subprocess.CalledProcessError as exc:
+            if exc.stdout:
+                self._append_log(exc.stdout, "DOCS")
+            if exc.stderr:
+                self._append_log(exc.stderr, "DOCS")
+            self._append_log(str(exc) + "\n", "DOCS")
             messagebox.showerror("Errore", f"Rimozione fallita: {exc}")
 
     def _reindex_documents(self) -> None:
@@ -1317,12 +1366,20 @@ class OracoloUI(tk.Tk):
             self._append_log(f"Reindex: tentativo {' '.join(args)}\n", "DOCS")
             try:
                 result = subprocess.run(
+            self._append_log(
+                f"Aggiorna indice: {' '.join(args)} in {self.root_dir}\n",
+                "DOCS",
+            )
+            try:
+                proc = subprocess.run(
+
                     [sys.executable, "-m", "scripts.ingest_docs", *args],
                     check=True,
                     cwd=self.root_dir,
                     capture_output=True,
                     text=True,
                 )
+
                 output = (result.stdout or "") + (result.stderr or "")
                 match = re.search(r"(\d+)\s+doc", output, re.IGNORECASE)
                 if match:
@@ -1331,9 +1388,19 @@ class OracoloUI(tk.Tk):
                     )
                 else:
                     self._append_log("Indice aggiornato\n", "DOCS")
+
+                self._append_log(proc.stdout, "DOCS")
+                if proc.stderr:
+                    self._append_log(proc.stderr, "DOCS")
+
                 messagebox.showinfo("Indice", f"Indice aggiornato ({' '.join(args)}).")
                 return
-            except subprocess.CalledProcessError:
+            except subprocess.CalledProcessError as exc:
+                if exc.stdout:
+                    self._append_log(exc.stdout, "DOCS")
+                if exc.stderr:
+                    self._append_log(exc.stderr, "DOCS")
+                self._append_log(str(exc) + "\n", "DOCS")
                 continue
         self._append_log("Reindex: fallito\n", "DOCS")
         messagebox.showerror(
@@ -2229,6 +2296,9 @@ class OracoloUI(tk.Tk):
         finally:
             self.destroy()
 
+
+# Alias per accesso esterno al gestore di log della UI
+UILogHandler = OracoloUI.UILogHandler
 
 # ----------------------------- entry point -------------------------------- #
 def main() -> None:
