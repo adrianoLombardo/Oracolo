@@ -9,80 +9,8 @@ import openai
 from .utils import retry_with_backoff
 
 
-DetectorFactory.seed = 42
-
-_IT_SW = {
-    "di","e","che","il","la","un","una","non","per","con","come","sono","sei","è","siamo","siete","sono",
-    "io","tu","lui","lei","noi","voi","loro","questo","questa","quello","quella","qui","lì","dove","quando",
-    "perché","come","cosa","tutto","anche","ma","se","nel","nella","dei","delle","degli","agli","alle","allo",
-    "fare","andare","venire","dire","vedere","può","posso","devo","voglio","grazie","ciao"
-}
-_EN_SW = {
-    "the","and","to","of","in","that","it","is","you","i","we","they","this","these","those","for","with",
-    "on","at","as","but","if","not","are","be","was","were","have","has","do","does","did","what","when",
-    "where","why","how","all","also","can","could","should","would","hello","hi","thanks","please"
-}
-
-
-def _score_lang(text: str, lang: str, *, debug: bool = False) -> float:
-    if not text:
-        return 0.0
-    toks = re.findall(r"[a-zàèéìòóù]+", text.lower())
-    if not toks:
-        return 0.0
-    sw = _IT_SW if lang == "it" else _EN_SW
-    hits = sum(1 for t in toks if t in sw)
-    coverage = hits / max(len(toks), 1)
-    try:
-        ld = detect(text)
-        bonus = 0.5 if (ld == lang) else 0.0
-    except Exception:
-        bonus = 0.0
-    length_bonus = min(len(toks), 30) / 30 * 0.2
-    score = coverage + bonus + length_bonus
-    if debug:
-        short = (text[:80] + "…") if len(text) > 80 else text
-        print(f"   [DBG] {lang.upper()} score={score:.3f} text='{short}'")
-    return score
-
-
-
-def transcribe(audio: Path | bytes, client, stt_model: str, *, debug: bool = False) -> Tuple[str, str]:
-    """Trascrivi ``audio`` restituendo testo e lingua stimata.
-
-    Viene effettuata una chiamata "auto"; solo se il punteggio di lingua è
-    basso si ripete la stessa richiesta forzando ``language=``.
-    """
-
-    def _call_transcription(**kwargs) -> str:
-        def do_call() -> str:
-            if isinstance(audio, (str, Path)):
-                with open(audio, "rb") as f:
-                    tx = client.audio.transcriptions.create(
-                        model=stt_model, file=f, **kwargs
-                    )
-            else:
-                bio = io.BytesIO(audio)
-                tx = client.audio.transcriptions.create(
-                    model=stt_model, file=bio, **kwargs
-                )
-            return (tx.text or "").strip()
-
-        try:
-            return retry_with_backoff(do_call)
-        except openai.OpenAIError as e:
-            print(f"Errore OpenAI: {e}")
-            return ""
-
-    print("🧠 Trascrizione (auto)…")
-    text = _call_transcription(
-        prompt=(
-            "Language is either Italian or English. Focus on neuroscience, "
-            "neuroaesthetics, contemporary art, the universe, and "
-
 def fast_transcribe(path_or_bytes, client, stt_model: str, lang_hint: str | None = None) -> str:
     """Perform a single transcription call with optional language hint."""
-
     kwargs = {}
     if lang_hint in ("it", "en"):
         kwargs["language"] = lang_hint
@@ -95,40 +23,12 @@ def fast_transcribe(path_or_bytes, client, stt_model: str, lang_hint: str | None
     else:
         tx = client.audio.transcriptions.create(
             model=stt_model, file=path_or_bytes, **kwargs
-main
         )
     return (getattr(tx, "text", "") or "").strip()
 
-    s_it = _score_lang(text, "it", debug=debug)
-    s_en = _score_lang(text, "en", debug=debug)
-    lang = "it" if s_it >= s_en else "en"
-    best = max(s_it, s_en)
 
-    if best < 0.6:
-        print(f"↻ Trascrizione forzata {lang.upper()}…")
-        prompt = (
-            "Lingua: italiano. Dominio: neuroscienze, neuroestetica, "
-            "arte contemporanea, universo e IA neuroscientifica."
-            if lang == "it"
-            else "Language: English. Domain: neuroscience, neuroaesthetics, "
-            "contemporary art, universe, and neuroscientific AI."
-        )
-        text = _call_transcription(language=lang, prompt=prompt)
-        best = _score_lang(text, lang, debug=debug)
-
-    if best == 0:
-        print("⚠️ Per favore parla in italiano o inglese.")
-        return "", ""
-
-    print("🌐 Lingua rilevata: IT" if lang == "it" else "🌐 Lingua rilevata: EN")
-    return text, lang
-
-
-
-main
 def transcribe(path: Path, client, stt_model: str, *, debug: bool = False) -> Tuple[str, str]:
     """Trascrive una singola volta e restituisce testo e lingua rilevata."""
-
     try:
         with open(path, "rb") as f:
             tx = client.audio.transcriptions.create(
@@ -154,7 +54,6 @@ def transcribe(path: Path, client, stt_model: str, *, debug: bool = False) -> Tu
         print(f"🌐 Lingua rilevata: {lang_code.upper()}")
 
     return text, lang_code
-main
 
 
 def oracle_answer(
@@ -321,5 +220,4 @@ def append_log(
         )
     with log_path.open("a", encoding="utf-8") as f:
         f.write(line)
-
 
