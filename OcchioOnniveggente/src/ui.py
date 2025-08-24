@@ -1488,8 +1488,14 @@ class OracoloUI(tk.Tk):
         win.title("Gestione Documenti")
         win.configure(bg=self._bg)
 
-        doc_var = tk.StringVar(value=self.settings.get("docstore_path", ""))
-        topic_var = tk.StringVar(value="museo")
+        dom = self.settings.get("domain", {})
+        profiles = dom.get("profiles", {}) if isinstance(dom, dict) else {}
+        current_profile = self.profile_var.get()
+        default_path = profiles.get(current_profile, {}).get(
+            "docstore_path", self.settings.get("docstore_path", "")
+        )
+        doc_var = tk.StringVar(value=default_path)
+        topic_var = tk.StringVar(value=current_profile)
         topk_var = tk.StringVar(value=str(self.settings.get("retrieval_top_k", 3)))
         query_var = tk.StringVar()
 
@@ -1507,17 +1513,30 @@ class OracoloUI(tk.Tk):
         ttk.Button(win, text="Sfoglia", command=browse).grid(row=0, column=2, padx=6, pady=6)
 
         tk.Label(win, text="Sezione", fg=self._fg, bg=self._bg).grid(row=1, column=0, padx=6, pady=6, sticky="e")
+        opts = [p for p in self.profile_names if p != current_profile]
+        tk.OptionMenu(win, topic_var, current_profile, *opts).grid(
         tk.OptionMenu(win, topic_var, topic_var.get(), "gallerie", "museo", "conferenze", "didattica", "them", "cryptomadonne", "adriano_lombardo").grid(
+
             row=1, column=1, padx=6, pady=6, sticky="w"
         )
 
+        def _on_topic_change(*_: Any) -> None:
+            path = profiles.get(topic_var.get(), {}).get("docstore_path", "")
+            if path:
+                doc_var.set(path)
+                refresh_tree()
+
+        topic_var.trace_add("write", _on_topic_change)
+
         btn_frame = ttk.Frame(win)
         btn_frame.grid(row=1, column=2, rowspan=2, padx=6, pady=6, sticky="n")
-        ttk.Button(
-            btn_frame,
-            text="Aggiungi",
-            command=lambda: (self._add_documents(topic_var.get(), doc_var.get()), refresh_tree()),
-        ).pack(fill="x")
+        def _add_from_topic() -> None:
+            path = profiles.get(topic_var.get(), {}).get("docstore_path", doc_var.get())
+            self._add_documents(topic_var.get(), path)
+            doc_var.set(path)
+            refresh_tree()
+
+        ttk.Button(btn_frame, text="Aggiungi", command=_add_from_topic).pack(fill="x")
         ttk.Button(
             btn_frame,
             text="Rimuovi",
