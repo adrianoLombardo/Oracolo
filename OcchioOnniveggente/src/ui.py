@@ -824,11 +824,13 @@ class OracoloUI(tk.Tk):
         self.chat_state.push_user(text)
         self.last_sources = []
         try:
-            client = OpenAI()
+            openai_conf = self.settings.get("openai", {})
+            api_key = openai_conf.get("api_key") or os.environ.get("OPENAI_API_KEY")
+            client = OpenAI(api_key=api_key) if api_key else OpenAI()
             self.chat_state.update_topic(
                 text,
                 client,
-                self.settings.get("openai", {}).get("embed_model", "text-embedding-3-small"),
+                openai_conf.get("embed_model", "text-embedding-3-small"),
                 threshold=float(self.topic_threshold.get()),
             )
             style_prompt = self.settings.get("style_prompt", "") if self.style_var.get() else ""
@@ -906,8 +908,9 @@ class OracoloUI(tk.Tk):
         if not path:
             return
         try:
-            client = OpenAI()
             openai_conf = self.settings.get("openai", {})
+            api_key = openai_conf.get("api_key") or os.environ.get("OPENAI_API_KEY")
+            client = OpenAI(api_key=api_key) if api_key else OpenAI()
             tts_model = openai_conf.get("tts_model", "gpt-4o-mini-tts")
             tts_voice = openai_conf.get("tts_voice", "alloy")
             synthesize(self.last_answer, Path(path), client, tts_model, tts_voice)
@@ -1026,7 +1029,9 @@ class OracoloUI(tk.Tk):
             lang = self.lang_map.get(lang_var.get(), "auto")
             start = time.time()
             try:
-                client = OpenAI()
+                openai_conf = self.settings.get("openai", {})
+                api_key = openai_conf.get("api_key") or os.environ.get("OPENAI_API_KEY")
+                client = OpenAI(api_key=api_key) if api_key else OpenAI()
             except Exception:
                 client = None
             ok, ctx, _clar, reason, _ = validate_question(
@@ -1129,7 +1134,9 @@ class OracoloUI(tk.Tk):
         win = tk.Toplevel(self)
         win.title("Limiti OpenAI")
         try:
-            client = OpenAI()
+            openai_conf = self.settings.get("openai", {})
+            api_key = openai_conf.get("api_key") or os.environ.get("OPENAI_API_KEY")
+            client = OpenAI(api_key=api_key) if api_key else OpenAI()
             model = self.settings.get("llm_model", "gpt-4o")
             info = client.models.retrieve(model)
             ttk.Label(win, text=f"Modello: {info.id}").pack(anchor="w", padx=8, pady=4)
