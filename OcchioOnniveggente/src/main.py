@@ -22,7 +22,13 @@ from src.config import Settings
 from src.filters import ProfanityFilter
 from src.audio import record_until_silence, play_and_pulse
 from src.lights import SacnLight, WledLight, color_from_text
-from src.oracle import transcribe, oracle_answer, synthesize, append_log
+from src.oracle import (
+    transcribe,
+    oracle_answer,
+    synthesize,
+    append_log,
+    extract_summary,
+)
 from src.domain import validate_question
 from src.chat import ChatState
 from src.dialogue import DialogueManager, DialogState
@@ -295,6 +301,7 @@ def main() -> None:
     pending_topic = None
     pending_history = None
     pending_answer = ""
+    pending_full_answer = ""
     pending_sources: list[dict[str, str]] = []
     processing_turn = 0
     countdown_last = -1
@@ -507,8 +514,9 @@ def main() -> None:
                     continue
                 if not ok:
                     pending_answer = "Domanda non pertinente"
+                    pending_full_answer = pending_answer
                     if CHAT_ENABLED:
-                        chat.push_assistant(pending_answer)
+                        chat.push_assistant(pending_full_answer)
                 else:
                     pending_answer, pending_sources = oracle_answer(
                         pending_q,
@@ -522,8 +530,10 @@ def main() -> None:
                         policy_prompt=ORACLE_POLICY,
                         mode=ANSWER_MODE,
                     )
+                    pending_full_answer = pending_answer
                     if CHAT_ENABLED:
-                        chat.push_assistant(pending_answer)
+                        chat.push_assistant(pending_full_answer)
+                    pending_answer = extract_summary(pending_full_answer)
                 if dlg.turn_id != processing_turn:
                     continue
                 dlg.transition(DialogState.SPEAKING)
@@ -544,7 +554,7 @@ def main() -> None:
                         pending_answer = PROF.mask(pending_answer)
                 append_log(
                     pending_q,
-                    pending_answer,
+                    pending_full_answer or pending_answer,
                     LOG_PATH,
                     lang=pending_lang,
                     topic=pending_topic,
