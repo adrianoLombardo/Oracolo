@@ -1903,7 +1903,26 @@ class OracoloUI(tk.Tk):
                     break
                 time.sleep(0.05)
                 continue
-            self.after(0, lambda line=line: self._append_log(line, "LLM"))
+            text = line.rstrip("\n")
+            try:
+                data = json.loads(text)
+                text = str(data.get("text", ""))
+            except Exception:
+                pass
+            self.after(
+                0,
+                lambda t=text: self._append_log(
+                    t + ("\n" if not t.endswith("\n") else ""), "LLM"
+                ),
+            )
+            if text.startswith("…"):
+                msg = text.lstrip("…").strip()
+                self.chat_state.push_user(msg)
+                self.after(0, lambda m=msg: self._append_chat("user", m))
+            elif text.startswith("🔮"):
+                msg = text.lstrip("🔮").strip()
+                self.chat_state.push_assistant(msg)
+                self.after(0, lambda m=msg: self._append_chat("assistant", m))
         rest = f.read()
         if rest:
             self.after(0, lambda rest=rest: self._append_log(rest, "LLM"))

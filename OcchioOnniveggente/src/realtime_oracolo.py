@@ -34,6 +34,11 @@ NEED_BYTES = BLOCKSIZE * BYTES_PER_SAMPLE * CHANNELS
 WS_URL = os.getenv("ORACOLO_WS_URL", "ws://localhost:8765")
 
 
+def _emit(kind: str, text: str) -> None:
+    """Emit a structured message on stdout."""
+    print(json.dumps({"type": kind, "text": text}, ensure_ascii=False), flush=True)
+
+
 async def _mic_worker(
     ws, send_q: "queue.Queue[bytes]", *, sr: int, state: dict[str, Any]
 ) -> None:
@@ -141,10 +146,10 @@ async def _player(
         # Diagnostica: stampa valori per ~3s (una volta ogni 50 callback)
         state["diag_counter"] = state.get("diag_counter", 0) + 1
         if state["diag_counter"] <= 150 and state["diag_counter"] % 50 == 0:
-            print(
+            _emit(
+                "diag",
                 f"[diag] need_bytes={need} chunk_len={last_chunk} "
                 f"written={written} carry_len={len(carry)}",
-                flush=True,
             )
 
         if state.get("ducking"):
@@ -179,10 +184,10 @@ async def _receiver(ws, audio_q: "queue.Queue[bytes]", dlg: DialogueManager) -> 
             kind = data.get("type")
             if kind == "partial":
                 dlg.transition(DialogState.THINKING)
-                print(f"… {data.get('text', '')}", flush=True)
+                _emit("partial", f"… {data.get('text', '')}")
             elif kind == "answer":
                 dlg.transition(DialogState.SPEAKING)
-                print(f"🔮 {data.get('text', '')}", flush=True)
+                _emit("answer", f"🔮 {data.get('text', '')}")
     except (websockets.ConnectionClosed, asyncio.CancelledError):
         return
 
@@ -220,13 +225,13 @@ async def _run(url: str, sr: int, barge_threshold: float) -> None:
             if data.get("type") != "ready":
                 raise RuntimeError("Handshake non valido")
         except Exception:
-            print("Handshake non valido", flush=True)
+            _emit("error", "Handshake non valido")
             return
 
-        print("✅ pronto a ricevere audio", flush=True)
-        print(
+        _emit("status", "✅ pronto a ricevere audio")
+        _emit(
+            "status",
             f"🔌 Realtime WS → {url}  (sr={sr}, in={sd.default.device[0]}, out={sd.default.device[1]})",
-            flush=True,
         )
 
         tasks = [

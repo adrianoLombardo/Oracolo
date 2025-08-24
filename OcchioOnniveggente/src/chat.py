@@ -23,15 +23,16 @@ class ChatState:
         self.history.clear()
         self.summary = ""
 
-    def push_user(self, text: str) -> None:
-        self.history.append({"role": "user", "content": text})
+    def push_message(self, role: str, text: str) -> None:
+        self.history.append({"role": role, "content": text})
         self._trim()
-        self._persist("user", text)
+        self._persist(role, text)
+
+    def push_user(self, text: str) -> None:
+        self.push_message("user", text)
 
     def push_assistant(self, text: str) -> None:
-        self.history.append({"role": "assistant", "content": text})
-        self._trim()
-        self._persist("assistant", text)
+        self.push_message("assistant", text)
 
     def pin_message(self, text: str) -> None:
         if not text:
