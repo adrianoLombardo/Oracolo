@@ -1,6 +1,7 @@
 # src/retrieval.py
 from __future__ import annotations
 import json, math, re, hashlib
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Dict, Tuple, Iterable, Optional, Any
@@ -26,6 +27,9 @@ except Exception:  # pragma: no cover - libreria facoltativa
 _CROSS_ENCODER_CACHE: Dict[str, Any] = {}
 
 
+logger = logging.getLogger(__name__)
+
+
 @dataclass
 class Chunk:
     doc_id: str
@@ -46,14 +50,19 @@ def _tokenize(s: str) -> List[str]:
 def _load_index(path: str | Path) -> List[Dict]:
     p = Path(path)
     if not p.exists():
+        logger.warning("Index file not found: %s", p)
         return []
     data = json.loads(p.read_text(encoding="utf-8"))
     # attesi: [{"id": "...", "text": "..."}]
     if isinstance(data, list):
-        return data
-    if isinstance(data, dict) and "documents" in data:
-        return data["documents"]
-    return []
+        documents = data
+    elif isinstance(data, dict) and "documents" in data:
+        documents = data["documents"]
+    else:
+        documents = []
+    if not documents:
+        logger.warning("Docstore is empty: %s", p)
+    return documents
 
 
 def _make_chunks(text: str, max_chars: int = 800, overlap_ratio: float = 0.1) -> List[str]:
