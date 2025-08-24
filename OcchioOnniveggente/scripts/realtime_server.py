@@ -18,11 +18,16 @@ if str(ROOT) not in sys.path:
 
 from src.config import Settings
 from src.hotword import strip_hotword_prefix
-from src.oracle import transcribe, oracle_answer
+from src.oracle import fast_transcribe, oracle_answer
 from src.retrieval import retrieve
 from src.chat import ChatState
+from langdetect import detect
 
 CHUNK_MS = 20
+
+
+CHUNK_MS = 20
+main
 # soglia più permissiva per captare parlato anche con microfoni poco sensibili
 START_LEVEL = 300
 END_SIL_MS = 700
@@ -154,6 +159,29 @@ class RTSession:
         except Exception:
             pass
 
+    async def stream_tts_pcm(self, text: str, client: Any) -> None:
+        """Sintetizza e invia ``text`` in formato PCM con latenza ridotta."""
+
+        self.state = "tts"
+        self.barge = False
+        try:
+            with client.audio.speech.with_streaming_response.create(
+                model=self.SET.openai.tts_model,
+                voice=self.SET.openai.tts_voice,
+                input=text,
+                response_format="pcm",
+                sample_rate=self.client_sr,
+            ) as resp:
+                for chunk in resp.iter_bytes(chunk_size=960):
+                    await self.ws.send(chunk)
+                    await asyncio.sleep(0)
+                    if self.barge:
+                        break
+        except Exception:
+            pass
+        self.state = "idle"
+        self.barge = False
+
     async def stream_sentences(self, text: str, client: Any) -> None:
         """Sintetizza ``text`` frase per frase, consentendo il barge-in
         solo ai confini di frase.
@@ -223,12 +251,19 @@ class RTSession:
         load_dotenv()
         client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
-        text, lang = transcribe(
-            self.in_wav, client, self.SET.openai.stt_model, debug=self.SET.debug
+        text = fast_transcribe(
+            self.in_wav, client, self.SET.openai.stt_model
         )
         if not text.strip():
             await self.send_partial("…silenzio…")
             return
+
+        try:
+            lang = detect(text)
+        except Exception:
+            lang = "it"
+        if lang not in ("it", "en"):
+            lang = "it"
 
         print(f"🗣️ {text.strip()}", flush=True)
         now = time.time()
@@ -260,7 +295,7 @@ class RTSession:
 
         if self.chat_enabled:
             self.chat.push_user(text)
-        ans = oracle_answer(
+        ans, _ = oracle_answer(
             text,
             lang,
             client,
@@ -271,9 +306,12 @@ class RTSession:
         )
         if self.chat_enabled:
             self.chat.push_assistant(ans)
-        await self.send_answer(ans)
 
-        await self.stream_sentences(ans, client)
+        first_words = " ".join(ans.split()[:5])
+        await self.send_partial(first_words)
+        tts_task = asyncio.create_task(self.stream_tts_pcm(ans, client))
+        await self.send_answer(ans)
+        await tts_task
 
 async def handler(ws):
     SET = Settings.model_validate_yaml(ROOT / "settings.yaml")
