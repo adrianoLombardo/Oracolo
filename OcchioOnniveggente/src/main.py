@@ -302,16 +302,35 @@ def main() -> None:
     if not WAKE_ENABLED:
         dlg.state = DialogState.LISTENING
 
-    def _monitor_barge(evt: threading.Event, sr: int, thresh: float, device: Any | None) -> None:
+    def _monitor_barge(
+        evt: threading.Event,
+        sr: int,
+        thresh: float,
+        device: Any | None,
+        skip_ms: float = 300.0,
+    ) -> None:
         frame = int(sr * 0.03)
+        hot_frames = 0
         try:
-            with sd.InputStream(samplerate=sr, blocksize=frame, channels=1, dtype="float32", device=device) as stream:
+            with sd.InputStream(
+                samplerate=sr,
+                blocksize=frame,
+                channels=1,
+                dtype="float32",
+                device=device,
+            ) as stream:
+                if skip_ms > 0:
+                    time.sleep(skip_ms / 1000.0)
                 while not evt.is_set():
                     block, _ = stream.read(frame)
                     level = float(np.sqrt(np.mean(block[:, 0] ** 2)))
                     if level > thresh:
-                        evt.set()
-                        break
+                        hot_frames += 1
+                        if hot_frames >= 10:
+                            evt.set()
+                            break
+                    else:
+                        hot_frames = 0
         except Exception:
             pass
 
@@ -380,7 +399,7 @@ def main() -> None:
                 evt = threading.Event()
                 mon = threading.Thread(
                     target=_monitor_barge,
-                    args=(evt, AUDIO_SR, float(recording_conf.get("min_speech_level", 0.01)), in_dev),
+                    args=(evt, AUDIO_SR, AUDIO_CONF.barge_rms_threshold, in_dev),
                     daemon=True,
                 )
                 mon.start()
@@ -548,7 +567,7 @@ def main() -> None:
                 evt = threading.Event()
                 mon = threading.Thread(
                     target=_monitor_barge,
-                    args=(evt, AUDIO_SR, float(recording_conf.get("min_speech_level", 0.01)), in_dev),
+                    args=(evt, AUDIO_SR, AUDIO_CONF.barge_rms_threshold, in_dev),
                     daemon=True,
                 )
                 mon.start()

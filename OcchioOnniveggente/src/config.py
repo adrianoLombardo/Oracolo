@@ -28,6 +28,7 @@ class AudioConfig(BaseModel):
     output_wav: str = "data/temp/answer.wav"
     input_device: Optional[str | int] = None
     output_device: Optional[str | int] = None
+    barge_rms_threshold: float = 0.25
 
 
 class RecordingConfig(BaseModel):
