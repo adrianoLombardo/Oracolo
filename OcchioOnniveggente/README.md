@@ -50,6 +50,8 @@ rigenerare l'indice:
 ```bash
 python scripts/ingest_docs.py --add DataBase/nuovo_file.txt
 python scripts/ingest_docs.py --remove DataBase/vecchio_file.txt
+python scripts/ingest_docs.py --reindex
+python scripts/ingest_docs.py --clear
 ```
 
 Puoi anche indicizzare l'intera cartella in un'unica volta:
@@ -61,9 +63,16 @@ python scripts/ingest_docs.py --add DataBase
 Rieseguendo lo script dopo ogni modifica l'indice viene aggiornato con i contenuti
 presenti in `DataBase/`.
 
-Lo script supporta soltanto le opzioni `--add` e `--remove`; eventuali
-argomenti supplementari (ad esempio `--model-dir` o `--video_dir`), eventualmente
-passati da interfacce o wrapper legacy, vengono semplicemente ignorati.
+Prima di `--remove`, `--reindex` o `--clear` viene creato un backup
+`index.json.bak`. Per ripristinare l'indice:
+
+```bash
+cp index.json.bak index.json
+```
+
+Usa `--no-backup` per saltare la creazione del file di backup. Argomenti
+supplementari non riconosciuti (es. `--model-dir` o `--video_dir`) vengono
+ignorati.
 
 ## Test
 
