@@ -841,10 +841,15 @@ class OracoloUI(tk.Tk):
             style_prompt = self.settings.get("style_prompt", "") if self.style_var.get() else ""
             lang = self.lang_map.get(self.lang_choice.get(), "auto")
             mode = self.mode_map.get(self.mode_choice.get(), "detailed")
+            docstore_path = self.settings.get("docstore_path")
+            top_k = int(self.settings.get("retrieval_top_k", 3))
             ok, ctx, needs_clar, reason, _ = validate_question(
                 text,
                 settings=self.settings,
                 client=client,
+                docstore_path=docstore_path,
+                top_k=top_k,
+                embed_model=openai_conf.get("embed_model", "text-embedding-3-small"),
                 topic=self.chat_state.topic_text,
             )
             if not ok:
@@ -1069,6 +1074,7 @@ class OracoloUI(tk.Tk):
                 client=client,
                 docstore_path=self.settings.get("docstore_path"),
                 top_k=k,
+                embed_model=openai_conf.get("embed_model", "text-embedding-3-small"),
             )
             end = time.time()
             m = _REASON_RE.search(reason)
