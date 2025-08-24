@@ -36,6 +36,15 @@ class ConversationManager:
     def refresh_deadline(self) -> None:
         self.dlg.refresh_deadline()
 
+    @property
+    def active_deadline(self) -> float:
+        """Proxy access to the underlying dialogue deadline."""
+        return self.dlg.active_deadline
+
+    @active_deadline.setter
+    def active_deadline(self, value: float) -> None:
+        self.dlg.active_deadline = value
+
     def transition(self, new_state: DialogState) -> None:
         self.dlg.transition(new_state)
 
