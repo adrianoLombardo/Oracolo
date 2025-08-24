@@ -22,7 +22,7 @@ from typing import Any
 import numpy as np
 import sounddevice as sd
 import websockets
-from src.dialogue import DialogueManager, DialogState
+from src.conversation import ConversationManager, DialogState
 
 
 SR = 24_000
@@ -169,7 +169,7 @@ async def _player(
             await asyncio.sleep(0.1)
 
 
-async def _receiver(ws, audio_q: "queue.Queue[bytes]", dlg: DialogueManager) -> None:
+async def _receiver(ws, audio_q: "queue.Queue[bytes]", conv: ConversationManager) -> None:
     """Gestisce i messaggi provenienti dal server."""
 
     try:
@@ -183,11 +183,16 @@ async def _receiver(ws, audio_q: "queue.Queue[bytes]", dlg: DialogueManager) -> 
                 continue
             kind = data.get("type")
             if kind == "partial":
-                dlg.transition(DialogState.THINKING)
-                _emit("partial", f"… {data.get('text', '')}")
+                conv.transition(DialogState.THINKING)
+                text = data.get("text", "")
+                _emit("partial", f"… {text}")
+                if data.get("final"):
+                    conv.push_user(text)
             elif kind == "answer":
-                dlg.transition(DialogState.SPEAKING)
-                _emit("answer", f"🔮 {data.get('text', '')}")
+                conv.transition(DialogState.SPEAKING)
+                text = data.get("text", "")
+                conv.push_assistant(text)
+                _emit("answer", f"🔮 {text}")
     except (websockets.ConnectionClosed, asyncio.CancelledError):
         return
 
@@ -203,8 +208,8 @@ async def _run(url: str, sr: int, barge_threshold: float) -> None:
         "barge_threshold": barge_threshold,
         "ducking": False,
     }
-    dlg = DialogueManager(idle_timeout=50)
-    dlg.transition(DialogState.LISTENING)
+    conv = ConversationManager(idle_timeout=50)
+    conv.transition(DialogState.LISTENING)
 
     async with websockets.connect(url, ping_interval=20, ping_timeout=20) as ws:
         await ws.send(
@@ -237,7 +242,7 @@ async def _run(url: str, sr: int, barge_threshold: float) -> None:
         tasks = [
             asyncio.create_task(_mic_worker(ws, send_q, sr=sr, state=state)),
             asyncio.create_task(_sender(ws, send_q)),
-            asyncio.create_task(_receiver(ws, audio_q, dlg)),
+            asyncio.create_task(_receiver(ws, audio_q, conv)),
             asyncio.create_task(_player(audio_q, sr=sr, state=state)),
         ]
         try:
