@@ -126,6 +126,8 @@ class RTSession:
 
         self.state = "tts"
         self.barge = False
+        first_ts = None
+        last_ts = None
 
         for sent in sentences:
             try:
@@ -137,7 +139,11 @@ class RTSession:
                     sample_rate=self.client_sr,
                 ) as resp:
                     for chunk in resp.iter_bytes(chunk_size=960):
+                        if first_ts is None:
+                            first_ts = time.time()
+                            print(f"[diag] tts_first_byte {first_ts:.3f}", flush=True)
                         await self.ws.send(chunk)
+                        last_ts = time.time()
                         await asyncio.sleep(0)
             except Exception:
                 break
@@ -146,6 +152,8 @@ class RTSession:
 
         self.state = "idle"
         self.barge = False
+        if first_ts is not None:
+            print(f"[diag] tts_last_byte {last_ts:.3f}", flush=True)
 
     async def on_audio(self, data: bytes, frame_ms: int) -> None:
         self.buf.extend(data)
@@ -174,6 +182,8 @@ class RTSession:
     async def _finalize_utterance(self) -> None:
         if not self.buf:
             return
+        ts_end = time.time()
+        print(f"[diag] end_of_speech {ts_end:.3f}", flush=True)
         write_wav(self.in_wav, self.client_sr, bytes(self.buf))
 
         from openai import OpenAI
@@ -183,6 +193,8 @@ class RTSession:
         text, lang = transcribe(
             self.in_wav, client, self.SET.openai.stt_model, debug=self.SET.debug
         )
+        ts_stt = time.time()
+        print(f"[diag] stt_done {ts_stt:.3f}", flush=True)
         if not text.strip():
             await self.send_partial("…silenzio…")
             return
@@ -217,6 +229,8 @@ class RTSession:
 
         if self.chat_enabled:
             self.chat.push_user(text)
+        llm_start = time.time()
+        print(f"[diag] llm_start {llm_start:.3f}", flush=True)
         ans = oracle_answer(
             text,
             lang,
@@ -226,6 +240,8 @@ class RTSession:
             context=ctx,
             history=(self.chat.history if self.chat_enabled else None),
         )
+        llm_done = time.time()
+        print(f"[diag] llm_done {llm_done:.3f}", flush=True)
         if self.chat_enabled:
             self.chat.push_assistant(ans)
         await self.send_answer(ans)

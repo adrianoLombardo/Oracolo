@@ -104,6 +104,7 @@ async def _player(
     def callback(outdata, frames, time_info, status) -> None:  # type: ignore[override]
         need = frames * BYTES_PER_SAMPLE * CHANNELS
         written = 0
+        last_chunk = 0
 
         # 1) consuma prima eventuale carry
         if carry:
@@ -118,11 +119,12 @@ async def _player(
                 chunk = audio_q.get_nowait()
             except queue.Empty:
                 break
-            take = min(len(chunk), need - written)
+            last_chunk = len(chunk)
+            take = min(last_chunk, need - written)
             outdata[written : written + take] = chunk[:take]
             written += take
             # se avanza spezzone, rimettilo in carry
-            if take < len(chunk):
+            if take < last_chunk:
                 carry.extend(chunk[take:])
 
         # 3) padding se siamo corti
@@ -132,6 +134,15 @@ async def _player(
             state["barge_sent"] = False
         else:
             state["tts_playing"] = True
+
+        # Diagnostica: stampa valori per ~3s (una volta ogni 50 callback)
+        state["diag_counter"] = state.get("diag_counter", 0) + 1
+        if state["diag_counter"] <= 150 and state["diag_counter"] % 50 == 0:
+            print(
+                f"[diag] need_bytes={need} chunk_len={last_chunk} "
+                f"written={written} carry_len={len(carry)}",
+                flush=True,
+            )
 
     with sd.RawOutputStream(
         samplerate=sr,
