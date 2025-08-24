@@ -305,6 +305,8 @@ def main() -> None:
     vad_conf = SET.vad.model_dump()
     lighting_conf = SET.lighting.model_dump()
 
+    is_tts_playing = threading.Event()
+
     # Luci
     if LIGHT_MODE == "sacn":
         light = SacnLight(lighting_conf)
@@ -364,6 +366,7 @@ def main() -> None:
         thresh: float,
         device: Any | None,
         skip_ms: float = 300.0,
+        tts_event: threading.Event | None = None,
     ) -> None:
         frame = int(sr * 0.03)
         hot_frames = 0
@@ -380,7 +383,8 @@ def main() -> None:
                 while not evt.is_set():
                     block, _ = stream.read(frame)
                     level = float(np.sqrt(np.mean(block[:, 0] ** 2)))
-                    if level > thresh:
+                    eff_thresh = thresh * 3 if tts_event is not None and tts_event.is_set() else thresh
+                    if level > eff_thresh:
                         hot_frames += 1
                         if hot_frames >= 10:
                             evt.set()
@@ -439,6 +443,7 @@ def main() -> None:
                     recording_conf,
                     debug=DEBUG and (not args.quiet),
                     input_device_id=in_dev,
+                    tts_playing=is_tts_playing,
                 )
                 if not ok:
                     continue
@@ -474,6 +479,7 @@ def main() -> None:
                 mon = threading.Thread(
                     target=_monitor_barge,
                     args=(evt, AUDIO_SR, AUDIO_CONF.barge_rms_threshold, in_dev),
+                    kwargs={"tts_event": is_tts_playing},
                     daemon=True,
                 )
                 mon.start()
@@ -484,9 +490,11 @@ def main() -> None:
                     lighting_conf,
                     output_device_id=out_dev,
                     duck_event=evt,
+                    tts_event=is_tts_playing,
                 )
                 evt.set()
                 mon.join()
+                time.sleep(recording_conf.get("hold_off_after_tts_ms", 500) / 1000.0)
                 if CHAT_ENABLED and CHAT_RESET_ON_WAKE and chat is not None:
                     chat.reset()
                 dlg.refresh_deadline()
@@ -508,6 +516,7 @@ def main() -> None:
                     recording_conf,
                     debug=DEBUG and (not args.quiet),
                     input_device_id=in_dev,
+                    tts_playing=is_tts_playing,
                 )
                 if not ok:
                     continue
@@ -665,6 +674,7 @@ def main() -> None:
                 mon = threading.Thread(
                     target=_monitor_barge,
                     args=(evt, AUDIO_SR, AUDIO_CONF.barge_rms_threshold, in_dev),
+                    kwargs={"tts_event": is_tts_playing},
                     daemon=True,
                 )
                 mon.start()
@@ -675,10 +685,12 @@ def main() -> None:
                     lighting_conf,
                     output_device_id=out_dev,
                     duck_event=evt,
+                    tts_event=is_tts_playing,
                 )
                 interrupted = evt.is_set()
                 evt.set()
                 mon.join()
+                time.sleep(recording_conf.get("hold_off_after_tts_ms", 500) / 1000.0)
                 dlg.end_processing()
                 processing_turn = dlg.turn_id
                 if interrupted:

@@ -77,6 +77,7 @@ def _record_with_webrtcvad(
     sr: int,
     recording_conf: Dict[str, Any],
     input_device_id: Any | None,
+    tts_playing: threading.Event | None = None,
 ) -> bool:
     frame_ms = 20
     frame_samples = int(sr * frame_ms / 1000)
@@ -99,6 +100,8 @@ def _record_with_webrtcvad(
         with sd.RawInputStream(**stream_kwargs) as stream:
             while total_ms < MAX_MS:
                 block, _ = stream.read(frame_samples)
+                if tts_playing is not None and tts_playing.is_set():
+                    continue
                 total_ms += frame_ms
                 if not started:
                     if vad.is_speech(block.tobytes(), sr):
@@ -140,6 +143,7 @@ def record_until_silence(
     *,
     debug: bool = False,
     input_device_id: Any | None = None,
+    tts_playing: threading.Event | None = None,
 ) -> bool:
     """VAD basato sull'energia che termina quando rileva silenzio."""
     try:
@@ -149,7 +153,7 @@ def record_until_silence(
         pass
 
     if recording_conf.get("use_webrtcvad") and webrtcvad is not None:
-        return _record_with_webrtcvad(path, sr, recording_conf, input_device_id)
+        return _record_with_webrtcvad(path, sr, recording_conf, input_device_id, tts_playing)
 
     FRAME_MS = int(vad_conf.get("frame_ms", 30))
     START_MS = int(vad_conf.get("start_ms", 150))
@@ -195,6 +199,8 @@ def record_until_silence(
         with sd.InputStream(**stream_kwargs) as stream:
             while total_ms < MAX_MS:
                 audio_block, _ = stream.read(frame_samples)
+                if tts_playing is not None and tts_playing.is_set():
+                    continue
                 block = audio_block[:, 0]
                 total_ms += FRAME_MS
 
@@ -266,11 +272,15 @@ def play_and_pulse(
     lighting_conf: Dict[str, Any],
     output_device_id: Any | None = None,
     duck_event: threading.Event | None = None,
+    tts_event: threading.Event | None = None,
 ) -> None:
     """Play audio and drive lights, with optional volume ducking."""
     y, sr = load_audio_as_float(path, sr)
     y = apply_limiter(y)
     stop = False
+
+    if tts_event is not None:
+        tts_event.set()
 
     def worker() -> None:
         win = int(0.02 * sr)
@@ -313,4 +323,6 @@ def play_and_pulse(
     finally:
         stop = True
         t.join()
+        if tts_event is not None:
+            tts_event.clear()
 
