@@ -145,8 +145,8 @@ def _match_hotword(text: str, phrases: Iterable[str]) -> bool:
 
 def oracle_greeting(lang: str) -> str:
     if (lang or "").lower().startswith("en"):
-        return "I am awake. Ask, and I will answer from the shore of starlight."
-    return "Sono desto. Chiedi, e risponderò dalla riva della luce."
+        return "Hello, I am the Oracle. Ask your question."
+    return "Ciao, sono l'Oracolo. Fai pure la tua domanda?"
 
 
 # --------------------------- main ------------------------------------- #
@@ -252,7 +252,7 @@ def main() -> None:
     WAKE_IT = ["ciao oracolo", "ehi oracolo", "salve oracolo", "ciao, oracolo"]
     WAKE_EN = ["hello oracle", "hey oracle", "hi oracle", "hello, oracle"]
     WAKE_ENABLED = True
-    WAKE_SINGLE_TURN = True
+    WAKE_SINGLE_TURN = False
     IDLE_TIMEOUT = 60.0  # secondi di inattività prima di tornare a SLEEP
 
     try:
