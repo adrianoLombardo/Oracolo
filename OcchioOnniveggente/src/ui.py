@@ -1363,21 +1363,36 @@ class OracoloUI(tk.Tk):
             return
         tried = (["--reindex"], ["--rebuild"], ["--refresh"])
         for args in tried:
+            self._append_log(f"Reindex: tentativo {' '.join(args)}\n", "DOCS")
+            try:
+                result = subprocess.run(
             self._append_log(
                 f"Aggiorna indice: {' '.join(args)} in {self.root_dir}\n",
                 "DOCS",
             )
             try:
                 proc = subprocess.run(
+
                     [sys.executable, "-m", "scripts.ingest_docs", *args],
                     check=True,
                     cwd=self.root_dir,
                     capture_output=True,
                     text=True,
                 )
+
+                output = (result.stdout or "") + (result.stderr or "")
+                match = re.search(r"(\d+)\s+doc", output, re.IGNORECASE)
+                if match:
+                    self._append_log(
+                        f"Indice aggiornato ({match.group(1)} documenti)\n", "DOCS"
+                    )
+                else:
+                    self._append_log("Indice aggiornato\n", "DOCS")
+
                 self._append_log(proc.stdout, "DOCS")
                 if proc.stderr:
                     self._append_log(proc.stderr, "DOCS")
+
                 messagebox.showinfo("Indice", f"Indice aggiornato ({' '.join(args)}).")
                 return
             except subprocess.CalledProcessError as exc:
@@ -1387,7 +1402,10 @@ class OracoloUI(tk.Tk):
                     self._append_log(exc.stderr, "DOCS")
                 self._append_log(str(exc) + "\n", "DOCS")
                 continue
-        messagebox.showerror("Indice", "Impossibile aggiornare l'indice (nessuna delle opzioni supportata).")
+        self._append_log("Reindex: fallito\n", "DOCS")
+        messagebox.showerror(
+            "Indice", "Impossibile aggiornare l'indice (nessuna delle opzioni supportata)."
+        )
 
     def _open_library_dialog(self) -> None:
         win = tk.Toplevel(self)
