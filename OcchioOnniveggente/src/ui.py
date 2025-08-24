@@ -838,8 +838,11 @@ class OracoloUI(tk.Tk):
                 text,
                 settings=self.settings,
                 client=client,
+
                 embed_model=openai_conf.get("embed_model", "text-embedding-3-small"),
                 topic=(self.settings.get("domain", {}) or {}).get("profile"),
+                topic=(self.settings.get("domain", {}).get("profile")),
+                embed_model=openai_conf.get("embed_model", "text-embedding-3-small"),
                 history=self.chat_state.history,
             )
             if not ok:
@@ -1064,10 +1067,15 @@ class OracoloUI(tk.Tk):
                 client=client,
                 docstore_path=self.settings.get("docstore_path"),
                 top_k=k,
+
                 embed_model=openai_conf.get("embed_model", "text-embedding-3-small")
                 if openai_conf
                 else None,
                 topic=(self.settings.get("domain", {}) or {}).get("profile"),
+
+                topic=(self.settings.get("domain", {}).get("profile")),
+                embed_model=openai_conf.get("embed_model", "text-embedding-3-small"),
+
             )
             end = time.time()
             m = _REASON_RE.search(reason)
