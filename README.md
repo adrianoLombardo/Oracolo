@@ -112,6 +112,8 @@ La GUI offre inoltre:
   `/profile`, `/topic`, `/docs`, `/realtime`)
 - Indicatori di livello audio in tempo reale e pulsanti per avviare/fermare
   il client WebSocket Realtime
+- Dal menu **Server** è possibile avviare o fermare il server WebSocket
+  realtime (`scripts/realtime_server.py`)
 - Menu **Strumenti** per esportare la conversazione (TXT/MD/JSON), salvare le
   risposte in audio (WAV/MP3) e scaricare log o profili da condividere
 
@@ -126,6 +128,7 @@ La GUI offre inoltre:
   python scripts/realtime_server.py
   ```
   (richiede chiave OpenAI, microfono e impostazioni valide in `settings.yaml`)
+  Può essere avviato/fermato anche dal menu **Server** della GUI.
 
 - **Server dummy di test**:
   ```bash

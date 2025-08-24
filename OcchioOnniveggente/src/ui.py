@@ -482,6 +482,11 @@ class OracoloUI(tk.Tk):
         self._reader_thread: threading.Thread | None = None
         self._stop_reader = threading.Event()
 
+        # websocket server
+        self.ws_server_proc: subprocess.Popen | None = None
+        self._ws_server_thread: threading.Thread | None = None
+        self._ws_stop_reader = threading.Event()
+
         # realtime client
         self.ws_client: RealtimeWSClient | None = None
 
@@ -538,6 +543,15 @@ class OracoloUI(tk.Tk):
         tools_menu.add_command(label="Limiti OpenAI…", command=self._open_quota_dialog)
         tools_menu.add_command(label="Salva log…", command=self._export_log)
         menubar.add_cascade(label="Strumenti", menu=tools_menu)
+
+        # Server WS
+        server_menu = tk.Menu(menubar, tearoff=0)
+        server_menu.add_command(label="Avvia server WS", command=self.start_ws_server)
+        self._srv_start_idx = server_menu.index("end")
+        server_menu.add_command(label="Ferma server WS", command=self.stop_ws_server, state="disabled")
+        self._srv_stop_idx = server_menu.index("end")
+        menubar.add_cascade(label="Server", menu=server_menu)
+        self.server_menu = server_menu
 
         self.config(menu=menubar)
 
@@ -1974,6 +1988,91 @@ class OracoloUI(tk.Tk):
                 pass
             self._reader_thread = None
 
+    # ----------------------- Realtime WS server ------------------------- #
+    def _read_ws_server_stdout(self) -> None:
+        if not self.ws_server_proc or not self.ws_server_proc.stdout:
+            return
+        f = self.ws_server_proc.stdout
+        while not self._ws_stop_reader.is_set():
+            line = f.readline()
+            if not line:
+                if self.ws_server_proc and self.ws_server_proc.poll() is not None:
+                    break
+                time.sleep(0.05)
+                continue
+            text = line.rstrip("\n")
+            self.after(0, lambda t=text: self._append_log(f"[WS-SRV] {t}\n", "WS"))
+        rest = f.read()
+        if rest:
+            self.after(0, lambda rest=rest: self._append_log(f"[WS-SRV] {rest}", "WS"))
+
+    def start_ws_server(self) -> None:
+        if self.ws_server_proc and self.ws_server_proc.poll() is None:
+            messagebox.showinfo("Server WS", "È già in esecuzione.")
+            return
+        try:
+            env = os.environ.copy()
+            env["PYTHONUNBUFFERED"] = "1"
+            env["PYTHONIOENCODING"] = "utf-8"
+            env["PYTHONUTF8"] = "1"
+            args = [sys.executable, "-u", "scripts/realtime_server.py"]
+            self.ws_server_proc = subprocess.Popen(
+                args,
+                cwd=self.root_dir,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+                encoding="utf-8",
+                errors="replace",
+                creationflags=subprocess.CREATE_NO_WINDOW if sys.platform.startswith("win") else 0,
+                env=env,
+            )
+            self.status_var.set("🟢 Server WS in esecuzione")
+            if hasattr(self, "server_menu"):
+                self.server_menu.entryconfig(self._srv_start_idx, state="disabled")
+                self.server_menu.entryconfig(self._srv_stop_idx, state="normal")
+            self._ws_stop_reader.clear()
+            self._ws_server_thread = threading.Thread(target=self._read_ws_server_stdout, daemon=True)
+            self._ws_server_thread.start()
+        except Exception as e:
+            messagebox.showerror("Server WS", f"Impossibile avviare il server: {e}")
+            self.ws_server_proc = None
+
+    def stop_ws_server(self) -> None:
+        if not self.ws_server_proc or self.ws_server_proc.poll() is not None:
+            if hasattr(self, "server_menu"):
+                self.server_menu.entryconfig(self._srv_start_idx, state="normal")
+                self.server_menu.entryconfig(self._srv_stop_idx, state="disabled")
+            if not (self.proc and self.proc.poll() is None) and self.ws_client is None:
+                self.status_var.set("🟡 In attesa")
+            return
+        try:
+            self._ws_stop_reader.set()
+            self.ws_server_proc.terminate()
+            for _ in range(40):
+                if self.ws_server_proc.poll() is not None:
+                    break
+                time.sleep(0.1)
+            if self.ws_server_proc.poll() is None:
+                self.ws_server_proc.kill()
+        except Exception:
+            pass
+        finally:
+            self.ws_server_proc = None
+            if hasattr(self, "server_menu"):
+                self.server_menu.entryconfig(self._srv_start_idx, state="normal")
+                self.server_menu.entryconfig(self._srv_stop_idx, state="disabled")
+            try:
+                if self._ws_server_thread and self._ws_server_thread.is_alive():
+                    self._ws_server_thread.join(timeout=0.5)
+            except Exception:
+                pass
+            self._ws_server_thread = None
+            if not (self.proc and self.proc.poll() is None) and self.ws_client is None:
+                self.status_var.set("🟡 In attesa")
+
     # ----------------------- Realtime WS control ------------------------- #
     def _on_ws_event(self, ev: str) -> None:
         self._append_log(f"[WS] {ev}\n", "WS")
@@ -2062,16 +2161,32 @@ class OracoloUI(tk.Tk):
                 self.status_var.set("🟡 In attesa")
 
     def _poll_process(self) -> None:
-        if self.proc is not None:
-            if self.proc.poll() is None:
-                if self.status_var.get() != "🟢 In esecuzione":
-                    self.status_var.set("🟢 In esecuzione")
-                self.start_btn.configure(state="disabled")
-                self.stop_btn.configure(state="normal")
-            else:
-                self.status_var.set("🟡 In attesa")
-                self.start_btn.configure(state="normal")
-                self.stop_btn.configure(state="disabled")
+        if self.proc is not None and self.proc.poll() is None:
+            self.start_btn.configure(state="disabled")
+            self.stop_btn.configure(state="normal")
+        else:
+            self.start_btn.configure(state="normal")
+            self.stop_btn.configure(state="disabled")
+
+        if self.ws_server_proc is not None and self.ws_server_proc.poll() is None:
+            if hasattr(self, "server_menu"):
+                self.server_menu.entryconfig(self._srv_start_idx, state="disabled")
+                self.server_menu.entryconfig(self._srv_stop_idx, state="normal")
+        else:
+            self.ws_server_proc = None
+            if hasattr(self, "server_menu"):
+                self.server_menu.entryconfig(self._srv_start_idx, state="normal")
+                self.server_menu.entryconfig(self._srv_stop_idx, state="disabled")
+
+        if self.proc is not None and self.proc.poll() is None:
+            self.status_var.set("🟢 In esecuzione")
+        elif self.ws_client is not None:
+            self.status_var.set("🟢 In esecuzione (realtime)")
+        elif self.ws_server_proc is not None and self.ws_server_proc.poll() is None:
+            self.status_var.set("🟢 Server WS in esecuzione")
+        else:
+            self.status_var.set("🟡 In attesa")
+
         self.after(500, self._poll_process)
 
     # ------------------------------ Exit ----------------------------------- #
@@ -2079,6 +2194,7 @@ class OracoloUI(tk.Tk):
         try:
             self.stop_oracolo()
             self.stop_realtime()
+            self.stop_ws_server()
         finally:
             self.destroy()
 
