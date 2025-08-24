@@ -157,44 +157,47 @@ chat:
 docstore_path: DataBase/index.json
 retrieval_top_k: 3
 
+profile:
+  current: museo
+
 profiles:
-  Museo:
-    oracle_system: >
-      Sei l'oracolo del museo, guida i visitatori tra le opere con tono
-      ispirato e conoscenza storica.
-    domain:
-      topic: "museo"
-      keywords: ["arte", "collezione"]
-      weights: {kw: 0.4, emb: 0.3, rag: 0.3}
-    docstore_path: DataBase/museo.json
-    chat_memory: data/logs/chat_museo.jsonl
-  Conferenza:
-    oracle_system: >
-      Sei l'oracolo della conferenza, rispondi come moderatore erudito.
-    domain:
-      topic: "conferenza"
-      keywords: ["relatore", "pubblico"]
-      weights: {kw: 0.4, emb: 0.3, rag: 0.3}
-    docstore_path: DataBase/conferenza.json
-    chat_memory: data/logs/chat_conferenza.jsonl
-  Galleria:
-    oracle_system: >
-      Sei l'oracolo della galleria, descrivi le esposizioni con stile
-      evocativo.
-    domain:
-      topic: "galleria"
-      keywords: ["opera", "esposizione"]
-      weights: {kw: 0.4, emb: 0.3, rag: 0.3}
-    docstore_path: DataBase/galleria.json
-    chat_memory: data/logs/chat_galleria.jsonl
-  Didattica:
-    oracle_system: >
-      Sei l'oracolo della didattica, parla agli studenti con chiarezza e
-      stimola la curiosità.
-    domain:
-      topic: "didattica"
-      keywords: ["lezione", "studenti"]
-      weights: {kw: 0.4, emb: 0.3, rag: 0.3}
-    docstore_path: DataBase/didattica.json
-    chat_memory: data/logs/chat_didattica.jsonl
+  museo:
+    label: "Museo"
+    topic: "museo"
+    keywords:
+      - neuroscienze dell’arte
+      - esposizioni museali
+      - opere, autori, curatori
+      - percorsi guidati, audioguide
+      - pubblico, accessibilità, didattica museale
+    docstore_path: "DataBase/museo/index.json"
+    system_hint: |
+      Rispondi come guida museale esperta di neuroscienze dell'arte.
+      Se la domanda non riguarda il contesto museale, chiedi gentilmente di riformularla in tema.
+    retrieval_top_k: 4
+    weights: {kw: 0.5, emb: 0.2, rag: 0.3}
+
+  conferenze:
+    label: "Conferenze"
+    topic: "conferenze"
+    keywords: ["programma", "relatori", "abstract", "orari", "logistica", "keynote"]
+    docstore_path: "DataBase/conferenze/index.json"
+    system_hint: "Rispondi come moderatore di conferenze su arte, neuroestetica e IA."
+    retrieval_top_k: 4
+
+  gallerie:
+    label: "Gallerie"
+    topic: "gallerie"
+    keywords: ["mostre in galleria", "artisti", "collezionisti", "vernissage", "cataloghi"]
+    docstore_path: "DataBase/gallerie/index.json"
+    system_hint: "Rispondi come curatore di galleria contemporanea."
+    retrieval_top_k: 4
+
+  didattica:
+    label: "Didattica"
+    topic: "didattica"
+    keywords: ["laboratori", "unità didattiche", "learning outcomes", "valutazione", "materiali"]
+    docstore_path: "DataBase/didattica/index.json"
+    system_hint: "Spiega in modo chiaro, con esempi adatti a studenti."
+    retrieval_top_k: 4
 

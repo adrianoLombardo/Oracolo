@@ -160,6 +160,7 @@ class RealtimeWSClient:
         on_output_level=lambda level: None,
         on_event=lambda evt: None,
         on_ping=lambda ms: None,
+        profile_name: str = "museo",
     ) -> None:
         self.url = url
         self.sr = sr
@@ -174,6 +175,7 @@ class RealtimeWSClient:
         self.on_output_level = on_output_level
         self.on_event = on_event
         self.on_ping = on_ping
+        self.profile_name = profile_name
         self.send_q: "queue.Queue[bytes]" = queue.Queue()
         self.audio_q: "queue.Queue[bytes]" = queue.Queue()
         self.state: dict[str, Any] = {
@@ -326,6 +328,10 @@ class RealtimeWSClient:
                         continue
 
                     self.on_event("handshake_ok")
+                    try:
+                        await ws.send(json.dumps({"type": "profile", "value": self.profile_name}))
+                    except Exception:
+                        pass
 
                     tasks = [
                         asyncio.create_task(self._mic_worker()),
@@ -444,9 +450,12 @@ class OracoloUI(tk.Tk):
             self.chat_state.persist_jsonl = Path(pj)
         self.remember_var = tk.BooleanVar(value=bool(chat_conf.get("enabled", True)))
         self.turns_var = tk.IntVar(value=int(chat_conf.get("max_turns", 10)))
-        profiles = self.settings.get("profiles", {})
+        profiles = self.settings.get("profiles", {}) or {}
         self.profile_names = list(profiles.keys())
-        self.profile_var = tk.StringVar(value=self.profile_names[0] if self.profile_names else "")
+        current_profile = (self.settings.get("profile", {}) or {}).get(
+            "current", self.profile_names[0] if self.profile_names else ""
+        )
+        self.profile_var = tk.StringVar(value=current_profile)
         self.tts_muted = False
         self.last_answer = ""
         self.last_sources: list[dict[str, str]] = []
@@ -762,21 +771,15 @@ class OracoloUI(tk.Tk):
         self._append_chat("system", f"Profilo cambiato: {self.profile_var.get()}")
 
     def _apply_profile(self, name: str) -> None:
-        profiles = self.settings.get("profiles", {})
-        prof = profiles.get(name)
-        if not prof:
-            return
-        if prof.get("oracle_system"):
-            self.settings["style_prompt"] = prof.get("oracle_system", "")
-        if prof.get("domain"):
-            self.settings["domain"] = prof["domain"]
-            self.chat_state.topic_text = prof["domain"].get("topic")
-            self.chat_state.topic_locked = True
-        if prof.get("docstore_path"):
-            self.settings["docstore_path"] = prof["docstore_path"]
-        if prof.get("chat_memory"):
-            self.chat_state.persist_jsonl = Path(prof["chat_memory"])
-            self.settings.setdefault("chat", {})["persist_jsonl"] = prof["chat_memory"]
+        self.settings.setdefault("profile", {})["current"] = name
+        routed_save(self.base_settings, self.local_settings, self.settings, self.root_dir)
+        if self.ws_client is not None:
+            self.ws_client.profile_name = name
+            if self.ws_client.ws is not None:
+                asyncio.run_coroutine_threadsafe(
+                    self.ws_client.ws.send(json.dumps({"type": "profile", "value": name})),
+                    self.ws_client.loop,
+                )
         self.chat_state.reset()
 
     def _on_chat_enter(self, event) -> str:
@@ -1982,6 +1985,7 @@ class OracoloUI(tk.Tk):
             on_output_level=lambda lvl: self.after(0, self.out_level.set, lvl),
             on_ping=lambda ms: self.after(0, self.ping_var.set, f"Ping: {ms:.0f} ms"),
             on_event=lambda ev: self.after(0, self._on_ws_event, ev),
+            profile_name=self.profile_var.get(),
         )
         try:
             self.ws_client.start()
