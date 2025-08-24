@@ -497,7 +497,7 @@ class OracoloUI(tk.Tk):
         self.sandbox_var = tk.BooleanVar(value=False)
         self.log_filters = {
             c: tk.BooleanVar(value=True)
-            for c in ["STT", "LLM", "TTS", "WS", "DOMAIN", "DOCS"]
+            for c in ["STT", "LLM", "TTS", "WS", "DOMAIN", "DOCS", "WAKE"]
         }
         self.log_entries: list[tuple[str, str]] = []
 
@@ -1833,8 +1833,8 @@ class OracoloUI(tk.Tk):
             wake["it_phrases"] = [p.strip() for p in it_var.get().split(",") if p.strip()]
             wake["en_phrases"] = [p.strip() for p in en_var.get().split(",") if p.strip()]
             self._append_log(
-                f"Wake: timeout={wake['idle_timeout']} it={wake['it_phrases']} en={wake['en_phrases']}\n",
-                "MISC",
+                f"Wake timeout={timeout_var.get()} IT={it_var.get()} EN={en_var.get()}",
+                "WAKE",
             )
             win.destroy()
 

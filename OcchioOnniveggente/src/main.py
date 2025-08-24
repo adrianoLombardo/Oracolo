@@ -18,6 +18,7 @@ import yaml
 from dotenv import load_dotenv
 from openai import OpenAI
 from pydantic import ValidationError
+import logging
 
 from src.config import Settings, get_openai_api_key
 from src.filters import ProfanityFilter
@@ -442,9 +443,11 @@ def main() -> None:
                     if wake:
                         text = text_en
                 say(f"📝 Riconosciuto: {text}")
+                logging.info("Hotword riconosciuta: %s (lang=%s)", text, lang)
                 if not wake:
                     if DEBUG:
                         say("…hotword non riconosciuta, continuo l'attesa.")
+                    logging.info("Hotword non riconosciuta: %s", text)
                     continue
                 session_lang = update_language(session_lang, lang, "")
                 wake_lang = session_lang or lang or "it"
@@ -470,9 +473,13 @@ def main() -> None:
                         elif text_it:
                             session_lang = "it"
                 say(f"📝 Riconosciuto: {text}")
+                logging.info(
+                    "Hotword riconosciuta: %s (lang=%s)", text, session_lang
+                )
                 if not (is_it or is_en):
                     if DEBUG:
                         say("…hotword non riconosciuta, continuo l'attesa.")
+                    logging.info("Hotword non riconosciuta: %s", text)
                     continue
                 wake_lang = session_lang or ("en" if is_en and not is_it else "it")
 
