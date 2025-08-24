@@ -94,8 +94,8 @@ oracle_system: >
 # Hotword / risveglio
 wake:
   enabled: true           # usa la hotword; se metti false parla sempre (sconsigliato)
-  single_turn: true       # dopo 1 risposta torna a SLEEP; metti false per dialogo continuo
-  idle_timeout: 60        # secondi di inattività prima di tornare a SLEEP
+  single_turn: false      # dopo 1 risposta resta attivo finché c'è attività
+  idle_timeout: 50        # secondi di inattività prima di tornare a SLEEP
 
   # Frasi riconosciute (tolleranti a maiuscole, punteggiatura, piccoli errori STT)
   it_phrases:

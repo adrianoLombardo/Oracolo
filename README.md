@@ -51,7 +51,8 @@ definire più **profili** preconfigurati. Ad esempio:
 ```yaml
 wake:
   enabled: true
-  single_turn: true
+  single_turn: false
+  idle_timeout: 50
   it_phrases: ["ciao oracolo"]
 
 profiles:

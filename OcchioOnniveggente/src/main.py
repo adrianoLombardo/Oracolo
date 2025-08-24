@@ -270,7 +270,7 @@ def main() -> None:
     WAKE_EN = ["hello oracle", "hey oracle", "hi oracle", "hello, oracle"]
     WAKE_ENABLED = True
     WAKE_SINGLE_TURN = False
-    IDLE_TIMEOUT = 60.0  # secondi di inattività prima di tornare a SLEEP
+    IDLE_TIMEOUT = 50.0  # secondi di inattività prima di tornare a SLEEP
 
     try:
         if getattr(SET, "wake", None) is not None:

@@ -137,7 +137,7 @@ class RTSession:
             self.wake_phrases = list(getattr(setts.wake, "it_phrases", [])) + list(
                 getattr(setts.wake, "en_phrases", [])
             )
-        self.idle_timeout = float(getattr(setts.wake, "idle_timeout", 60.0))
+        self.idle_timeout = float(getattr(setts.wake, "idle_timeout", 50.0))
 
         self.chat_enabled = bool(getattr(getattr(setts, "chat", None), "enabled", False))
         self.chat = ChatState(
@@ -162,7 +162,7 @@ class RTSession:
             self.wake_phrases = list(getattr(setts.wake, "it_phrases", [])) + list(
                 getattr(setts.wake, "en_phrases", [])
             )
-        self.idle_timeout = float(getattr(setts.wake, "idle_timeout", 60.0))
+        self.idle_timeout = float(getattr(setts.wake, "idle_timeout", 50.0))
 
         self.chat_enabled = bool(getattr(getattr(setts, "chat", None), "enabled", False))
         self.chat = ChatState(
