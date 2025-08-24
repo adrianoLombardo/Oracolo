@@ -32,6 +32,7 @@ from src.chat import ChatState
 from src.conversation import ConversationManager
 from src.oracle import oracle_answer, synthesize
 from src.domain import validate_question
+from src.validators import validate_device_config
 from src.config import get_openai_api_key
 
 import asyncio
@@ -2143,6 +2144,13 @@ class OracoloUI(tk.Tk):
         if self.proc and self.proc.poll() is None:
             messagebox.showinfo("Oracolo", "È già in esecuzione.")
             return
+        audio_cfg = self.settings.get("audio", {})
+        try:
+            validate_device_config(audio_cfg)
+        except ValueError as e:
+            messagebox.showerror("Audio", str(e))
+            logging.error("Invalid device configuration: %s", e)
+            return
         try:
             self._clear_log()
             env = os.environ.copy()
@@ -2351,6 +2359,12 @@ class OracoloUI(tk.Tk):
 
         # applica dispositivi audio da settings come default
         audio = self.settings.get("audio", {})
+        try:
+            validate_device_config(audio)
+        except ValueError as e:
+            messagebox.showerror("Audio", str(e))
+            logging.error("Invalid device configuration: %s", e)
+            return
         in_dev = audio.get("input_device", None)
         out_dev = audio.get("output_device", None)
         sd.default.device = (in_dev, out_dev)
