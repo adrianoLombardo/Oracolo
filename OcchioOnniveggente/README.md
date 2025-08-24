@@ -94,3 +94,26 @@ python -m src.ui
 Dal menu **Impostazioni** è possibile selezionare i dispositivi audio e
 configurare la luce via Art-Net/sACN o WLED.
 
+
+### Moduli Qt richiesti
+
+L'interfaccia QML utilizza i moduli `Qt5Compat.GraphicalEffects` o `QtQuick.Effects`.
+
+#### Installazione con pip
+
+I moduli sono inclusi in `PySide6` e si installano con:
+
+```bash
+pip install PySide6
+```
+
+#### Pacchetti di sistema
+
+Su Debian/Ubuntu è possibile installarli con:
+
+```bash
+sudo apt install qml6-module-qt5compat-graphicaleffects qml6-module-qtquick-effects
+```
+
+Per altre distribuzioni consulta la documentazione dei pacchetti Qt.
+
