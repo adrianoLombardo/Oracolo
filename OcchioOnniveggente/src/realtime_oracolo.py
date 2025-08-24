@@ -75,28 +75,34 @@ async def _player(
     audio_q: "queue.Queue[bytes]", *, sr: int, state: dict[str, Any], dlg: DialogueManager
 ) -> None:
     """Riproduce i frame audio (binari) ricevuti dal server."""
+    buf = bytearray()
 
     def callback(outdata, frames, time_info, status) -> None:  # type: ignore[override]
-        try:
-            chunk = audio_q.get_nowait()
-            n = len(outdata)
+        nonlocal buf
+        n = len(outdata)
+
+        while len(buf) < n:
+            try:
+                buf.extend(audio_q.get_nowait())
+                state["tts_playing"] = True
+            except queue.Empty:
+                break
+
+        if buf:
             vol = 0.3 if state.get("barge_sent") else 1.0
-            data = np.frombuffer(chunk, dtype=np.int16).astype(np.float32)
-            data = np.clip(data * vol, -32768, 32767).astype(np.int16).tobytes()
-            if len(data) >= n:
-                outdata[:] = data[:n]
-            else:
-                outdata[: len(data)] = data
-                outdata[len(data) :] = b"\x00" * (n - len(data))
-            state["tts_playing"] = True
-        except queue.Empty:
-            outdata[:] = b"\x00" * len(outdata)
+            data = np.frombuffer(buf[:n], dtype=np.int16).astype(np.float32)
+            data = np.clip(data * vol, -32768, 32767).astype(np.int16)
+            outdata[:] = data.tobytes()
+            buf = buf[n:]
+        else:
+            outdata[:] = b"\x00" * n
             state["tts_playing"] = False
             state["barge_sent"] = False
             dlg.transition(DialogState.LISTENING)
 
+    blocksize = int(sr * 0.02)  # ~20ms di audio
     with sd.RawOutputStream(
-        samplerate=sr, channels=1, dtype="int16", callback=callback
+        samplerate=sr, channels=1, dtype="int16", callback=callback, blocksize=blocksize
     ):
         while True:
             await asyncio.sleep(0.1)
