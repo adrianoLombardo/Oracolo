@@ -771,6 +771,7 @@ class OracoloUI(tk.Tk):
         if prof.get("domain"):
             self.settings["domain"] = prof["domain"]
             self.chat_state.topic_text = prof["domain"].get("topic")
+            self.chat_state.topic_locked = True
         if prof.get("docstore_path"):
             self.settings["docstore_path"] = prof["docstore_path"]
         if prof.get("chat_memory"):
@@ -827,12 +828,13 @@ class OracoloUI(tk.Tk):
             openai_conf = self.settings.get("openai", {})
             api_key = openai_conf.get("api_key") or os.environ.get("OPENAI_API_KEY")
             client = OpenAI(api_key=api_key) if api_key else OpenAI()
-            self.chat_state.update_topic(
-                text,
-                client,
-                openai_conf.get("embed_model", "text-embedding-3-small"),
-                threshold=float(self.topic_threshold.get()),
-            )
+            if not self.chat_state.topic_locked:
+                self.chat_state.update_topic(
+                    text,
+                    client,
+                    openai_conf.get("embed_model", "text-embedding-3-small"),
+                    threshold=float(self.topic_threshold.get()),
+                )
             style_prompt = self.settings.get("style_prompt", "") if self.style_var.get() else ""
             lang = self.lang_map.get(self.lang_choice.get(), "auto")
             mode = self.mode_map.get(self.mode_choice.get(), "detailed")

@@ -14,6 +14,7 @@ class ChatState:
     history: List[Dict[str, str]] = field(default_factory=list)
     topic_emb: Optional[np.ndarray] = field(default=None, repr=False)
     topic_text: Optional[str] = None
+    topic_locked: bool = False
     pinned: List[str] = field(default_factory=list)
     summary: str = ""
     pinned_limit: int = 5
@@ -127,6 +128,8 @@ class ChatState:
         Ritorna True se è stato rilevato un cambio di tema rispetto al
         topic precedente.
         """
+        if self.topic_locked:
+            return False
         if not text or client is None or not emb_model:
             return False
         try:
