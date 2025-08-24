@@ -1,7 +1,7 @@
 from __future__ import annotations
+
 import asyncio
 import json
-import os
 import sys
 import time
 from pathlib import Path
@@ -9,61 +9,46 @@ from typing import Any
 
 import numpy as np
 import websockets
+import yaml
 from dotenv import load_dotenv
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from src.config import Settings, get_openai_api_key
-from src.hotword import strip_hotword_prefix
-from src.oracle import transcribe, oracle_answer
 from src.chat import ChatState
+from src.config import Settings, get_openai_api_key
 from src.domain import validate_question
-import yaml
+from src.hotword import strip_hotword_prefix
+from src.oracle import oracle_answer, transcribe
 
 import wave
 
 CHUNK_MS = 20
-# soglia più permissiva per captare parlato anche con microfoni poco sensibili
 START_LEVEL = 300
 END_SIL_MS = 700
 MAX_UTT_MS = 15_000
 
 
 def get_active_profile(SETTINGS, forced_name: str | None = None):
+    """Return the active profile name and configuration."""
     if isinstance(SETTINGS, dict):
-
         dom = SETTINGS.get("domain", {}) or {}
-        prof_name = dom.get("profile", "museo")
-
-        dom = SETTINGS.get("domain") or {}
         prof_name = forced_name or dom.get("profile", "museo")
-main
         profiles = dom.get("profiles", {}) or {}
         prof = profiles.get(prof_name, {})
     else:
         dom = getattr(SETTINGS, "domain", None)
-
-        prof_name = getattr(dom, "profile", "museo") if dom else "museo"
+        prof_name = forced_name or (
+            getattr(dom, "profile", "museo") if dom else "museo"
+        )
         profiles = getattr(dom, "profiles", {}) if dom else {}
-
-        prof_name = forced_name or getattr(dom, "profile", "museo")
-        profiles = getattr(dom, "profiles", {}) or {}
-main
         prof = profiles.get(prof_name, {})
     return prof_name, prof
 
 
-
-def make_domain_settings(base_settings, prof_name):
-    if isinstance(base_settings, dict):
-        new_s = dict(base_settings)
-        dom = dict(new_s.get("domain") or {})
-        dom["enabled"] = True
-        dom["profile"] = prof_name
-
-def make_domain_settings(base_settings, prof_name: str, prof):
+def make_domain_settings(base_settings, prof_name: str, prof: dict):
+    """Return ``base_settings`` with domain info replaced by ``prof``."""
     if isinstance(base_settings, dict):
         new_s = dict(base_settings)
         dom = dict(new_s.get("domain", {}))
@@ -73,12 +58,11 @@ def make_domain_settings(base_settings, prof_name: str, prof):
             "keywords": prof.get("keywords", []),
         })
         if prof.get("weights"):
-            dom["weights"] = prof.get("weights")
+            dom["weights"] = prof["weights"]
         if prof.get("accept_threshold") is not None:
-            dom["accept_threshold"] = prof.get("accept_threshold")
+            dom["accept_threshold"] = prof["accept_threshold"]
         if prof.get("clarify_margin") is not None:
-            dom["clarify_margin"] = prof.get("clarify_margin")
-main
+            dom["clarify_margin"] = prof["clarify_margin"]
         new_s["domain"] = dom
         return new_s
     else:
@@ -87,15 +71,15 @@ main
             base_settings.domain.profile = prof_name
             base_settings.domain.keywords = prof.get("keywords", [])
             if prof.get("weights"):
-                base_settings.domain.weights = prof.get("weights")
+                base_settings.domain.weights = prof["weights"]
             if prof.get("accept_threshold") is not None:
-                base_settings.domain.accept_threshold = prof.get("accept_threshold")
+                base_settings.domain.accept_threshold = prof["accept_threshold"]
             if prof.get("clarify_margin") is not None:
-                base_settings.domain.clarify_margin = prof.get("clarify_margin")
-main
+                base_settings.domain.clarify_margin = prof["clarify_margin"]
         except Exception:
             pass
         return base_settings
+
 
 def rms_level(pcm_bytes: bytes) -> float:
     if not pcm_bytes:
@@ -106,8 +90,6 @@ def rms_level(pcm_bytes: bytes) -> float:
     return float(np.sqrt(np.mean(x * x)))
 
 
-class RTSession:
-
 def write_wav(path: Path, sr: int, pcm: bytes) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with wave.open(str(path), "wb") as w:
@@ -117,12 +99,12 @@ def write_wav(path: Path, sr: int, pcm: bytes) -> None:
         w.writeframes(pcm)
 
 
-async def stream_tts_pcm(ws, client, text: str, tts_model: str, tts_voice: str, sr: int = 24000) -> None:
+async def stream_tts_pcm(
+    ws, client, text: str, tts_model: str, tts_voice: str, sr: int = 24000
+) -> None:
     """Streamma TTS in PCM nativo se supportato, altrimenti decapsula WAV."""
-
     chunk_bytes = int(sr * 2 * CHUNK_MS / 1000)
     block_frames = int(sr * CHUNK_MS / 1000)
-
     try:
         with client.audio.speech.with_streaming_response.create(
             model=tts_model,
@@ -161,8 +143,8 @@ async def stream_tts_pcm(ws, client, text: str, tts_model: str, tts_voice: str, 
             await ws.send(frames)
             await asyncio.sleep(0)
 
-class RTSession:
 
+class RTSession:
     def __init__(self, ws, setts: Settings, raw: dict) -> None:
         self.ws = ws
         self.SET = setts
@@ -174,20 +156,7 @@ class RTSession:
         self.ms_since_voice = 0
         self.barge = False
 
-
         dom = raw.get("domain", {}) or {}
-        self.profiles = dom.get("profiles", {})
-        self.profile = dom.get("profile", "")
-        self.profile_info = self.profiles.get(self.profile, {})
-        self.docstore_path = self.profile_info.get(
-            "docstore_path", getattr(setts, "docstore_path", "DataBase/index.json")
-        )
-        self.topic = self.profile
-        self.system_hint = self.profile_info.get("system_hint", "")
-        self.retrieval_top_k = int(
-            self.profile_info.get("retrieval_top_k") or getattr(setts, "retrieval_top_k", 3)
-
-        dom = raw.get("domain", {})
         self.profiles = dom.get("profiles", {})
         self.profile = dom.get("profile", "museo")
         prof = self.profiles.get(self.profile, {})
@@ -199,7 +168,6 @@ class RTSession:
         self.system_hint = prof.get("system_hint", "")
         self.retrieval_top_k = int(
             prof.get("retrieval_top_k") or getattr(setts, "retrieval_top_k", 3)
-main
         )
 
         self.active_until = 0.0
@@ -210,7 +178,9 @@ main
             )
         self.idle_timeout = float(getattr(setts.wake, "idle_timeout", 50.0))
 
-        self.chat_enabled = bool(getattr(getattr(setts, "chat", None), "enabled", False))
+        self.chat_enabled = bool(
+            getattr(getattr(setts, "chat", None), "enabled", False)
+        )
         self.chat = ChatState(
             max_turns=int(getattr(getattr(setts, "chat", None), "max_turns", 10)),
             persist_jsonl=Path(
@@ -239,76 +209,10 @@ main
     async def send_answer(self, text: str) -> None:
         await self.send_json({"type": "answer", "text": text})
 
-
     async def stream_file(self, path: Path, chunk_bytes: int = 960) -> None:
         """Invia il contenuto di ``path`` in piccoli chunk al client."""
-
         if not path.exists():
             return
-
-        try:
-            with path.open("rb") as f:
-                while True:
-                    data = f.read(chunk_bytes)
-                    if not data:
-                        break
-                    await self.ws.send(data)
-                    await asyncio.sleep(0.01)
-        except Exception:
-            pass
-
-    async def stream_sentences(self, text: str, client: Any) -> None:
-        """Sintetizza ``text`` frase per frase, consentendo il barge-in
-        solo ai confini di frase.
-
-        Se ``self.barge`` viene impostato a ``True`` dal client durante la
-        riproduzione, la frase corrente viene terminata ma le successive non
-        vengono inviate.
-        """
-
-        import re
-
-        sentences = [s.strip() for s in re.split(r"(?<=[.!?]) +", text) if s.strip()]
-        if not sentences:
-            return
-
-        self.state = "tts"
-        self.barge = False
-        first_ts = None
-        last_ts = None
-
-        for sent in sentences:
-            try:
-                with client.audio.speech.with_streaming_response.create(
-                    model=self.SET.openai.tts_model,
-                    voice=self.SET.openai.tts_voice,
-                    input=sent,
-                    response_format="pcm",
-                    sample_rate=self.client_sr,
-                ) as resp:
-                    for chunk in resp.iter_bytes(chunk_size=960):
-                        if first_ts is None:
-                            first_ts = time.time()
-                            print(f"[diag] tts_first_byte {first_ts:.3f}", flush=True)
-                        await self.ws.send(chunk)
-                        last_ts = time.time()
-                        await asyncio.sleep(0)
-            except Exception:
-                break
-            if self.barge:
-                break
-
-        self.state = "idle"
-        self.barge = False
-        if first_ts is not None:
-            print(f"[diag] tts_last_byte {last_ts:.3f}", flush=True)
-
-    async def stream_file(self, path: Path, chunk_bytes: int = 960) -> None:
-        """Invia il contenuto di ``path`` in piccoli chunk al client."""
-
-        if not path.exists():
-            return
-
         try:
             with path.open("rb") as f:
                 while True:
@@ -322,7 +226,6 @@ main
 
     async def stream_tts_pcm(self, text: str, client: Any) -> None:
         """Sintetizza e invia ``text`` in formato PCM con latenza ridotta."""
-
         self.state = "tts"
         self.barge = False
         try:
@@ -344,14 +247,7 @@ main
         self.barge = False
 
     async def stream_sentences(self, text: str, client: Any) -> None:
-        """Sintetizza ``text`` frase per frase, consentendo il barge-in
-        solo ai confini di frase.
-
-        Se ``self.barge`` viene impostato a ``True`` dal client durante la
-        riproduzione, la frase corrente viene terminata ma le successive non
-        vengono inviate.
-        """
-
+        """Sintetizza ``text`` frase per frase, consentendo il barge-in."""
         import re
 
         sentences = [s.strip() for s in re.split(r"(?<=[.!?]) +", text) if s.strip()]
@@ -360,7 +256,6 @@ main
 
         self.state = "tts"
         self.barge = False
-
         for sent in sentences:
             try:
                 await stream_tts_pcm(
@@ -375,10 +270,8 @@ main
                 break
             if self.barge:
                 break
-
         self.state = "idle"
         self.barge = False
-        main
 
     async def on_audio(self, data: bytes, frame_ms: int) -> None:
         self.buf.extend(data)
@@ -405,12 +298,12 @@ main
                 self.ms_since_voice = 0
 
     async def _finalize_utterance(self) -> None:
-
         if not self.buf:
             return
         audio_bytes = bytes(self.buf)
 
         from openai import OpenAI
+
         load_dotenv()
         api_key = get_openai_api_key(self.SET)
         client = OpenAI(api_key=api_key) if api_key else OpenAI()
@@ -443,12 +336,12 @@ main
 
         embed_model = getattr(self.SET.openai, "embed_model", None)
 
-        settings_for_domain = make_domain_settings(self.SET, self.profile)
-
         settings_for_domain = make_domain_settings(
-            self.SET, self.profile, {"keywords": self.domain_keywords, "weights": self.domain_weights}
+            self.SET,
+            self.profile,
+            {"keywords": self.domain_keywords, "weights": self.domain_weights},
         )
-main
+
         ok, ctx, clarify, reason, _ = validate_question(
             text,
             lang,
@@ -469,7 +362,9 @@ main
             await self.stream_sentences(ans, client)
             return
 
-        context_texts = [item.get("text", "") for item in (ctx or []) if isinstance(item, dict)]
+        context_texts = [
+            item.get("text", "") for item in (ctx or []) if isinstance(item, dict)
+        ]
         profile_hint = self.system_hint
         base_system = self.SET.oracle_system
         if profile_hint:
@@ -492,6 +387,7 @@ main
         await self.send_answer(ans)
         await self.stream_sentences(ans, client)
 
+
 async def handler(ws):
     raw_cfg = yaml.safe_load((ROOT / "settings.yaml").read_text(encoding="utf-8")) or {}
     SET = Settings.model_validate(raw_cfg)
@@ -512,11 +408,6 @@ async def handler(ws):
             return
         sess.client_sr = int(hello.get("sr", SET.audio.sample_rate))
         print(f"🤝 handshake sr={sess.client_sr}", flush=True)
-
-        if hello.get("type") != "hello":
-            await ws.close(code=1002, reason="missing hello type")
-            return
-        sess.client_sr = int(hello.get("sr", SET.audio.sample_rate))
 
         await sess.send_json({"type": "ready"})
         await sess.send_partial("Sto capendo...")
@@ -539,36 +430,37 @@ async def handler(ws):
                 elif data.get("type") == "profile":
                     sess.profile = data.get("value", "")
                     prof = sess.profiles.get(sess.profile, {})
-                    sess.profile_info = prof
                     sess.docstore_path = prof.get(
-                        "docstore_path", getattr(sess.SET, "docstore_path", "DataBase/index.json")
+                        "docstore_path",
+                        getattr(sess.SET, "docstore_path", "DataBase/index.json"),
                     )
-
                     sess.topic = sess.profile
-
                     sess.domain_keywords = prof.get("keywords", [])
                     sess.domain_weights = prof.get("weights", {})
-main
                     sess.system_hint = prof.get("system_hint", "")
                     sess.retrieval_top_k = int(
-                        prof.get("retrieval_top_k") or getattr(sess.SET, "retrieval_top_k", 3)
+                        prof.get("retrieval_top_k")
+                        or getattr(sess.SET, "retrieval_top_k", 3)
                     )
-                    await sess.send_json({"type": "info", "text": f"Profilo attivo: {sess.profile}"})
+                    await sess.send_json(
+                        {"type": "info", "text": f"Profilo attivo: {sess.profile}"}
+                    )
     except websockets.ConnectionClosed:
         pass
 
+
 async def main(host="127.0.0.1", port=8765):
-    # keepalive più larghi e gestione close robusta
     async with websockets.serve(
-        handler, host, port,
-        ping_interval=20, ping_timeout=40, max_size=None
+        handler, host, port, ping_interval=20, ping_timeout=40, max_size=None
     ):
         print(f"WS Realtime server pronto su ws://{host}:{port}", flush=True)
         await asyncio.Future()
 
+
 if __name__ == "__main__":
     try:
         import argparse
+
         p = argparse.ArgumentParser()
         p.add_argument("--host", default="127.0.0.1")
         p.add_argument("--port", type=int, default=8765)
@@ -576,3 +468,4 @@ if __name__ == "__main__":
         asyncio.run(main(args.host, args.port))
     except KeyboardInterrupt:
         pass
+
