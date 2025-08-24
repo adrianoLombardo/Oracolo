@@ -27,6 +27,15 @@ from tkinter import filedialog, messagebox, scrolledtext, simpledialog, ttk
 from typing import Any, Callable
 
 from src.retrieval import retrieve
+from src.chat import ChatState
+from src.conversation import ConversationManager
+from src.oracle import (
+    oracle_answer,
+    oracle_answer_async,
+    synthesize,
+    synthesize_async,
+)
+
 from src.domain import validate_question
 from src.validators import validate_device_config
 from src.config import get_openai_api_key
@@ -438,6 +447,13 @@ class OracoloUI(tk.Tk):
         # realtime client
         self.ws_client: RealtimeWSClient | None = None
 
+        # background asyncio loop for blocking operations
+        self._async_loop = asyncio.new_event_loop()
+        self._async_thread = threading.Thread(
+            target=self._async_loop.run_forever, daemon=True
+        )
+        self._async_thread.start()
+
         # UI
         self._build_menubar()
         self._build_layout()
@@ -845,8 +861,96 @@ class OracoloUI(tk.Tk):
 
     
     def _send_chat(self, text: str) -> None:
+        """Wrapper that schedules the async chat handler."""
         self.last_activity = time.time()
         self._append_chat("user", text)
+        self.conv.push_user(text)
+        self.last_sources = []
+        openai_conf = self.settings.get("openai", {})
+        api_key = get_openai_api_key(self.settings)
+        if not api_key:
+            if messagebox.askyesno(
+                "OpenAI", "È necessaria una API key OpenAI. Aprire le impostazioni?"
+            ):
+                self._open_openai_dialog()
+                api_key = get_openai_api_key(self.settings)
+            if not api_key:
+                self.chat_entry.configure(state="disabled")
+                self.status_var.set("🟡 In attesa")
+                return
+            else:
+                self.chat_entry.configure(state="normal")
+        self.status_var.set("⏳ In corso…")
+        self._async_loop.call_soon_threadsafe(
+            asyncio.create_task, self._send_chat_async(text, api_key, openai_conf)
+        )
+    async def _send_chat_async(
+        self, text: str, api_key: str, openai_conf: dict
+    ) -> None:
+        try:
+            client = OpenAI(api_key=api_key)
+            style_prompt = (
+                self.settings.get("style_prompt", "") if self.style_var.get() else ""
+            )
+            lang = self.lang_map.get(self.lang_choice.get(), "auto")
+            mode = self.mode_map.get(self.mode_choice.get(), "detailed")
+            docstore_path = self.settings.get("docstore_path")
+            top_k = int(self.settings.get("retrieval_top_k", 3))
+            ok, ctx, needs_clar, reason, _ = await asyncio.to_thread(
+                validate_question,
+                text,
+                settings=self.settings,
+                client=client,
+                docstore_path=docstore_path,
+                top_k=top_k,
+                embed_model=openai_conf.get("embed_model", "text-embedding-3-small"),
+                topic=self.chat_state.topic_text,
+                history=self.chat_state.history,
+            )
+            if not ok:
+                if needs_clar:
+                    ans = "Potresti fornire maggiori dettagli o chiarire la tua domanda?"
+                else:
+                    m = _REASON_RE.search(reason)
+                    if m:
+                        score = float(m.group("score"))
+                        thr = float(m.group("thr"))
+                        ans = f"Richiesta fuori dominio (score {score:.2f} < {thr:.2f})."
+                    else:
+                        ans = "Richiesta fuori dominio."
+                self.conv.push_assistant(ans)
+                self.after(0, self._append_chat, "assistant", ans)
+                self.after(0, self._append_citations, [])
+                self.last_activity = time.time()
+                self.after(0, self.status_var.set, "🟢 Attivo")
+                return
+            if self.sandbox_var.get():
+                ctx = []
+            else:
+                dom = self.settings.get("domain", {}) or {}
+                prof = dom.get("profile", "")
+                if isinstance(prof, dict):
+                    prof = prof.get("current", "")
+                ctx = await asyncio.to_thread(
+                    retrieve,
+                    text,
+                    self.settings.get("docstore_path", ""),
+                    top_k=int(self.settings.get("retrieval_top_k", 3)),
+                    topic=prof,
+                )
+            pin_ctx = [{"id": f"pin{i}", "text": t} for i, t in enumerate(self.chat_state.pinned)]
+            ctx = pin_ctx + ctx
+            ans, used_ctx = await oracle_answer_async(
+                text,
+                lang,
+                client,
+                self.settings.get("llm_model", "gpt-4o"),
+                style_prompt,
+                context=ctx,
+                history=self.chat_state.history,
+                topic=self.chat_state.topic_text,
+                mode=mode,
+
         try:
             ans, used_ctx = self.controller.send_chat(
                 text,
@@ -854,23 +958,35 @@ class OracoloUI(tk.Tk):
                 self.mode_map.get(self.mode_choice.get(), "detailed"),
                 self.style_var.get(),
                 self.sandbox_var.get(),
+
             )
             self.last_sources = used_ctx
         except Exception as e:
             ans = f"Errore: {e}"
             self.last_sources = []
+        self.conv.push_assistant(ans)
+
         self._append_chat("assistant", ans)
         self._append_citations(self.last_sources)
         self.last_activity = time.time()
-        self.status_var.set("🟢 Attivo")
+        self.after(0, self._append_chat, "assistant", ans)
+        self.after(0, self._append_citations, self.last_sources)
+        self.after(0, self.status_var.set, "🟢 Attivo")
 
     def _mute_tts(self) -> None:
         self.tts_muted = not self.tts_muted
 
     def _stop_tts(self) -> None:
-        if self.ws_client is not None and self.ws_client.ws is not None:
+        if (
+            self.ws_client is not None
+            and self.ws_client.ws is not None
+            and self.ws_client.loop is not None
+        ):
             try:
-                asyncio.run(self.ws_client.ws.send(json.dumps({"type": "barge_in"})))
+                asyncio.run_coroutine_threadsafe(
+                    self.ws_client.ws.send(json.dumps({"type": "barge_in"})),
+                    self.ws_client.loop,
+                )
             except Exception:
                 pass
 
@@ -904,15 +1020,23 @@ class OracoloUI(tk.Tk):
         )
         if not path:
             return
+        self.status_var.set("⏳ Esportazione audio…")
+        self._async_loop.call_soon_threadsafe(
+            asyncio.create_task, self._export_audio_async(Path(path))
+        )
+
+    async def _export_audio_async(self, path: Path) -> None:
         try:
             openai_conf = self.settings.get("openai", {})
             api_key = get_openai_api_key(self.settings)
             client = OpenAI(api_key=api_key) if api_key else OpenAI()
             tts_model = openai_conf.get("tts_model", "gpt-4o-mini-tts")
             tts_voice = openai_conf.get("tts_voice", "alloy")
-            synthesize(self.last_answer, Path(path), client, tts_model, tts_voice)
+            await synthesize_async(self.last_answer, Path(path), client, tts_model, tts_voice)
         except Exception as e:
-            messagebox.showerror("Audio", f"Errore esportando audio: {e}")
+            self.after(0, lambda: messagebox.showerror("Audio", f"Errore esportando audio: {e}"))
+        finally:
+            self.after(0, self.status_var.set, "🟢 Attivo")
 
     def _copy_citations(self) -> None:
         if not self.last_sources:
@@ -2334,6 +2458,10 @@ class OracoloUI(tk.Tk):
             self.stop_realtime()
             self.stop_ws_server()
         finally:
+            try:
+                self._async_loop.call_soon_threadsafe(self._async_loop.stop)
+            except Exception:
+                pass
             self.destroy()
 
 
