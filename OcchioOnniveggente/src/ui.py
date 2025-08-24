@@ -5,7 +5,7 @@ UI Tkinter per Occhio Onniveggente.
 - Carica settings.yaml + settings.local.yaml (overlay).
 - Salvataggio "split": debug e audio.(input/output)_device -> settings.local.yaml,
   tutto il resto -> settings.yaml.
-- Menu Documenti: Aggiungi / Rimuovi / Aggiorna indice.
+- Menu Documenti: Gestione documenti (indice, aggiungi/rimuovi/reindicizza, test retrieval) e Libreria.
 - Avvio/Stop di src.main in modalità --autostart con log in tempo reale.
 - Controllo client Realtime WebSocket (start/stop) con streaming audio.
 """
@@ -536,10 +536,7 @@ class OracoloUI(tk.Tk):
 
         # Documenti
         docs_menu = tk.Menu(menubar, tearoff=0)
-        docs_menu.add_command(label="Aggiungi…", command=self._add_documents)
-        docs_menu.add_command(label="Rimuovi…", command=self._remove_documents)
-        docs_menu.add_separator()
-        docs_menu.add_command(label="Aggiorna indice…", command=self._reindex_documents)
+        docs_menu.add_command(label="Gestione…", command=self._open_doc_manager_dialog)
         docs_menu.add_command(label="Libreria…", command=self._open_library_dialog)
         menubar.add_cascade(label="Documenti", menu=docs_menu)
 
@@ -552,7 +549,6 @@ class OracoloUI(tk.Tk):
         settings_menu.add_command(label="Luci…", command=self._open_lighting_dialog)
         settings_menu.add_command(label="OpenAI…", command=self._open_openai_dialog)
         settings_menu.add_command(label="Argomenti & Regole…", command=self._open_domain_dialog)
-        settings_menu.add_command(label="Conoscenza…", command=self._open_knowledge_dialog)
         settings_menu.add_command(label="Wake…", command=self._open_wake_dialog)
         settings_menu.add_separator()
         settings_menu.add_command(label="Importa profili…", command=self._import_profiles)
@@ -1333,7 +1329,7 @@ class OracoloUI(tk.Tk):
         p = self.root_dir / "scripts" / "ingest_docs.py"
         return p if p.exists() else None
 
-    def _add_documents(self) -> None:
+    def _add_documents(self, topic: str = "", docstore_path: str | None = None) -> None:
         paths = list(filedialog.askopenfilenames(parent=self))
         if not paths:
             directory = filedialog.askdirectory(parent=self)
@@ -1346,9 +1342,15 @@ class OracoloUI(tk.Tk):
             messagebox.showwarning("Documento", "Script di ingest non trovato (scripts/ingest_docs.py).")
             return
         self._append_log("Aggiunta documenti:\n" + "\n".join(paths) + "\n", "DOCS")
+        cmd = [sys.executable, "-m", "scripts.ingest_docs", "--add", *paths]
+        target = docstore_path or self.settings.get("docstore_path")
+        if target:
+            cmd.extend(["--path", target])
+        if topic:
+            cmd.extend(["--topic", topic])
         try:
             proc = subprocess.run(
-                [sys.executable, "-m", "scripts.ingest_docs", "--add", *paths],
+                cmd,
                 check=True,
                 cwd=self.root_dir,
                 capture_output=True,
@@ -1366,7 +1368,7 @@ class OracoloUI(tk.Tk):
             self._append_log(str(exc) + "\n", "DOCS")
             messagebox.showerror("Errore", f"Ingest fallito: {exc}")
 
-    def _remove_documents(self) -> None:
+    def _remove_documents(self, docstore_path: str | None = None) -> None:
         paths = list(filedialog.askopenfilenames(parent=self))
         if not paths:
             directory = filedialog.askdirectory(parent=self)
@@ -1379,9 +1381,13 @@ class OracoloUI(tk.Tk):
             messagebox.showwarning("Documento", "Script di ingest non trovato (scripts/ingest_docs.py).")
             return
         self._append_log("Rimozione documenti:\n" + "\n".join(paths) + "\n", "DOCS")
+        cmd = [sys.executable, "-m", "scripts.ingest_docs", "--remove", *paths]
+        target = docstore_path or self.settings.get("docstore_path")
+        if target:
+            cmd.extend(["--path", target])
         try:
             proc = subprocess.run(
-                [sys.executable, "-m", "scripts.ingest_docs", "--remove", *paths],
+                cmd,
                 check=True,
                 cwd=self.root_dir,
                 capture_output=True,
@@ -1399,7 +1405,7 @@ class OracoloUI(tk.Tk):
             self._append_log(str(exc) + "\n", "DOCS")
             messagebox.showerror("Errore", f"Rimozione fallita: {exc}")
 
-    def _reindex_documents(self) -> None:
+    def _reindex_documents(self, docstore_path: str | None = None) -> None:
         script = self._find_ingest_script()
         if not script:
             messagebox.showwarning("Indice", "Script di ingest non trovato (scripts/ingest_docs.py).")
@@ -1412,8 +1418,12 @@ class OracoloUI(tk.Tk):
                     f"Aggiorna indice: {' '.join(args)} in {self.root_dir}\n",
                     "DOCS",
                 )
+                cmd = [sys.executable, "-m", "scripts.ingest_docs", *args]
+                target = docstore_path or self.settings.get("docstore_path")
+                if target:
+                    cmd.extend(["--path", target])
                 proc = subprocess.run(
-                    [sys.executable, "-m", "scripts.ingest_docs", *args],
+                    cmd,
                     check=True,
                     cwd=self.root_dir,
                     capture_output=True,
@@ -1447,6 +1457,125 @@ class OracoloUI(tk.Tk):
             "Indice", "Impossibile aggiornare l'indice (nessuna delle opzioni supportata)."
         )
 
+    def _open_doc_manager_dialog(self) -> None:
+        if tkdnd is not None:
+            win = tkdnd.TkinterDnD.Toplevel(self)  # type: ignore[attr-defined]
+        else:
+            win = tk.Toplevel(self)
+        win.title("Gestione Documenti")
+        win.configure(bg=self._bg)
+
+        doc_var = tk.StringVar(value=self.settings.get("docstore_path", ""))
+        topic_var = tk.StringVar(value="museo")
+        topk_var = tk.StringVar(value=str(self.settings.get("retrieval_top_k", 3)))
+        query_var = tk.StringVar()
+
+        tk.Label(win, text="Indice", fg=self._fg, bg=self._bg).grid(row=0, column=0, padx=6, pady=6, sticky="e")
+        tk.Entry(win, textvariable=doc_var, width=40).grid(row=0, column=1, padx=6, pady=6, sticky="w")
+
+        def browse() -> None:
+            p = filedialog.askopenfilename(
+                title="Indice", filetypes=[("JSON", "*.json"), ("Tutti", "*.*")]
+            )
+            if p:
+                doc_var.set(p)
+                refresh_tree()
+
+        ttk.Button(win, text="Sfoglia", command=browse).grid(row=0, column=2, padx=6, pady=6)
+
+        tk.Label(win, text="Sezione", fg=self._fg, bg=self._bg).grid(row=1, column=0, padx=6, pady=6, sticky="e")
+        tk.OptionMenu(win, topic_var, topic_var.get(), "gallerie", "museo", "conferenze", "didattica").grid(
+            row=1, column=1, padx=6, pady=6, sticky="w"
+        )
+
+        btn_frame = ttk.Frame(win)
+        btn_frame.grid(row=1, column=2, rowspan=2, padx=6, pady=6, sticky="n")
+        ttk.Button(
+            btn_frame,
+            text="Aggiungi",
+            command=lambda: (self._add_documents(topic_var.get(), doc_var.get()), refresh_tree()),
+        ).pack(fill="x")
+        ttk.Button(
+            btn_frame,
+            text="Rimuovi",
+            command=lambda: (self._remove_documents(doc_var.get()), refresh_tree()),
+        ).pack(fill="x")
+        ttk.Button(
+            btn_frame,
+            text="Reindicizza",
+            command=lambda: (self._reindex_documents(doc_var.get()), refresh_tree()),
+        ).pack(fill="x")
+
+        tree = ttk.Treeview(win, columns=("topic", "date", "size"), show="headings")
+        tree.heading("topic", text="Sezione")
+        tree.heading("date", text="Indicizzazione")
+        tree.heading("size", text="Dim.")
+        tree.grid(row=2, column=0, columnspan=3, padx=6, pady=6, sticky="nsew")
+        win.grid_rowconfigure(2, weight=1)
+        win.grid_columnconfigure(1, weight=1)
+
+        def refresh_tree() -> None:
+            for i in tree.get_children():
+                tree.delete(i)
+            path = doc_var.get().strip() or "DataBase/index.json"
+            try:
+                data = json.loads(Path(path).read_text(encoding="utf-8"))
+            except Exception:
+                data = []
+            docs = data.get("documents") if isinstance(data, dict) else (data if isinstance(data, list) else [])
+            for d in docs:
+                name = d.get("title") or d.get("id") or ""
+                tag = ", ".join(d.get("tags", [])) or d.get("topic", "")
+                date = d.get("date", "")
+                size = len(d.get("text", ""))
+                tree.insert("", "end", iid=str(d.get("id", name)), values=(tag, date, size), text=name)
+
+        refresh_tree()
+
+        tk.Label(win, text="Top-K", fg=self._fg, bg=self._bg).grid(row=3, column=0, padx=6, pady=6, sticky="e")
+        tk.Entry(win, textvariable=topk_var, width=6).grid(row=3, column=1, padx=6, pady=6, sticky="w")
+
+        tk.Label(win, text="Test query", fg=self._fg, bg=self._bg).grid(row=4, column=0, padx=6, pady=6, sticky="e")
+        tk.Entry(win, textvariable=query_var, width=40).grid(row=4, column=1, padx=6, pady=6, sticky="w")
+
+        result_box = scrolledtext.ScrolledText(win, width=50, height=8)
+        result_box.grid(row=5, column=0, columnspan=3, padx=6, pady=6, sticky="nsew")
+        win.grid_rowconfigure(5, weight=1)
+
+        def run_test() -> None:
+            result_box.delete("1.0", "end")
+            try:
+                k = int(topk_var.get() or 3)
+            except Exception:
+                k = 3
+            try:
+                res = retrieve(query_var.get(), doc_var.get(), top_k=k)
+            except Exception as e:
+                result_box.insert("end", f"Errore: {e}\n")
+                return
+            for item in res:
+                text = str(item.get("text", "")).replace("\n", " ")[:200]
+                title = str(item.get("title", ""))
+                if title:
+                    result_box.insert("end", f"- {title}: {text}\n")
+                else:
+                    result_box.insert("end", f"- {text}\n")
+
+        ttk.Button(win, text="Prova", command=run_test).grid(row=4, column=2, padx=6, pady=6)
+
+        def on_ok() -> None:
+            self.settings["docstore_path"] = doc_var.get().strip()
+            try:
+                self.settings["retrieval_top_k"] = int(topk_var.get())
+            except Exception:
+                pass
+            self._append_log(
+                f"Gestione Documenti: index={self.settings['docstore_path']} top_k={self.settings.get('retrieval_top_k')} topic={topic_var.get()}\n",
+                "MISC",
+            )
+            win.destroy()
+
+        ttk.Button(win, text="OK", command=on_ok).grid(row=6, column=0, columnspan=3, pady=10)
     def _open_library_dialog(self) -> None:
         win = tk.Toplevel(self)
         win.title("Libreria")
@@ -1480,7 +1609,7 @@ class OracoloUI(tk.Tk):
             messagebox.showinfo("Collezione", "Topic aggiornato dalla selezione.")
 
         ttk.Button(btn_frame, text="Crea Collezione da selezione", command=make_collection).pack(side="left")
-        ttk.Button(btn_frame, text="Verifica indice", command=self._open_knowledge_dialog).pack(side="right")
+        ttk.Button(btn_frame, text="Verifica indice", command=self._open_doc_manager_dialog).pack(side="right")
 
     def _load_doc_index(self) -> list[dict]:
         path = self.settings.get("docstore_path", "DataBase/index.json")
@@ -1875,110 +2004,6 @@ class OracoloUI(tk.Tk):
             win.destroy()
 
         ttk.Button(win, text="OK", command=on_ok).grid(row=3, column=0, columnspan=2, pady=10)
-
-    def _open_knowledge_dialog(self) -> None:
-        if tkdnd is not None:
-            win = tkdnd.TkinterDnD.Toplevel(self)  # type: ignore[attr-defined]
-        else:
-            win = tk.Toplevel(self)
-        win.title("Conoscenza")
-        win.configure(bg=self._bg)
-
-        doc_var = tk.StringVar(value=self.settings.get("docstore_path", ""))
-        topk_var = tk.StringVar(value=str(self.settings.get("retrieval_top_k", 3)))
-        query_var = tk.StringVar()
-
-        tk.Label(win, text="Indice", fg=self._fg, bg=self._bg).grid(row=0, column=0, padx=6, pady=6, sticky="e")
-        tk.Entry(win, textvariable=doc_var, width=40).grid(row=0, column=1, padx=6, pady=6, sticky="w")
-
-        def browse() -> None:
-            p = filedialog.askopenfilename(
-                title="Indice", filetypes=[("JSON", "*.json"), ("Tutti", "*.*")]
-            )
-            if p:
-                doc_var.set(p)
-
-        ttk.Button(win, text="Sfoglia", command=browse).grid(row=0, column=2, padx=6, pady=6)
-
-        tk.Label(win, text="Top-K", fg=self._fg, bg=self._bg).grid(row=1, column=0, padx=6, pady=6, sticky="e")
-        tk.Entry(win, textvariable=topk_var, width=6).grid(row=1, column=1, padx=6, pady=6, sticky="w")
-
-        tk.Label(win, text="Test query", fg=self._fg, bg=self._bg).grid(row=2, column=0, padx=6, pady=6, sticky="e")
-        tk.Entry(win, textvariable=query_var, width=40).grid(row=2, column=1, padx=6, pady=6, sticky="w")
-
-        result_box = scrolledtext.ScrolledText(win, width=50, height=8)
-        result_box.grid(row=3, column=0, columnspan=3, padx=6, pady=6)
-
-        def run_test() -> None:
-            result_box.delete("1.0", "end")
-            try:
-                k = int(topk_var.get() or 3)
-            except Exception:
-                k = 3
-            try:
-                res = retrieve(query_var.get(), doc_var.get(), top_k=k)
-            except Exception as e:
-                result_box.insert("end", f"Errore: {e}\n")
-                return
-            for item in res:
-                text = str(item.get("text", "")).replace("\n", " ")[:200]
-                title = str(item.get("title", ""))
-                if title:
-                    result_box.insert("end", f"- {title}: {text}\n")
-                else:
-                    result_box.insert("end", f"- {text}\n")
-
-        ttk.Button(win, text="Prova", command=run_test).grid(row=2, column=2, padx=6, pady=6)
-
-        drop_lab = ttk.Label(
-            win,
-            text="Trascina qui file o cartelle per importarli",
-            relief="ridge",
-            padding=6,
-        )
-        drop_lab.grid(row=4, column=0, columnspan=3, padx=6, pady=6, sticky="we")
-
-        def _ingest_paths(paths: list[str]) -> None:
-            if not paths:
-                return
-            script = self._find_ingest_script()
-            if not script:
-                messagebox.showwarning("Documento", "Script di ingest non trovato (scripts/ingest_docs.py).")
-                return
-            try:
-                subprocess.run(
-                    [sys.executable, "-m", "scripts.ingest_docs", "--add", *paths],
-                    check=True,
-                    cwd=self.root_dir,
-                )
-                messagebox.showinfo("Successo", "Documenti aggiunti.")
-            except subprocess.CalledProcessError as exc:
-                messagebox.showerror("Errore", f"Ingest fallito: {exc}")
-
-        def _handle_drop(event):  # pragma: no cover - dipende da GUI
-            try:
-                items = drop_lab.tk.splitlist(event.data)  # type: ignore[attr-defined]
-            except Exception:
-                items = []
-            _ingest_paths(list(items))
-
-        if tkdnd is not None:  # pragma: no cover - non testabile headless
-            drop_lab.drop_target_register(tkdnd.DND_FILES)  # type: ignore[attr-defined]
-            drop_lab.dnd_bind("<<Drop>>", _handle_drop)  # type: ignore[attr-defined]
-
-        def on_ok() -> None:
-            self.settings["docstore_path"] = doc_var.get().strip()
-            try:
-                self.settings["retrieval_top_k"] = int(topk_var.get())
-            except Exception:
-                pass
-            self._append_log(
-                f"Knowledge: index={self.settings['docstore_path']} top_k={self.settings.get('retrieval_top_k')}\n",
-                "MISC",
-            )
-            win.destroy()
-
-        ttk.Button(win, text="OK", command=on_ok).grid(row=5, column=0, columnspan=3, pady=10)
 
     def _open_lighting_dialog(self) -> None:
         win = tk.Toplevel(self)
