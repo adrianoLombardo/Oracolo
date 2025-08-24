@@ -620,8 +620,22 @@ class OracoloUI(tk.Tk):
 
         self.start_btn = ttk.Button(bar, image=self.start_icon, command=self.start_oracolo)
         self.stop_btn = ttk.Button(bar, image=self.stop_icon, command=self.stop_oracolo, state="disabled")
-        self.ws_start_btn = ttk.Button(bar, text="Avvia WS", command=self.start_realtime)
-        self.ws_stop_btn = ttk.Button(bar, text="Ferma WS", command=self.stop_realtime, state="disabled")
+        self.ws_start_icon = load_icon("ws_start.png", (32, 32))
+        self.ws_stop_icon = load_icon("ws_stop.png", (32, 32))
+        btn_opts = {
+            "padding": self.start_btn.cget("padding"),
+            "width": self.start_btn.cget("width"),
+        }
+        self.ws_start_btn = ttk.Button(
+            bar, image=self.ws_start_icon, command=self.start_realtime, **btn_opts
+        )
+        self.ws_stop_btn = ttk.Button(
+            bar,
+            image=self.ws_stop_icon,
+            command=self.stop_realtime,
+            state="disabled",
+            **btn_opts,
+        )
         self.start_btn.pack(side="left", padx=(0, 8))
         self.stop_btn.pack(side="left")
         self.ws_start_btn.pack(side="left", padx=(8, 8))
