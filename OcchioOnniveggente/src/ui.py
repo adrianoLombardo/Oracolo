@@ -836,6 +836,29 @@ class OracoloUI(tk.Tk):
             style_prompt = self.settings.get("style_prompt", "") if self.style_var.get() else ""
             lang = self.lang_map.get(self.lang_choice.get(), "auto")
             mode = self.mode_map.get(self.mode_choice.get(), "detailed")
+            ok, ctx, needs_clar, reason, _ = validate_question(
+                text,
+                settings=self.settings,
+                client=client,
+                topic=self.chat_state.topic_text,
+            )
+            if not ok:
+                if needs_clar:
+                    ans = "Potresti fornire maggiori dettagli o chiarire la tua domanda?"
+                else:
+                    m = _REASON_RE.search(reason)
+                    if m:
+                        score = float(m.group("score"))
+                        thr = float(m.group("thr"))
+                        ans = f"Richiesta fuori dominio (score {score:.2f} < {thr:.2f})."
+                    else:
+                        ans = "Richiesta fuori dominio."
+                self.chat_state.push_assistant(ans)
+                self._append_chat("assistant", ans)
+                self._append_citations([])
+                self.last_activity = time.time()
+                self.status_var.set("🟢 Attivo")
+                return
             if self.sandbox_var.get():
                 ctx = []
             else:
