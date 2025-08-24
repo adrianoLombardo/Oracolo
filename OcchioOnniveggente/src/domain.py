@@ -151,6 +151,7 @@ def validate_question(
     weights: dict[str, float] = {"kw": 0.7, "emb": 0.15, "rag": 0.15}
     accept_threshold = 0.75
     clarify_margin = 0.10
+    fallback_accept_threshold = 0.4
     emb_min_sim = 0.22  # conservato per compatibilità (non usato come soglia dura qui)
     dom_topic = ""
     profile_name = ""
@@ -208,6 +209,7 @@ def validate_question(
         for (attr, var_name, cast, default) in [
             ("accept_threshold", "accept_threshold", float, accept_threshold),
             ("clarify_margin", "clarify_margin", float, clarify_margin),
+            ("fallback_accept_threshold", "fallback_accept_threshold", float, fallback_accept_threshold),
             ("emb_min_sim", "emb_min_sim", float, emb_min_sim),
         ]:
             try:
@@ -225,6 +227,8 @@ def validate_question(
                 accept_threshold = float(val)  # type: ignore[arg-type]
             elif var_name == "clarify_margin":
                 clarify_margin = float(val)  # type: ignore[arg-type]
+            elif var_name == "fallback_accept_threshold":
+                fallback_accept_threshold = float(val)  # type: ignore[arg-type]
             elif var_name == "emb_min_sim":
                 emb_min_sim = float(val)  # type: ignore[arg-type]
 
@@ -289,6 +293,12 @@ def validate_question(
             cm = getattr(prof_obj, "clarify_margin", None) or prof_obj.get("clarify_margin")  # type: ignore[attr-defined]
             if cm is not None:
                 clarify_margin = float(cm)
+        except Exception:
+            pass
+        try:
+            fat = getattr(prof_obj, "fallback_accept_threshold", None) or prof_obj.get("fallback_accept_threshold")  # type: ignore[attr-defined]
+            if fat is not None:
+                fallback_accept_threshold = float(fat)
         except Exception:
             pass
 
@@ -374,6 +384,10 @@ def validate_question(
                 emb_sim = _cosine(vecs[0], vecs[1])
         except Exception:
             emb_sim = 0.0
+
+    # se mancano embedding e documenti ma c'è una keyword, rilassa la soglia
+    if emb_sim == 0.0 and rag_hits == 0 and kw_score > 0:
+        accept_threshold = min(accept_threshold, fallback_accept_threshold)
 
     # punteggio finale
     score = (

@@ -117,6 +117,7 @@ domain:
   accept_threshold: 0.75  # soglia più severa
   profile: "museo"        # profilo scelto dalla UI
   accept_threshold: 0.75  # soglia più severa per accettare la domanda
+  fallback_accept_threshold: 0.4  # usa questa soglia se emb_sim e RAG non danno risultati ma c'è una keyword
   clarify_margin: 0.10
   weights: { kw: 0.7, emb: 0.15, rag: 0.15 }
   always_accept_wake: true   # accetta sempre saluti/hotword
