@@ -1342,6 +1342,75 @@ class OracoloUI(tk.Tk):
         p = self.root_dir / "scripts" / "ingest_docs.py"
         return p if p.exists() else None
 
+    def _run_ingest_process(self, cmd: list[str]) -> tuple[bool, bool, str]:
+        """Esegue un comando di ingest mostrando output in tempo reale.
+
+        Ritorna una tupla ``(successo, annullato, output)``.
+        """
+        top = tk.Toplevel(self)
+        top.title("Ingest documenti")
+        pb = ttk.Progressbar(top, mode="indeterminate")
+        pb.pack(fill="x", padx=5, pady=5)
+        txt = scrolledtext.ScrolledText(top, width=80, height=20)
+        txt.pack(fill="both", expand=True, padx=5, pady=(0, 5))
+        pb.start(10)
+
+        output: list[str] = []
+        cancelled = threading.Event()
+        proc_holder: dict[str, subprocess.Popen | None] = {"proc": None}
+        rc_holder: dict[str, int | None] = {"rc": None}
+
+        def append(line: str) -> None:
+            txt.insert("end", line)
+            txt.see("end")
+            output.append(line)
+            self._append_log(line, "DOCS")
+
+        def worker() -> None:
+            proc = subprocess.Popen(
+                cmd,
+                cwd=self.root_dir,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            proc_holder["proc"] = proc
+
+            def reader(stream: Any) -> None:
+                for line in stream:  # type: ignore[assignment]
+                    self.after(0, append, line)
+                stream.close()
+
+            threads = [
+                threading.Thread(target=reader, args=(proc.stdout,)),
+                threading.Thread(target=reader, args=(proc.stderr,)),
+            ]
+            for t in threads:
+                t.daemon = True
+                t.start()
+            proc.wait()
+            rc_holder["rc"] = proc.returncode
+            if top.winfo_exists():
+                self.after(0, pb.stop)
+                self.after(0, top.destroy)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+        def cancel() -> None:
+            cancelled.set()
+            p = proc_holder.get("proc")
+            if p and p.poll() is None:
+                p.terminate()
+            pb.stop()
+            if top.winfo_exists():
+                top.destroy()
+            self._append_log("Operazione annullata\n", "DOCS")
+
+        ttk.Button(top, text="Annulla", command=cancel).pack(pady=5)
+
+        self.wait_window(top)
+        return rc_holder.get("rc", 1) == 0, cancelled.is_set(), "".join(output)
+
     def _add_documents(self, topic: str = "", docstore_path: str | None = None) -> None:
         dom = self.settings.get("domain", {}) or {}
         prof_val = dom.get("profile", {})
@@ -1374,25 +1443,13 @@ class OracoloUI(tk.Tk):
             cmd.extend(["--path", docstore_path])
         if topic:
             cmd.extend(["--topic", topic])
-        try:
-            proc = subprocess.run(
-                cmd,
-                check=True,
-                cwd=self.root_dir,
-                capture_output=True,
-                text=True,
-            )
-            self._append_log(proc.stdout, "DOCS")
-            if proc.stderr:
-                self._append_log(proc.stderr, "DOCS")
+        ok, cancelled, _ = self._run_ingest_process(cmd)
+        if cancelled:
+            return
+        if ok:
             messagebox.showinfo("Successo", "Documenti aggiunti.")
-        except subprocess.CalledProcessError as exc:
-            if exc.stdout:
-                self._append_log(exc.stdout, "DOCS")
-            if exc.stderr:
-                self._append_log(exc.stderr, "DOCS")
-            self._append_log(str(exc) + "\n", "DOCS")
-            messagebox.showerror("Errore", f"Ingest fallito: {exc}")
+        else:
+            messagebox.showerror("Errore", "Ingest fallito.")
 
     def _remove_documents(self, docstore_path: str | None = None) -> None:
         paths = list(filedialog.askopenfilenames(parent=self))
@@ -1411,25 +1468,13 @@ class OracoloUI(tk.Tk):
         target = docstore_path or self.settings.get("docstore_path")
         if target:
             cmd.extend(["--path", target])
-        try:
-            proc = subprocess.run(
-                cmd,
-                check=True,
-                cwd=self.root_dir,
-                capture_output=True,
-                text=True,
-            )
-            self._append_log(proc.stdout, "DOCS")
-            if proc.stderr:
-                self._append_log(proc.stderr, "DOCS")
+        ok, cancelled, _ = self._run_ingest_process(cmd)
+        if cancelled:
+            return
+        if ok:
             messagebox.showinfo("Successo", "Documenti rimossi.")
-        except subprocess.CalledProcessError as exc:
-            if exc.stdout:
-                self._append_log(exc.stdout, "DOCS")
-            if exc.stderr:
-                self._append_log(exc.stderr, "DOCS")
-            self._append_log(str(exc) + "\n", "DOCS")
-            messagebox.showerror("Errore", f"Rimozione fallita: {exc}")
+        else:
+            messagebox.showerror("Errore", "Rimozione fallita.")
 
     def _reindex_documents(self, docstore_path: str | None = None) -> None:
         script = self._find_ingest_script()
@@ -1439,24 +1484,18 @@ class OracoloUI(tk.Tk):
         tried = (["--reindex"], ["--rebuild"], ["--refresh"])
         for args in tried:
             self._append_log(f"Reindex: tentativo {' '.join(args)}\n", "DOCS")
-            try:
-                self._append_log(
-                    f"Aggiorna indice: {' '.join(args)} in {self.root_dir}\n",
-                    "DOCS",
-                )
-                cmd = [sys.executable, "-m", "scripts.ingest_docs", *args]
-                target = docstore_path or self.settings.get("docstore_path")
-                if target:
-                    cmd.extend(["--path", target])
-                proc = subprocess.run(
-                    cmd,
-                    check=True,
-                    cwd=self.root_dir,
-                    capture_output=True,
-                    text=True,
-                )
-
-                output = (proc.stdout or "") + (proc.stderr or "")
+            self._append_log(
+                f"Aggiorna indice: {' '.join(args)} in {self.root_dir}\n",
+                "DOCS",
+            )
+            cmd = [sys.executable, "-m", "scripts.ingest_docs", *args]
+            target = docstore_path or self.settings.get("docstore_path")
+            if target:
+                cmd.extend(["--path", target])
+            ok, cancelled, output = self._run_ingest_process(cmd)
+            if cancelled:
+                return
+            if ok:
                 match = re.search(r"(\d+)\s+doc", output, re.IGNORECASE)
                 if match:
                     self._append_log(
@@ -1464,20 +1503,8 @@ class OracoloUI(tk.Tk):
                     )
                 else:
                     self._append_log("Indice aggiornato\n", "DOCS")
-
-                self._append_log(proc.stdout, "DOCS")
-                if proc.stderr:
-                    self._append_log(proc.stderr, "DOCS")
-
                 messagebox.showinfo("Indice", f"Indice aggiornato ({' '.join(args)}).")
                 return
-            except subprocess.CalledProcessError as exc:
-                if exc.stdout:
-                    self._append_log(exc.stdout, "DOCS")
-                if exc.stderr:
-                    self._append_log(exc.stderr, "DOCS")
-                self._append_log(str(exc) + "\n", "DOCS")
-                continue
         self._append_log("Reindex: fallito\n", "DOCS")
         messagebox.showerror(
             "Indice", "Impossibile aggiornare l'indice (nessuna delle opzioni supportata)."
