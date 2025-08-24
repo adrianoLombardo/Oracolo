@@ -462,23 +462,30 @@ def main() -> None:
                 # prova trascrizione forzando IT/EN per maggiore robustezza
                 text_it = fast_transcribe(INPUT_WAV, client, STT_MODEL, lang_hint="it")
                 text_en = fast_transcribe(INPUT_WAV, client, STT_MODEL, lang_hint="en")
-                if _match_hotword(text_it, WAKE_IT):
-                    text, lang = text_it, "it"
-                elif _match_hotword(text_en, WAKE_EN):
-                    text, lang = text_en, "en"
+                is_en = _match_hotword(text_en, WAKE_EN)
+                is_it = _match_hotword(text_it, WAKE_IT)
+                if is_en:
+                    text = text_en
+                    session_lang = "en"
+                elif is_it:
+                    text = text_it
+                    session_lang = "it"
                 else:
-                    text = text_it or text_en
-                    lang = "it" if text_it else "en" if text_en else ""
+                    text = text_en or text_it
+                    if text_en:
+                        session_lang = "en"
+                    elif text_it:
+                        session_lang = "it"
                 say(f"📝 Riconosciuto: {text}")
-                if lang in ("it", "en"):
-                    session_lang = lang
-                is_it = _match_hotword(text, WAKE_IT)
-                is_en = _match_hotword(text, WAKE_EN)
                 if not (is_it or is_en):
                     if DEBUG:
                         say("…hotword non riconosciuta, continuo l'attesa.")
                     continue
-                wake_lang = "it" if is_it and not is_en else "en" if is_en and not is_it else (session_lang or "it")
+                wake_lang = (
+                    "en"
+                    if is_en and not is_it
+                    else "it" if is_it and not is_en else (session_lang or "it")
+                )
                 dlg.transition(DialogState.AWAKE)
                 continue
 
