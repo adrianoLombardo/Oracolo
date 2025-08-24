@@ -176,7 +176,11 @@ class RealtimeWSClient:
         self.on_ping = on_ping
         self.send_q: "queue.Queue[bytes]" = queue.Queue()
         self.audio_q: "queue.Queue[bytes]" = queue.Queue()
-        self.state: dict[str, Any] = {"tts_playing": False, "barge_sent": False}
+        self.state: dict[str, Any] = {
+            "tts_playing": False,
+            "barge_sent": False,
+            "barge_threshold": barge_threshold,
+        }
         self.loop: asyncio.AbstractEventLoop | None = None
         self.thread: threading.Thread | None = None
         self.ws = None
@@ -187,14 +191,28 @@ class RealtimeWSClient:
         loop = asyncio.get_running_loop()
 
         def callback(indata, frames, time_info, status) -> None:  # type: ignore[override]
-            data = bytes(indata)
-            self.send_q.put_nowait(data)
+            data = bytes(indata)  # CFFI -> bytes
+
+            if not self.state.get("tts_playing"):
+                self.send_q.put_nowait(data)
+
             samples = np.frombuffer(data, dtype=np.int16).astype(np.float32)
             level = float(np.sqrt(np.mean(samples ** 2)))
             self.on_input_level(level / 32768.0)
-            if self.state.get("tts_playing") and not self.state.get("barge_sent"):
-                if level > self.barge_threshold:
+
+            if self.state.get("tts_playing"):
+                if level > self.state.get("barge_threshold", 500.0):
+                    self.state["hot_frames"] = self.state.get("hot_frames", 0) + 1
+                else:
+                    self.state["hot_frames"] = 0
+                now = time.monotonic()
+                if (
+                    self.state.get("hot_frames", 0) >= 10
+                    and not self.state.get("barge_sent", False)
+                    and now - self.state.get("last_barge_ts", 0) > 0.6
+                ):
                     self.state["barge_sent"] = True
+                    self.state["last_barge_ts"] = now
                     asyncio.run_coroutine_threadsafe(
                         self.ws.send(json.dumps({"type": "barge_in"})), loop
                     )
@@ -205,6 +223,7 @@ class RealtimeWSClient:
             channels=1,
             dtype="int16",
             callback=callback,
+            latency="low",
         ):
             while not self.stop_event.is_set():
                 await asyncio.sleep(0.1)

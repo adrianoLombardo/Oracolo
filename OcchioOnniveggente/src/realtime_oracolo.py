@@ -16,6 +16,7 @@ import asyncio
 import json
 import os
 import queue
+import time
 from typing import Any
 
 import numpy as np
@@ -45,25 +46,40 @@ async def _mic_worker(
     loop = asyncio.get_running_loop()
 
     def callback(indata, frames, time_info, status) -> None:  # type: ignore[override]
-        data = bytes(indata)
-        send_q.put_nowait(data)
+        data = bytes(indata)  # CFFI -> bytes
 
-        if state.get("tts_playing") and not state.get("barge_sent"):
-            samples = np.frombuffer(data, dtype=np.int16).astype(np.float32)
-            level = float(np.sqrt(np.mean(samples ** 2)))
-            if level > 500:  # soglia empirica
+        # HALF-DUPLEX: non streammare al server mentre il TTS sta parlando,
+        # eviti eco e "false barge-in". Continui però a misurare il livello.
+        if not state.get("tts_playing"):
+            send_q.put_nowait(data)
+
+        # BARGE-IN: richiedi ~200ms sopra soglia prima di inviare l'evento.
+        # (10 callback da 20ms = 200ms)
+        samples = np.frombuffer(data, dtype=np.int16).astype(np.float32)
+        level = float(np.sqrt(np.mean(samples ** 2)))
+
+        if state.get("tts_playing"):
+            # isteresi + cooldown per non spammare
+            if level > state.get("barge_threshold", 500.0):
+                state["hot_frames"] = state.get("hot_frames", 0) + 1
+            else:
+                state["hot_frames"] = 0
+            now = time.monotonic()
+            if (
+                state.get("hot_frames", 0) >= 10
+                and not state.get("barge_sent", False)
+                and now - state.get("last_barge_ts", 0) > 0.6
+            ):
                 state["barge_sent"] = True
+                state["last_barge_ts"] = now
                 asyncio.run_coroutine_threadsafe(
                     ws.send(json.dumps({"type": "barge_in"})),
-                    loop,
+                    loop
                 )
 
     with sd.RawInputStream(
-        samplerate=sr,
-        channels=CHANNELS,
-        dtype="int16",
-        callback=callback,
-        blocksize=BLOCKSIZE,
+        samplerate=sr, channels=1, dtype="int16",
+        callback=callback, blocksize=BLOCKSIZE, latency="low"
     ):
         while True:
             await asyncio.sleep(0.1)
@@ -143,12 +159,16 @@ async def _receiver(ws, audio_q: "queue.Queue[bytes]", dlg: DialogueManager) -> 
         return
 
 
-async def _run(url: str, sr: int) -> None:
+async def _run(url: str, sr: int, barge_threshold: float) -> None:
     """Avvia la sessione realtime verso ``url``."""
 
     send_q: "queue.Queue[bytes]" = queue.Queue()
     audio_q: "queue.Queue[bytes]" = queue.Queue()
-    state: dict[str, Any] = {"tts_playing": False, "barge_sent": False}
+    state: dict[str, Any] = {
+        "tts_playing": False,
+        "barge_sent": False,
+        "barge_threshold": barge_threshold,
+    }
     dlg = DialogueManager(idle_timeout=60)
     dlg.transition(DialogState.LISTENING)
 
@@ -212,7 +232,7 @@ def main() -> None:
         "--barge-threshold",
         type=float,
         default=500.0,
-        help="Soglia barge-in RMS (non usata qui)",
+        help="Soglia barge-in RMS",
     )
     # Flag ignorati (per compatibilità con l'interfaccia precedente)
     parser.add_argument("--autostart", action="store_true")
@@ -229,7 +249,7 @@ def main() -> None:
 
     sd.default.device = (_parse_dev(args.in_dev), _parse_dev(args.out_dev))
 
-    asyncio.run(_run(args.url, args.sr))
+    asyncio.run(_run(args.url, args.sr, args.barge_threshold))
 
 
 if __name__ == "__main__":
