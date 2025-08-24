@@ -46,6 +46,25 @@ def _score_lang(text: str, lang: str, *, debug: bool = False) -> float:
     return score
 
 
+def fast_transcribe(path_or_bytes, client, stt_model: str, lang_hint: str | None = None) -> str:
+    """Perform a single transcription call with optional language hint."""
+
+    kwargs = {}
+    if lang_hint in ("it", "en"):
+        kwargs["language"] = lang_hint
+
+    if isinstance(path_or_bytes, (str, Path)):
+        with open(path_or_bytes, "rb") as f:
+            tx = client.audio.transcriptions.create(
+                model=stt_model, file=f, **kwargs
+            )
+    else:
+        tx = client.audio.transcriptions.create(
+            model=stt_model, file=path_or_bytes, **kwargs
+        )
+    return (getattr(tx, "text", "") or "").strip()
+
+
 def transcribe(path: Path, client, stt_model: str, *, debug: bool = False) -> Tuple[str, str]:
     def _call_transcription(**kwargs) -> str:
         def do_call() -> str:
