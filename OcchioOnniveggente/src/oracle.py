@@ -5,6 +5,7 @@ import io
 import json
 import re
 import uuid
+import csv
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
@@ -243,6 +244,8 @@ def export_audio_answer(
         synthesize(text, out_path, client, tts_model, tts_voice)
 
 
+
+
 def format_citations(sources: list[dict[str, str]]) -> str:
     """Return a comma-separated string of source identifiers."""
     return ", ".join(s.get("id", "") for s in sources if s.get("id"))
@@ -253,42 +256,26 @@ def append_log(
     a: str,
     log_path: Path,
     *,
-    session_id: str,
+    session_id: str | None = None,
     lang: str = "",
     topic: str | None = None,
     sources: list[dict[str, str]] | None = None,
-    session_id: str | None = None,
 ) -> str:
-    """Append a structured CSV line with optional metadata.
+    """Append a log entry and return the session identifier used.
 
-    If ``session_id`` is not provided, a new one is generated and returned.
+    If ``log_path`` ends with ``.jsonl`` a JSON line is written, otherwise a
+    CSV row is appended. When ``session_id`` is ``None`` a new UUID is
+    generated and returned.
     """
-
-) -> None:
-
-    """Append a JSON line with optional metadata.
-
-    Parameters are logged along with a computed ``summary`` extracted from
-    ``a`` using :func:`extract_summary`.
-    """
-
 
     log_path.parent.mkdir(parents=True, exist_ok=True)
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     if session_id is None:
         session_id = uuid.uuid4().hex
 
-    entry = {
-        "timestamp": ts,
-
-    """Append one JSON object per line with optional metadata."""
-    log_path.parent.mkdir(parents=True, exist_ok=True)
-    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
     record = {
         "timestamp": ts,
         "session_id": session_id,
-
         "lang": lang,
         "topic": topic or "",
         "question": q,
@@ -297,26 +284,37 @@ def append_log(
         "sources": sources or [],
     }
 
+    if log_path.suffix.lower() == ".jsonl":
+        with log_path.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(record, ensure_ascii=False) + "\n")
+    else:
+        is_new = not log_path.exists()
+        with log_path.open("a", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f, quoting=csv.QUOTE_ALL)
+            if is_new:
+                writer.writerow([
+                    "timestamp",
+                    "session_id",
+                    "lang",
+                    "topic",
+                    "question",
+                    "answer",
+                    "sources",
+                ])
+            src_str = ";".join(
+                f"{s.get('id','')}:{s.get('score',0):.2f}" for s in (sources or [])
+            )
+            writer.writerow([
+                ts,
+                session_id,
+                lang,
+                topic or "",
+                q,
+                a,
+                src_str,
+            ])
 
-    src_str = ";".join(
-        f"{s.get('id','')}:{s.get('score',0):.2f}" for s in (sources or [])
-    )
-    line = (
-        f'"{ts}","{session_id}","{lang}","{clean(topic or "")}",'
-        f'"{clean(q)}","{clean(a)}","{src_str}"\n'
-    )
-    if not log_path.exists():
-        log_path.write_text(
-            '"timestamp","session_id","lang","topic","question","answer","sources"\n',
-            encoding="utf-8",
-        )
-    with log_path.open("a", encoding="utf-8") as f:
-        f.write(line)
     return session_id
-    with log_path.open("a", encoding="utf-8") as f:
-        f.write(json.dumps(entry, ensure_ascii=False) + "\n")
-        f.write(json.dumps(record, ensure_ascii=False) + "\n")
-
 
 
 def extract_summary(answer: str) -> str:
@@ -340,4 +338,3 @@ def extract_summary(answer: str) -> str:
         return match.group(1).strip()
 
     return answer.strip()
-
