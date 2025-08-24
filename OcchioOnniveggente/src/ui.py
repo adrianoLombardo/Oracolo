@@ -573,23 +573,11 @@ class OracoloUI(tk.Tk):
 
     # --------------------------- Layout / Widgets ------------------------- #
     def _build_layout(self) -> None:
-        nav_bar = ttk.Frame(self)
-        nav_bar.pack(fill="x", padx=16, pady=(12, 8))
-
-        self._sections: dict[str, tk.Frame] = {}
-        for name in ("Museo", "Galleria", "Conferenze", "Didattica"):
-            frame = ttk.Frame(self)
-            self._sections[name] = frame
-            ttk.Button(nav_bar, text=name, command=lambda n=name: self._show_section(n)).pack(
-                side="left", padx=(0, 4)
-            )
-
-        self._current_section: str | None = None
-        self._show_section("Museo")
-        container = self._sections["Museo"]
+        container = ttk.Frame(self)
+        container.pack(fill="both", expand=True)
 
         header = ttk.Frame(container)
-        header.pack(fill="x", padx=16, pady=(0, 8))
+        header.pack(fill="x", padx=16, pady=(12, 8))
         ttk.Label(header, text="Occhio Onniveggente", font=("Helvetica", 18, "bold")).pack(side="left")
         if self.profile_names:
             ttk.Label(header, text="Profilo:").pack(side="left", padx=(16, 4))
@@ -859,16 +847,6 @@ class OracoloUI(tk.Tk):
             return
         level = max(0.0, min(1.0, float(self.in_level.get())))
         self.mic_canvas.itemconfigure(self.mic_level_arc, extent=-level * 360)
-
-    def _show_section(self, name: str) -> None:
-        if not hasattr(self, "_sections"):
-            return
-        for frame in self._sections.values():
-            frame.pack_forget()
-        sel = self._sections.get(name)
-        if sel is not None:
-            sel.pack(fill="both", expand=True)
-            self._current_section = name
 
     # --------------------------- Chat helpers ------------------------------ #
     def _append_chat(self, role: str, text: str) -> None:
