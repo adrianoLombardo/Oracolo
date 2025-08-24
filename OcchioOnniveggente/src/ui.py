@@ -456,11 +456,18 @@ class OracoloUI(tk.Tk):
             self.chat_state.persist_jsonl = Path(pj)
         self.remember_var = tk.BooleanVar(value=bool(chat_conf.get("enabled", True)))
         self.turns_var = tk.IntVar(value=int(chat_conf.get("max_turns", 10)))
-        profiles = self.settings.get("profiles", {}) or {}
+        dom = self.settings.get("domain", {})
+        profiles = dom.get("profiles", {}) or {}
         self.profile_names = list(profiles.keys())
-        current_profile = (self.settings.get("profile", {}) or {}).get(
-            "current", self.profile_names[0] if self.profile_names else ""
-        )
+        prof_val = dom.get("profile", {})
+        if isinstance(prof_val, dict):
+            current_profile = prof_val.get(
+                "current", self.profile_names[0] if self.profile_names else ""
+            )
+        else:
+            current_profile = prof_val or (
+                self.profile_names[0] if self.profile_names else ""
+            )
         self.profile_var = tk.StringVar(value=current_profile)
         self.tts_muted = False
         self.last_answer = ""
@@ -791,7 +798,7 @@ class OracoloUI(tk.Tk):
         self._append_chat("system", f"Profilo cambiato: {self.profile_var.get()}")
 
     def _apply_profile(self, name: str) -> None:
-        self.settings.setdefault("profile", {})["current"] = name
+        self.settings.setdefault("domain", {})["profile"] = name
         routed_save(self.base_settings, self.local_settings, self.settings, self.root_dir)
         if self.ws_client is not None:
             self.ws_client.profile_name = name
@@ -897,11 +904,15 @@ class OracoloUI(tk.Tk):
             if self.sandbox_var.get():
                 ctx = []
             else:
+                dom = self.settings.get("domain", {}) or {}
+                prof = dom.get("profile", "")
+                if isinstance(prof, dict):
+                    prof = prof.get("current", "")
                 ctx = retrieve(
                     text,
                     self.settings.get("docstore_path", ""),
                     top_k=int(self.settings.get("retrieval_top_k", 3)),
-                    topic=(self.settings.get("domain", {}) or {}).get("profile"),
+                    topic=prof,
                 )
             pin_ctx = [{"id": f"pin{i}", "text": t} for i, t in enumerate(self.chat_state.pinned)]
             ctx = pin_ctx + ctx
@@ -1102,7 +1113,11 @@ class OracoloUI(tk.Tk):
                 embed_model=openai_conf.get("embed_model", "text-embedding-3-small")
                 if openai_conf
                 else None,
-                topic=(self.settings.get("domain", {}) or {}).get("profile"),
+                dom = self.settings.get("domain", {}) or {}
+                prof = dom.get("profile", "")
+                if isinstance(prof, dict):
+                    prof = prof.get("current", "")
+                topic=prof,
             )
             end = time.time()
             m = _REASON_RE.search(reason)
@@ -1163,7 +1178,8 @@ class OracoloUI(tk.Tk):
         txt = scrolledtext.ScrolledText(win, width=60, height=15)
         txt.pack(padx=8, pady=8)
         txt.insert("1.0", self.settings.get("style_prompt", ""))
-        presets = list(self.settings.get("profiles", {}).keys())
+        dom = self.settings.get("domain", {})
+        presets = list(dom.get("profiles", {}).keys())
         if presets:
             var = tk.StringVar(value="")
             combo = ttk.Combobox(win, textvariable=var, values=presets, state="readonly")
@@ -1171,7 +1187,7 @@ class OracoloUI(tk.Tk):
 
             def on_sel(event=None):
                 name = var.get()
-                prof = self.settings.get("profiles", {}).get(name, {})
+                prof = dom.get("profiles", {}).get(name, {})
                 sp = prof.get("oracle_system", "")
                 txt.delete("1.0", "end")
                 txt.insert("1.0", sp)
@@ -1221,7 +1237,8 @@ class OracoloUI(tk.Tk):
         if not path:
             return
         prof_dir = Path(path)
-        profiles = self.settings.setdefault("profiles", {})
+        dom = self.settings.setdefault("domain", {})
+        profiles = dom.setdefault("profiles", {})
         for p in prof_dir.glob("*.yaml"):
             profiles[p.stem] = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
         self.profile_names = list(profiles.keys())
@@ -1236,7 +1253,7 @@ class OracoloUI(tk.Tk):
             return
         out_dir = Path(path)
         out_dir.mkdir(parents=True, exist_ok=True)
-        for name, conf in self.settings.get("profiles", {}).items():
+        for name, conf in self.settings.get("domain", {}).get("profiles", {}).items():
             (out_dir / f"{name}.yaml").write_text(
                 yaml.safe_dump(conf, sort_keys=False, allow_unicode=True), encoding="utf-8"
             )
