@@ -149,8 +149,8 @@ class RealtimeWSClient:
         self,
         url: str,
         sr: int,
-        on_partial,
-        on_answer,
+        on_partial=lambda text, final: None,
+        on_answer=lambda text: None,
         *,
         barge_threshold: float = 500.0,
         ping_interval: int = 20,
@@ -247,10 +247,13 @@ class RealtimeWSClient:
             except json.JSONDecodeError:
                 continue
             kind = data.get("type")
+            text = data.get("text", "")
             if kind == "partial":
-                self.on_partial(data.get("text", ""))
+                self.on_partial(text, bool(data.get("final")))
+            elif kind in ("final", "transcript"):
+                self.on_partial(text, True)
             elif kind == "answer":
-                self.on_answer(data.get("text", ""))
+                self.on_answer(text)
             if self.stop_event.is_set():
                 break
 
@@ -1971,15 +1974,24 @@ class OracoloUI(tk.Tk):
             "WS",
         )
 
+        def _handle_partial(text: str, final: bool) -> None:
+            self._append_log(f"… {text}\n", "STT")
+            if final:
+                self._append_chat("user", text)
+                self.chat_state.push_user(text)
+
+        def _handle_answer(text: str) -> None:
+            self._append_log(f"🔮 {text}\n", "LLM")
+            self._append_chat("assistant", text)
+            self.chat_state.push_assistant(text)
+
         self.ws_client = RealtimeWSClient(
             url,
             sr,
-            on_partial=lambda text: self.after(
-                0, lambda t=text: self._append_log(f"… {t}\n", "STT")
+            on_partial=lambda text, final: self.after(
+                0, lambda t=text, f=final: _handle_partial(t, f)
             ),
-            on_answer=lambda text: self.after(
-                0, lambda t=text: self._append_log(f"🔮 {t}\n", "LLM")
-            ),
+            on_answer=lambda text: self.after(0, lambda t=text: _handle_answer(t)),
             barge_threshold=barge,
             ping_interval=ping_interval,
             ping_timeout=ping_timeout,
