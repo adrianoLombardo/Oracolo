@@ -1,8 +1,7 @@
-import QtQuick 2.15
-import QtQuick.Controls 2.15
-import QtQuick.Layouts 1.15
-// Prefer the modern QtQuick.Effects module (Qt 6.7+).
-// Fall back to Qt5Compat.GraphicalEffects when QtQuick.Effects is unavailable.
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Layouts
+import QtQuick.Effects
 
 Rectangle {
     id: root
@@ -12,24 +11,11 @@ Rectangle {
     border.color: "#3df5ff"
     border.width: 2
 
-    // neon glow effect using QtQuick.Effects when available.
-    // A Qt.createQmlObject() call tries QtQuick.Effects first and falls back
-    // to Qt5Compat.GraphicalEffects if the new module is missing (Qt 6.6 and earlier).
+    // neon glow effect using MultiEffect from QtQuick.Effects
     layer.enabled: true
-    Component.onCompleted: {
-        let effect
-        try {
-            effect = Qt.createQmlObject(
-                'import QtQuick 2.15; import QtQuick.Effects 1.15;\n' +
-                'DropShadow { color: "#3df5ff"; radius: 20; samples: 25; verticalOffset: 0; horizontalOffset: 0 }',
-                root)
-        } catch (e) {
-            effect = Qt.createQmlObject(
-                'import QtQuick 2.15; import Qt5Compat.GraphicalEffects 1.0;\n' +
-                'DropShadow { color: "#3df5ff"; radius: 20; samples: 25; verticalOffset: 0; horizontalOffset: 0 }',
-                root)
-        }
-        root.layer.effect = effect
+    layer.effect: MultiEffect {
+        shadowEnabled: true
+        shadowColor: "#3df5ff"
     }
 
     ColumnLayout {
