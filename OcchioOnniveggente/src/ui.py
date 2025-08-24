@@ -1742,12 +1742,14 @@ class OracoloUI(tk.Tk):
             openai_conf["llm_model"] = llm_var.get().strip()
             openai_conf["tts_model"] = tts_model_var.get().strip()
             openai_conf["tts_voice"] = tts_voice_var.get().strip()
-            if openai_conf["api_key"]:
-                self.chat_entry.configure(state="normal")
+            self._append_log("Chiave OpenAI aggiornata\n", "MISC")
             self._append_log(
-                f"OpenAI: key={openai_conf['api_key']} stt={openai_conf['stt_model']} llm={openai_conf['llm_model']} tts={openai_conf['tts_model']} voice={openai_conf['tts_voice']}\n",
+                f"Modelli aggiornati: STT={stt_var.get()}, LLM={llm_var.get()}, "
+                f"TTS={tts_model_var.get()} ({tts_voice_var.get()})\n",
                 "MISC",
             )
+            if openai_conf["api_key"]:
+                self.chat_entry.configure(state="normal")
             win.destroy()
 
         ttk.Button(win, text="OK", command=on_ok).grid(row=len(rows), column=0, columnspan=2, pady=10)
