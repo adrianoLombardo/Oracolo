@@ -957,7 +957,7 @@ class OracoloUI(tk.Tk):
 
     def _poll_idle(self) -> None:
         now = time.time()
-        timeout = self.settings.get("wake", {}).get("idle_timeout", 60)
+        timeout = self.settings.get("wake", {}).get("idle_timeout", 50)
         if now - self.last_activity > timeout:
             self.status_var.set("😴 Dormiente — dì Ciao Oracolo per riattivarmi")
         elif self.status_var.get().startswith("😴"):
@@ -1617,7 +1617,7 @@ class OracoloUI(tk.Tk):
         win.configure(bg=self._bg)
 
         wake = self.settings.setdefault("wake", {})
-        timeout_var = tk.IntVar(value=int(wake.get("idle_timeout", 60)))
+        timeout_var = tk.IntVar(value=int(wake.get("idle_timeout", 50)))
         it_var = tk.StringVar(value=", ".join(wake.get("it_phrases", [])))
         en_var = tk.StringVar(value=", ".join(wake.get("en_phrases", [])))
 
