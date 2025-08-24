@@ -707,6 +707,7 @@ def main() -> None:
                     pending_q,
                     pending_full_answer or pending_answer,
                     LOG_PATH,
+                    session_id=session_id,
                     lang=pending_lang,
                     topic=pending_topic,
                     sources=pending_sources,
