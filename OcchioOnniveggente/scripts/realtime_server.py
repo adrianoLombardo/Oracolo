@@ -191,6 +191,70 @@ class RTSession:
     async def send_answer(self, text: str) -> None:
         await self.send_json({"type": "answer", "text": text})
 
+
+    async def stream_file(self, path: Path, chunk_bytes: int = 960) -> None:
+        """Invia il contenuto di ``path`` in piccoli chunk al client."""
+
+        if not path.exists():
+            return
+
+        try:
+            with path.open("rb") as f:
+                while True:
+                    data = f.read(chunk_bytes)
+                    if not data:
+                        break
+                    await self.ws.send(data)
+                    await asyncio.sleep(0.01)
+        except Exception:
+            pass
+
+    async def stream_sentences(self, text: str, client: Any) -> None:
+        """Sintetizza ``text`` frase per frase, consentendo il barge-in
+        solo ai confini di frase.
+
+        Se ``self.barge`` viene impostato a ``True`` dal client durante la
+        riproduzione, la frase corrente viene terminata ma le successive non
+        vengono inviate.
+        """
+
+        import re
+
+        sentences = [s.strip() for s in re.split(r"(?<=[.!?]) +", text) if s.strip()]
+        if not sentences:
+            return
+
+        self.state = "tts"
+        self.barge = False
+        first_ts = None
+        last_ts = None
+
+        for sent in sentences:
+            try:
+                with client.audio.speech.with_streaming_response.create(
+                    model=self.SET.openai.tts_model,
+                    voice=self.SET.openai.tts_voice,
+                    input=sent,
+                    response_format="pcm",
+                    sample_rate=self.client_sr,
+                ) as resp:
+                    for chunk in resp.iter_bytes(chunk_size=960):
+                        if first_ts is None:
+                            first_ts = time.time()
+                            print(f"[diag] tts_first_byte {first_ts:.3f}", flush=True)
+                        await self.ws.send(chunk)
+                        last_ts = time.time()
+                        await asyncio.sleep(0)
+            except Exception:
+                break
+            if self.barge:
+                break
+
+        self.state = "idle"
+        self.barge = False
+        if first_ts is not None:
+            print(f"[diag] tts_last_byte {last_ts:.3f}", flush=True)
+
     async def stream_file(self, path: Path, chunk_bytes: int = 960) -> None:
         """Invia il contenuto di ``path`` in piccoli chunk al client."""
 
@@ -266,6 +330,7 @@ class RTSession:
 
         self.state = "idle"
         self.barge = False
+        main
 
     async def on_audio(self, data: bytes, frame_ms: int) -> None:
         self.buf.extend(data)
@@ -290,6 +355,28 @@ class RTSession:
                 self.state = "idle"
                 self.ms_in_state = 0
                 self.ms_since_voice = 0
+
+    async def _finalize_utterance(self) -> None:
+        if not self.buf:
+            return
+        ts_end = time.time()
+        print(f"[diag] end_of_speech {ts_end:.3f}", flush=True)
+        write_wav(self.in_wav, self.client_sr, bytes(self.buf))
+
+        from openai import OpenAI
+        load_dotenv()
+        client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+
+        text, lang = transcribe(
+            self.in_wav, client, self.SET.openai.stt_model, debug=self.SET.debug
+        )
+        ts_stt = time.time()
+        print(f"[diag] stt_done {ts_stt:.3f}", flush=True)
+        if not text.strip():
+            await self.send_partial("…silenzio…")
+            return
+
+        print(f"🗣️ {text.strip()}", flush=True)
 
     async def _finalize_utterance(self) -> None:
 
@@ -334,6 +421,7 @@ class RTSession:
 
         print(f"🗣️ {text.strip()}", flush=True)
         main
+
         now = time.time()
         if now > self.active_until:
             self.active_until = 0.0
@@ -348,6 +436,40 @@ class RTSession:
                 await self.send_partial("Dimmi pure…")
                 self.active_until = now + self.idle_timeout
                 return
+
+
+        self.active_until = now + self.idle_timeout
+
+        # RAG
+        try:
+            ctx = retrieve(
+                text,
+                getattr(self.SET, "docstore_path", "DataBase/index.json"),
+                top_k=int(getattr(self.SET, "retrieval_top_k", 3)),
+            )
+        except Exception:
+            ctx = []
+
+        if self.chat_enabled:
+            self.chat.push_user(text)
+        llm_start = time.time()
+        print(f"[diag] llm_start {llm_start:.3f}", flush=True)
+        ans = oracle_answer(
+            text,
+            lang,
+            client,
+            self.SET.openai.llm_model,
+            self.SET.oracle_system,
+            context=ctx,
+            history=(self.chat.history if self.chat_enabled else None),
+        )
+        llm_done = time.time()
+        print(f"[diag] llm_done {llm_done:.3f}", flush=True)
+        if self.chat_enabled:
+            self.chat.push_assistant(ans)
+        await self.send_answer(ans)
+
+        await self.stream_sentences(ans, client)
 
         self.active_until = now + self.idle_timeout
 
@@ -380,6 +502,7 @@ class RTSession:
         tts_task = asyncio.create_task(self.stream_tts_pcm(ans, client))
         await self.send_answer(ans)
         await tts_task
+        main
 
 async def handler(ws):
     SET = Settings.model_validate_yaml(ROOT / "settings.yaml")
