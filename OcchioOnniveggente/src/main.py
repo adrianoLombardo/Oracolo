@@ -540,6 +540,7 @@ def main() -> None:
                 say(f"📝 Domanda: {q}")
                 if not q:
                     continue
+                low_q = q.lower()
                 session_lang = update_language(session_lang, qlang, q)
                 eff_lang = session_lang
                 if PROF.contains_profanity(q):
