@@ -701,7 +701,6 @@ def main() -> None:
                     lang=pending_lang,
                     topic=pending_topic,
                     sources=pending_sources,
-                    session_id=session_id,
                 )
                 if pending_sources:
                     print("📚 Fonti:")
