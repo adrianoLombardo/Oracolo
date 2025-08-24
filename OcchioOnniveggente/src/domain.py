@@ -54,7 +54,10 @@ def _keyword_overlap_score(text: str, keywords: Iterable[str]) -> float:
     if not toks or not kw_tokens:
         return 0.0
     inter = toks.intersection(kw_tokens)
-    return len(inter) / max(len(toks), 1)
+    # Normalizza sull'ampiezza più piccola tra domanda e keyword per non
+    # penalizzare frasi lunghe o molto corte.
+    denom = max(min(len(toks), len(kw_tokens)), 1)
+    return len(inter) / denom
 
 
 # ------------------------- embeddings ------------------------- #
@@ -368,6 +371,12 @@ def validate_question(
             coh = sum(1 for s in overlaps if s > 0.6)
             accept_threshold += 0.05 * div - 0.05 * coh
             accept_threshold = min(max(accept_threshold, 0.1), 0.9)
+
+    # domande molto corte possono avere punteggi distorti: abbassa la soglia
+    # di accettazione proporzionalmente.
+    q_tok_count = len(_tokens(question))
+    if q_tok_count <= 4 and kw_score > 0:
+        accept_threshold -= 0.05 * (5 - q_tok_count)
 
     # ---- Retrieval ----
     ctx = _try_retrieve(question, settings, docstore_path, top_k, use_topic, client, emb_model or embed_model)
