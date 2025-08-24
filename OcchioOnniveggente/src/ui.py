@@ -30,6 +30,7 @@ from src.retrieval import retrieve
 from src.chat import ChatState
 from src.oracle import oracle_answer, synthesize
 from src.domain import validate_question
+from src.config import get_openai_api_key
 
 import asyncio
 import numpy as np
@@ -832,14 +833,13 @@ class OracoloUI(tk.Tk):
         self.last_sources = []
         try:
             openai_conf = self.settings.get("openai", {})
-            api_key = openai_conf.get("api_key") or os.environ.get("OPENAI_API_KEY")
+            api_key = get_openai_api_key(self.settings)
             if not api_key:
                 if messagebox.askyesno(
                     "OpenAI", "È necessaria una API key OpenAI. Aprire le impostazioni?"
                 ):
                     self._open_openai_dialog()
-                    openai_conf = self.settings.get("openai", {})
-                    api_key = openai_conf.get("api_key") or os.environ.get("OPENAI_API_KEY")
+                    api_key = get_openai_api_key(self.settings)
                 if not api_key:
                     self.chat_entry.configure(state="disabled")
                     return
@@ -951,7 +951,7 @@ class OracoloUI(tk.Tk):
             return
         try:
             openai_conf = self.settings.get("openai", {})
-            api_key = openai_conf.get("api_key") or os.environ.get("OPENAI_API_KEY")
+            api_key = get_openai_api_key(self.settings)
             client = OpenAI(api_key=api_key) if api_key else OpenAI()
             tts_model = openai_conf.get("tts_model", "gpt-4o-mini-tts")
             tts_voice = openai_conf.get("tts_voice", "alloy")
@@ -1072,7 +1072,7 @@ class OracoloUI(tk.Tk):
             start = time.time()
             try:
                 openai_conf = self.settings.get("openai", {})
-                api_key = openai_conf.get("api_key") or os.environ.get("OPENAI_API_KEY")
+                api_key = get_openai_api_key(self.settings)
                 client = OpenAI(api_key=api_key) if api_key else OpenAI()
             except Exception:
                 client = None
@@ -1181,7 +1181,7 @@ class OracoloUI(tk.Tk):
         win.title("Limiti OpenAI")
         try:
             openai_conf = self.settings.get("openai", {})
-            api_key = openai_conf.get("api_key") or os.environ.get("OPENAI_API_KEY")
+            api_key = get_openai_api_key(self.settings)
             client = OpenAI(api_key=api_key) if api_key else OpenAI()
             model = self.settings.get("llm_model", "gpt-4o")
             info = client.models.retrieve(model)

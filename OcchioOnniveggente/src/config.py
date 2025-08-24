@@ -1,7 +1,9 @@
 from pathlib import Path
-from typing import Dict, List, Literal, Optional, Tuple
+from typing import Any, Dict, List, Literal, Optional, Tuple
 
+import os
 import yaml
+from functools import lru_cache
 from pydantic import BaseModel, Field
 class WakeConfig(BaseModel):
     enabled: bool = True
@@ -164,3 +166,45 @@ class Settings(BaseModel):
             raise ValueError(f"Invalid YAML in {path}") from exc
 
         return cls.model_validate(data)
+
+
+@lru_cache()
+def _load_api_key_from_files() -> str:
+    """Load the OpenAI API key from settings files, if present."""
+    for name in ("settings.local.yaml", "settings.yaml"):
+        p = Path(name)
+        if not p.exists():
+            continue
+        try:
+            cfg = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
+        except yaml.YAMLError:
+            continue
+        key = cfg.get("openai", {}).get("api_key")
+        if key:
+            return key
+    return ""
+
+
+def get_openai_api_key(settings: Any | None = None) -> str:
+    """Return the OpenAI API key.
+
+    The key is resolved from, in order of priority:
+    1. Environment variable ``OPENAI_API_KEY``;
+    2. the provided ``settings`` object or mapping;
+    3. ``settings.local.yaml`` or ``settings.yaml`` on disk.
+
+    Settings files are read only once and cached.
+    """
+
+    key = os.getenv("OPENAI_API_KEY")
+    if key:
+        return key
+
+    if settings is not None:
+        attr_key = getattr(getattr(settings, "openai", None), "api_key", None)
+        if not attr_key and isinstance(settings, dict):
+            attr_key = settings.get("openai", {}).get("api_key")
+        if attr_key:
+            return attr_key
+
+    return _load_api_key_from_files()
