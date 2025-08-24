@@ -43,6 +43,7 @@ from src.ui_state import UIState
 from src.ui_controller import UIController
 from src.oracle import synthesize
 from src.ui_controller import UiController, _REASON_RE
+from src.ui_theme import THEME
 
 
 import asyncio
@@ -362,23 +363,27 @@ class OracoloUI(tk.Tk):
         self.geometry("900x600")
 
         # tema
-        self._bg = "#0f0f0f"
-        self._fg = "#00ffe1"
-        self._mid = "#161616"
+        self._bg = THEME["bg"]
+        self._fg = THEME["fg"]
+        self._mid = THEME.get("mid", self._bg)
         self.configure(bg=self._bg)
 
         style = ttk.Style(self)
         style.theme_use("clam")
         style.configure(
             "TButton",
-            background="#1e1e1e",
+            background=THEME.get("button_bg", self._mid),
             foreground=self._fg,
             borderwidth=1,
             focusthickness=3,
             focuscolor="none",
             padding=8,
         )
-        style.map("TButton", background=[("active", self._fg)], foreground=[("active", self._bg)])
+        style.map(
+            "TButton",
+            background=[("active", self._fg)],
+            foreground=[("active", self._bg)],
+        )
         style.configure("TLabel", background=self._bg, foreground=self._fg)
         style.configure("TFrame", background=self._bg)
 
