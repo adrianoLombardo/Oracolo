@@ -234,6 +234,23 @@ def _reindex(docstore_path: str) -> None:
         logging.warning("DocumentDB non supporta reindex().")
 
 
+def _clear(docstore_path: str) -> None:
+    """Svuota completamente il DocumentDB."""
+    db = _load_db(docstore_path)
+    if hasattr(db, "clear"):
+        db.clear()  # type: ignore[call-arg]
+    elif isinstance(db, SimpleDocumentDB):
+        db._data = {"documents": []}
+        db._save()
+    else:
+        index_path = Path(docstore_path)
+        index_path.write_text(
+            json.dumps({"documents": []}, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+    logging.info("Cleared document store.")
+
+
 # ----------------------------- Entry point ------------------------------------ #
 def _default_docstore_path() -> str:
     # Se hai Settings, prova a usarlo; altrimenti default sensato
@@ -261,6 +278,7 @@ def main() -> None:
     group.add_argument("--add", nargs="+", help="File o cartelle da indicizzare (PDF/DOCX/TXT/MD)")
     group.add_argument("--remove", nargs="+", help="File o cartelle da rimuovere dall'indice")
     group.add_argument("--reindex", action="store_true", help="Rigenera l'indice rileggendo i file già noti")
+    group.add_argument("--clear", action="store_true", help="Svuota completamente l’indice")
     args = parser.parse_args()
 
     if args.add:
@@ -269,6 +287,8 @@ def main() -> None:
         _remove(args.remove, args.path)
     elif args.reindex:
         _reindex(args.path)
+    elif args.clear:
+        _clear(args.path)
 
 
 if __name__ == "__main__":
