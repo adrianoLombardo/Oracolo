@@ -592,16 +592,22 @@ class OracoloUI(tk.Tk):
 
         def load_icon(name: str, size: tuple[int, int]) -> tk.PhotoImage:
             path = img_dir / name
-            if Image and ImageTk:
-                resample = getattr(getattr(Image, "Resampling", Image), "LANCZOS")
-                img = Image.open(path).resize(size, resample)
-                return ImageTk.PhotoImage(img)
-            icon = tk.PhotoImage(file=str(path))
-            w, h = icon.width(), icon.height()
-            # riduzione best-effort se l'immagine è più grande del target
-            if w > size[0] and h > size[1]:
-                icon = icon.subsample(max(1, w // size[0]), max(1, h // size[1]))
-            return icon
+            if path.exists():
+                try:
+                    if Image and ImageTk:
+                        resample = getattr(getattr(Image, "Resampling", Image), "LANCZOS")
+                        img = Image.open(path).resize(size, resample)
+                        return ImageTk.PhotoImage(img)
+                    icon = tk.PhotoImage(file=str(path))
+                    w, h = icon.width(), icon.height()
+                    # riduzione best-effort se l'immagine è più grande del target
+                    if w > size[0] and h > size[1]:
+                        icon = icon.subsample(max(1, w // size[0]), max(1, h // size[1]))
+                    return icon
+                except Exception:
+                    pass
+            # fallback: icona vuota se il file non esiste o non è leggibile
+            return tk.PhotoImage(width=size[0], height=size[1])
 
         self.start_icon = load_icon("start.png", (32, 32))
         self.stop_icon = load_icon("stop.png", (32, 32))
