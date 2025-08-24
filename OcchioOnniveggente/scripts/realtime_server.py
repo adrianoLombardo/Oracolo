@@ -24,6 +24,10 @@ from src.chat import ChatState
 from langdetect import detect
 
 CHUNK_MS = 20
+
+
+CHUNK_MS = 20
+main
 # soglia più permissiva per captare parlato anche con microfoni poco sensibili
 START_LEVEL = 300
 END_SIL_MS = 700
@@ -44,6 +48,51 @@ def write_wav(path: Path, sr: int, pcm: bytes) -> None:
         w.setsampwidth(2)
         w.setframerate(sr)
         w.writeframes(pcm)
+
+
+async def stream_tts_pcm(ws, client, text: str, tts_model: str, tts_voice: str, sr: int = 24000) -> None:
+    """Streamma TTS in PCM nativo se supportato, altrimenti decapsula WAV."""
+
+    chunk_bytes = int(sr * 2 * CHUNK_MS / 1000)
+    block_frames = int(sr * CHUNK_MS / 1000)
+
+    try:
+        with client.audio.speech.with_streaming_response.create(
+            model=tts_model,
+            voice=tts_voice,
+            input=text,
+            response_format="pcm",
+            sample_rate=sr,
+        ) as resp:
+            for chunk in resp.iter_bytes(chunk_size=chunk_bytes):
+                await ws.send(chunk)
+                await asyncio.sleep(0)
+        return
+    except TypeError:
+        pass
+
+    import io, wave as _wave
+
+    with client.audio.speech.with_streaming_response.create(
+        model=tts_model, voice=tts_voice, input=text, response_format="wav"
+    ) as resp:
+        buf = io.BytesIO()
+        for chunk in resp.iter_bytes(chunk_size=4096):
+            buf.write(chunk)
+            if buf.tell() > 48:
+                break
+        for chunk in resp.iter_bytes(chunk_size=8192):
+            buf.write(chunk)
+
+    buf.seek(0)
+    with _wave.open(buf, "rb") as wf:
+        assert wf.getsampwidth() == 2 and wf.getnchannels() == 1
+        while True:
+            frames = wf.readframes(block_frames)
+            if not frames:
+                break
+            await ws.send(frames)
+            await asyncio.sleep(0)
 
 class RTSession:
     def __init__(self, ws, setts: Settings) -> None:
@@ -153,16 +202,14 @@ class RTSession:
 
         for sent in sentences:
             try:
-                with client.audio.speech.with_streaming_response.create(
-                    model=self.SET.openai.tts_model,
-                    voice=self.SET.openai.tts_voice,
-                    input=sent,
-                    response_format="pcm",
-                    sample_rate=self.client_sr,
-                ) as resp:
-                    for chunk in resp.iter_bytes(chunk_size=960):
-                        await self.ws.send(chunk)
-                        await asyncio.sleep(0)
+                await stream_tts_pcm(
+                    self.ws,
+                    client,
+                    sent,
+                    self.SET.openai.tts_model,
+                    self.SET.openai.tts_voice,
+                    sr=self.client_sr,
+                )
             except Exception:
                 break
             if self.barge:

@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-import re
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
 import openai
-from langdetect import DetectorFactory, detect
 from .utils import retry_with_backoff
+
 
 DetectorFactory.seed = 42
 
@@ -65,67 +64,36 @@ def fast_transcribe(path_or_bytes, client, stt_model: str, lang_hint: str | None
     return (getattr(tx, "text", "") or "").strip()
 
 
+
+main
 def transcribe(path: Path, client, stt_model: str, *, debug: bool = False) -> Tuple[str, str]:
-    def _call_transcription(**kwargs) -> str:
-        def do_call() -> str:
-            with open(path, "rb") as f:
-                tx = client.audio.transcriptions.create(model=stt_model, file=f, **kwargs)
-            return (tx.text or "").strip()
-
-        try:
-            return retry_with_backoff(do_call)
-        except openai.OpenAIError as e:
-            print(f"Errore OpenAI: {e}")
-            return ""
-
-    print("🧠 Trascrizione (auto)…")
-    text_auto = _call_transcription(
-        prompt=(
-            "Language is either Italian or English. Focus on neuroscience, "
-            "neuroaesthetics, contemporary art, the universe, and "
-            "neuroscientific AI. Ignore any other language."
-        )
-    )
-
-    print("↻ Trascrizione forzata IT…")
-    text_it = _call_transcription(
-        language="it",
-        prompt=(
-            "Lingua: italiano. Dominio: neuroscienze, neuroestetica, "
-            "arte contemporanea, universo e IA neuroscientifica."
-        ),
-    )
-
-    print("↻ Trascrizione forzata EN…")
-    text_en = _call_transcription(
-        language="en",
-        prompt=(
-            "Language: English. Domain: neuroscience, neuroaesthetics, "
-            "contemporary art, universe, and neuroscientific AI."
-        ),
-    )
-
-    s_it = _score_lang(text_it, "it", debug=debug)
-    s_en = _score_lang(text_en, "en", debug=debug)
+    """Trascrive una singola volta e restituisce testo e lingua rilevata."""
 
     try:
-        auto_lang = detect(text_auto) if text_auto else None
-    except Exception:
-        auto_lang = None
-    if auto_lang == "it":
-        s_it += 0.05
-    elif auto_lang == "en":
-        s_en += 0.05
-
-    if s_it == 0 and s_en == 0:
-        print("⚠️ Per favore parla in italiano o inglese.")
+        with open(path, "rb") as f:
+            tx = client.audio.transcriptions.create(
+                model=stt_model,
+                file=f,
+                response_format="verbose_json",
+            )
+    except openai.OpenAIError as e:
+        print(f"Errore OpenAI: {e}")
         return "", ""
-    if s_it >= s_en:
-        print("🌐 Lingua rilevata: IT")
-        return text_it, "it"
+
+    text = (getattr(tx, "text", "") or "").strip()
+    lang = getattr(tx, "language", "") or ""
+
+    if lang.startswith("it"):
+        lang_code = "it"
+    elif lang.startswith("en"):
+        lang_code = "en"
     else:
-        print("🌐 Lingua rilevata: EN")
-        return text_en, "en"
+        lang_code = ""
+
+    if debug and lang_code:
+        print(f"🌐 Lingua rilevata: {lang_code.upper()}")
+
+    return text, lang_code
 
 
 def oracle_answer(
