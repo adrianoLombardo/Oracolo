@@ -161,17 +161,30 @@ def oracle_greeting(lang: str) -> str:
 
 def get_active_profile(SETTINGS, forced_name: str | None = None):
     if isinstance(SETTINGS, dict):
+
+        dom = SETTINGS.get("domain", {}) or {}
+        prof_name = dom.get("profile", "museo")
         dom = SETTINGS.get("domain") or {}
         prof_name = forced_name or dom.get("profile", "museo")
         profiles = dom.get("profiles", {}) or {}
         prof = profiles.get(prof_name, {})
     else:
         dom = getattr(SETTINGS, "domain", None)
+        prof_name = getattr(dom, "profile", "museo") if dom else "museo"
+        profiles = getattr(dom, "profiles", {}) if dom else {}
         prof_name = forced_name or getattr(dom, "profile", "museo")
         profiles = getattr(dom, "profiles", {}) or {}
         prof = profiles.get(prof_name, {})
     return prof_name, prof
 
+
+
+def make_domain_settings(base_settings, prof_name):
+    if isinstance(base_settings, dict):
+        new_s = dict(base_settings)
+        dom = dict(new_s.get("domain") or {})
+        dom["enabled"] = True
+        dom["profile"] = prof_name
 
 def make_domain_settings(base_settings, prof_name: str, prof):
     if isinstance(base_settings, dict):
@@ -188,6 +201,7 @@ def make_domain_settings(base_settings, prof_name: str, prof):
             dom["accept_threshold"] = prof.get("accept_threshold")
         if prof.get("clarify_margin") is not None:
             dom["clarify_margin"] = prof.get("clarify_margin")
+
         new_s["domain"] = dom
         return new_s
     else:
@@ -201,6 +215,7 @@ def make_domain_settings(base_settings, prof_name: str, prof):
                 base_settings.domain.accept_threshold = prof.get("accept_threshold")
             if prof.get("clarify_margin") is not None:
                 base_settings.domain.clarify_margin = prof.get("clarify_margin")
+
         except Exception:
             pass
         return base_settings
@@ -593,7 +608,11 @@ def main() -> None:
                 effective_top_k = int(
                     prof.get("retrieval_top_k") or getattr(SET, "retrieval_top_k", 3)
                 )
+
+                settings_for_domain = make_domain_settings(SET, prof_name)
+
                 settings_for_domain = make_domain_settings(SET, session_profile_name, prof)
+
                 ok, context, clarify, reason, suggestion = validate_question(
                     pending_q,
                     pending_lang,
@@ -602,6 +621,7 @@ def main() -> None:
                     docstore_path=effective_docstore,
                     top_k=effective_top_k,
                     embed_model=embed_model,
+                    topic=prof_name,
                     topic=session_profile_name,
                     history=pending_history,
                 )
@@ -647,7 +667,7 @@ def main() -> None:
                     effective_system if STYLE_ENABLED else "",
                     context=context_texts,
                     history=pending_history,
-                    topic=prof.get("topic"),
+                    topic=prof_name,
                     policy_prompt=ORACLE_POLICY,
                     mode=ANSWER_MODE,
                 )

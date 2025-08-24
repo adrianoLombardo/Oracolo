@@ -112,6 +112,9 @@ wake:
 # ⬇️ NUOVO: impostazioni per RAG/pertinenza dominio
 domain:
   enabled: true
+
+  profile: "museo"        # scelto dalla UI (museo | conferenze | gallerie | didattica)
+  accept_threshold: 0.75  # soglia più severa
   profile: "museo"        # profilo scelto dalla UI
   accept_threshold: 0.75  # soglia più severa per accettare la domanda
   clarify_margin: 0.10
@@ -120,6 +123,8 @@ domain:
   emb_min_sim: 0.22          # soglia minima di similarità coseno (0..1)
   profiles:
     museo:
+
+
       label: "Museo"
       keywords:
         - museo
@@ -137,7 +142,9 @@ domain:
         Se la domanda non riguarda il contesto museale, chiedi gentilmente di riformularla in tema.
       retrieval_top_k: 4
     conferenze:
+
       label: "Conferenze"
+
       keywords:
         - conferenza
         - keynote
@@ -150,6 +157,7 @@ domain:
       system_hint: "Rispondi come moderatore di conferenze su arte, neuroestetica e IA."
       retrieval_top_k: 4
     gallerie:
+
       label: "Gallerie"
       keywords:
         - galleria
@@ -163,7 +171,9 @@ domain:
       system_hint: "Rispondi come curatore di galleria contemporanea."
       retrieval_top_k: 4
     didattica:
+
       label: "Didattica"
+
       keywords:
         - laboratorio
         - workshop
@@ -207,3 +217,4 @@ chat:
 # RAG: dove sono i documenti indicizzati e quanti frammenti prendere
 docstore_path: DataBase/index.json
 retrieval_top_k: 3
+

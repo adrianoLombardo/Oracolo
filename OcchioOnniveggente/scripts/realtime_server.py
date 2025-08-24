@@ -33,17 +33,35 @@ MAX_UTT_MS = 15_000
 
 def get_active_profile(SETTINGS, forced_name: str | None = None):
     if isinstance(SETTINGS, dict):
+
+        dom = SETTINGS.get("domain", {}) or {}
+        prof_name = dom.get("profile", "museo")
+
         dom = SETTINGS.get("domain") or {}
         prof_name = forced_name or dom.get("profile", "museo")
+main
         profiles = dom.get("profiles", {}) or {}
         prof = profiles.get(prof_name, {})
     else:
         dom = getattr(SETTINGS, "domain", None)
+
+        prof_name = getattr(dom, "profile", "museo") if dom else "museo"
+        profiles = getattr(dom, "profiles", {}) if dom else {}
+
         prof_name = forced_name or getattr(dom, "profile", "museo")
         profiles = getattr(dom, "profiles", {}) or {}
+main
         prof = profiles.get(prof_name, {})
     return prof_name, prof
 
+
+
+def make_domain_settings(base_settings, prof_name):
+    if isinstance(base_settings, dict):
+        new_s = dict(base_settings)
+        dom = dict(new_s.get("domain") or {})
+        dom["enabled"] = True
+        dom["profile"] = prof_name
 
 def make_domain_settings(base_settings, prof_name: str, prof):
     if isinstance(base_settings, dict):
@@ -60,6 +78,7 @@ def make_domain_settings(base_settings, prof_name: str, prof):
             dom["accept_threshold"] = prof.get("accept_threshold")
         if prof.get("clarify_margin") is not None:
             dom["clarify_margin"] = prof.get("clarify_margin")
+main
         new_s["domain"] = dom
         return new_s
     else:
@@ -73,6 +92,7 @@ def make_domain_settings(base_settings, prof_name: str, prof):
                 base_settings.domain.accept_threshold = prof.get("accept_threshold")
             if prof.get("clarify_margin") is not None:
                 base_settings.domain.clarify_margin = prof.get("clarify_margin")
+main
         except Exception:
             pass
         return base_settings
@@ -154,6 +174,19 @@ class RTSession:
         self.ms_since_voice = 0
         self.barge = False
 
+
+        dom = raw.get("domain", {}) or {}
+        self.profiles = dom.get("profiles", {})
+        self.profile = dom.get("profile", "")
+        self.profile_info = self.profiles.get(self.profile, {})
+        self.docstore_path = self.profile_info.get(
+            "docstore_path", getattr(setts, "docstore_path", "DataBase/index.json")
+        )
+        self.topic = self.profile
+        self.system_hint = self.profile_info.get("system_hint", "")
+        self.retrieval_top_k = int(
+            self.profile_info.get("retrieval_top_k") or getattr(setts, "retrieval_top_k", 3)
+
         dom = raw.get("domain", {})
         self.profiles = dom.get("profiles", {})
         self.profile = dom.get("profile", "museo")
@@ -166,6 +199,7 @@ class RTSession:
         self.system_hint = prof.get("system_hint", "")
         self.retrieval_top_k = int(
             prof.get("retrieval_top_k") or getattr(setts, "retrieval_top_k", 3)
+main
         )
 
         self.active_until = 0.0
@@ -407,9 +441,13 @@ class RTSession:
         self.active_until = now + self.idle_timeout
 
         embed_model = getattr(self.SET.openai, "embed_model", None)
+
+        settings_for_domain = make_domain_settings(self.SET, self.profile)
+
         settings_for_domain = make_domain_settings(
             self.SET, self.profile, {"keywords": self.domain_keywords, "weights": self.domain_weights}
         )
+main
         ok, ctx, clarify, reason, _ = validate_question(
             text,
             lang,
@@ -500,11 +538,16 @@ async def handler(ws):
                 elif data.get("type") == "profile":
                     sess.profile = data.get("value", "")
                     prof = sess.profiles.get(sess.profile, {})
+                    sess.profile_info = prof
                     sess.docstore_path = prof.get(
                         "docstore_path", getattr(sess.SET, "docstore_path", "DataBase/index.json")
                     )
+
+                    sess.topic = sess.profile
+
                     sess.domain_keywords = prof.get("keywords", [])
                     sess.domain_weights = prof.get("weights", {})
+main
                     sess.system_hint = prof.get("system_hint", "")
                     sess.retrieval_top_k = int(
                         prof.get("retrieval_top_k") or getattr(sess.SET, "retrieval_top_k", 3)
