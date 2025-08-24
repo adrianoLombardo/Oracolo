@@ -30,6 +30,14 @@ openai:
   stt_model: gpt-4o-mini-transcribe
 ```
 
+Per limitare le risposte a un determinato contesto è possibile definire un profilo di dominio:
+
+```yaml
+domain:
+  profile: "museo"  # profilo selezionato
+  topic: ""        # contesto specifico opzionale
+```
+
 Se ad esempio `audio.sample_rate` contiene una stringa (`"ventiquattromila"`) invece di un
 numero, Pydantic segnalerà `Input should be a valid integer` e userà `24000`.
 

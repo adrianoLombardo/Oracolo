@@ -112,8 +112,8 @@ wake:
 # ⬇️ NUOVO: impostazioni per RAG/pertinenza dominio
 domain:
   enabled: true
-
   profile: "museo"        # scelto dalla UI (museo | conferenze | gallerie | didattica | them | cryptomadonne | adriano_lombardo)
+  topic: ""              # contesto specifico opzionale
   accept_threshold: 0.75  # soglia più severa per accettare la domanda
   fallback_accept_threshold: 0.4  # usa questa soglia se emb_sim e RAG non danno risultati ma c'è una keyword
   clarify_margin: 0.10
