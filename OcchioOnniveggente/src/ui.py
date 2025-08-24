@@ -12,7 +12,6 @@ UI Tkinter per Occhio Onniveggente.
 
 from __future__ import annotations
 
-import copy
 import json
 import csv
 import os
@@ -36,8 +35,15 @@ from src.oracle import (
     synthesize,
     synthesize_async,
 )
+
 from src.domain import validate_question
+from src.validators import validate_device_config
 from src.config import get_openai_api_key
+from src.ui_state import UIState
+from src.ui_controller import UIController
+from src.oracle import synthesize
+from src.ui_controller import UiController, _REASON_RE
+
 
 import asyncio
 import numpy as np
@@ -62,10 +68,6 @@ except Exception:  # pragma: no cover - fallback se non disponibile
 WS_URL = os.getenv("ORACOLO_WS_URL", "ws://localhost:8765")
 SR = 24_000
 
-_REASON_RE = re.compile(
-    r"kw=(?P<kw>[-0-9.]+) emb=(?P<emb>[-0-9.]+) rag=(?P<rag>[-0-9.]+) score=(?P<score>[-0-9.]+) thr=(?P<thr>[-0-9.]+)"
-)
-
 
 def _highlight_terms(text: str, query: str) -> str:
     """Evidenzia i termini della query all'interno del testo."""
@@ -81,87 +83,6 @@ try:
 except Exception:
     Image = None
     ImageTk = None
-
-
-# ------------------------------ helpers ---------------------------------- #
-def deep_update(base: dict, upd: dict) -> dict:
-    for k, v in (upd or {}).items():
-        if isinstance(v, dict) and isinstance(base.get(k), dict):
-            deep_update(base[k], v)
-        else:
-            base[k] = v
-    return base
-
-
-def deep_copy(d: dict) -> dict:
-    return copy.deepcopy(d or {})
-
-
-def load_settings_pair(root: Path) -> tuple[dict, dict, dict]:
-    """Ritorna (base, local, merged)."""
-    base_p = root / "settings.yaml"
-    local_p = root / "settings.local.yaml"
-
-    base = {}
-    local = {}
-    if base_p.exists():
-        base = yaml.safe_load(base_p.read_text(encoding="utf-8")) or {}
-    if local_p.exists():
-        local = yaml.safe_load(local_p.read_text(encoding="utf-8")) or {}
-
-    merged = deep_copy(base)
-    merged = deep_update(merged, deep_copy(local))
-    return base, local, merged
-
-
-def routed_save(
-    base_now: dict,
-    local_now: dict,
-    merged_new: dict,
-    root: Path,
-    log_fn: Callable[[str, str], None] | None = None,
-) -> None:
-    """
-    Salva split:
-      - In settings.local.yaml: debug, audio.input_device, audio.output_device
-      - In settings.yaml: tutto il resto
-    Mantiene eventuali altre chiavi locali preesistenti.
-
-    Se ``log_fn`` è fornito, emette un log per ogni file aggiornato.
-    """
-    local_out = deep_copy(local_now)
-    local_out.setdefault("audio", {})
-    local_out["debug"] = bool(merged_new.get("debug", local_out.get("debug", False)))
-
-    audio_new = deep_copy(merged_new.get("audio", {}))
-    if "input_device" in audio_new:
-        local_out["audio"]["input_device"] = audio_new.get(
-            "input_device", local_out["audio"].get("input_device")
-        )
-    if "output_device" in audio_new:
-        local_out["audio"]["output_device"] = audio_new.get(
-            "output_device", local_out["audio"].get("output_device")
-        )
-
-    base_out = deep_copy(merged_new)
-    base_out.pop("debug", None)
-    if "audio" in base_out:
-        base_out["audio"].pop("input_device", None)
-        base_out["audio"].pop("output_device", None)
-
-    base_changed = base_out != base_now
-    local_changed = local_out != local_now
-
-    (root / "settings.yaml").write_text(
-        yaml.safe_dump(base_out, sort_keys=False, allow_unicode=True), encoding="utf-8"
-    )
-    if base_changed and log_fn is not None:
-        log_fn("Aggiornato settings.yaml\n", "MISC")
-    (root / "settings.local.yaml").write_text(
-        yaml.safe_dump(local_out, sort_keys=False, allow_unicode=True), encoding="utf-8"
-    )
-    if local_changed and log_fn is not None:
-        log_fn("Aggiornato settings.local.yaml\n", "MISC")
 
 
 # ------------------------- Realtime WS client ---------------------------- #
@@ -404,8 +325,14 @@ class RealtimeWSClient:
 class OracoloUI(tk.Tk):
     """Interfaccia grafica per l'Oracolo."""
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        state: UIState | None = None,
+        controller: UIController | None = None,
+    ) -> None:
         super().__init__()
+        self.state = state or UIState()
+        self.controller = controller
         self.root_dir = Path(__file__).resolve().parents[1]
         self.title("Occhio Onniveggente")
 
@@ -455,8 +382,13 @@ class OracoloUI(tk.Tk):
         style.configure("TLabel", background=self._bg, foreground=self._fg)
         style.configure("TFrame", background=self._bg)
 
-        # settings
-        self.base_settings, self.local_settings, self.settings = load_settings_pair(self.root_dir)
+        # settings and controller
+        self.controller = UiController(self.root_dir)
+        self.base_settings = self.controller.base_settings
+        self.local_settings = self.controller.local_settings
+        self.settings = self.controller.settings
+        self.conv = self.controller.conv
+        self.chat_state = self.controller.chat_state
 
         # quick toggles state
         self.lang_map = {"Auto": "auto", "IT": "it", "EN": "en"}
@@ -469,12 +401,6 @@ class OracoloUI(tk.Tk):
         self.style_var = tk.BooleanVar(value=True)
         self.use_mic_var = tk.BooleanVar(value=True)
         chat_conf = self.settings.get("chat", {})
-        self.conv = ConversationManager()
-        self.chat_state = self.conv.chat
-        self.chat_state.max_turns = int(chat_conf.get("max_turns", 10)) if chat_conf.get("enabled", True) else 0
-        pj = chat_conf.get("persist_jsonl")
-        if pj:
-            self.chat_state.persist_jsonl = Path(pj)
         self.remember_var = tk.BooleanVar(value=bool(chat_conf.get("enabled", True)))
         self.turns_var = tk.IntVar(value=int(chat_conf.get("max_turns", 10)))
         dom = self.settings.get("domain", {})
@@ -541,6 +467,32 @@ class OracoloUI(tk.Tk):
         self.protocol("WM_DELETE_WINDOW", self._on_close)
 
         logging.getLogger().addHandler(UILogHandler(self))
+
+    # ------------------------------ state props ---------------------------- #
+
+    @property
+    def settings(self) -> dict[str, Any]:
+        return self.state.settings
+
+    @settings.setter
+    def settings(self, value: dict[str, Any]) -> None:
+        self.state.settings = value
+
+    @property
+    def conv(self) -> ConversationManager | None:
+        return self.state.conversation
+
+    @conv.setter
+    def conv(self, value: ConversationManager) -> None:
+        self.state.conversation = value
+
+    @property
+    def audio(self) -> Any | None:
+        return self.state.audio
+
+    @audio.setter
+    def audio(self, value: Any | None) -> None:
+        self.state.audio = value
 
     # --------------------------- Menubar & dialogs ------------------------ #
     def _build_menubar(self) -> None:
@@ -810,13 +762,10 @@ class OracoloUI(tk.Tk):
             self.keywords.append(kw)
             self.keyword_listbox.insert("end", kw)
             self.settings["keywords"] = self.keywords
-            routed_save(
-                self.base_settings,
-                self.local_settings,
-                self.settings,
-                self.root_dir,
-                self._append_log,
-            )
+            self.controller.save_settings(self._append_log)
+            self.base_settings = self.controller.base_settings
+            self.local_settings = self.controller.local_settings
+            self.settings = self.controller.settings
             self._append_log(f"Aggiunta keyword: {kw}", "DOMAIN")
         self.keyword_entry.delete(0, "end")
 
@@ -831,13 +780,10 @@ class OracoloUI(tk.Tk):
             removed = True
         if removed:
             self.settings["keywords"] = self.keywords
-            routed_save(
-                self.base_settings,
-                self.local_settings,
-                self.settings,
-                self.root_dir,
-                self._append_log,
-            )
+            self.controller.save_settings(self._append_log)
+            self.base_settings = self.controller.base_settings
+            self.local_settings = self.controller.local_settings
+            self.settings = self.controller.settings
 
     def _pin_last(self) -> None:
         self.chat_state.pin_last_user()
@@ -849,13 +795,10 @@ class OracoloUI(tk.Tk):
 
     def _apply_profile(self, name: str) -> None:
         self.settings.setdefault("domain", {})["profile"] = name
-        routed_save(
-            self.base_settings,
-            self.local_settings,
-            self.settings,
-            self.root_dir,
-            self._append_log,
-        )
+        self.controller.save_settings(self._append_log)
+        self.base_settings = self.controller.base_settings
+        self.local_settings = self.controller.local_settings
+        self.settings = self.controller.settings
         self._append_log(f"Profilo attivo: {name}", "DOMAIN")
         if self.ws_client is not None:
             self.ws_client.profile_name = name
@@ -916,6 +859,7 @@ class OracoloUI(tk.Tk):
         else:
             self._append_chat("system", "Comando sconosciuto")
 
+    
     def _send_chat(self, text: str) -> None:
         """Wrapper that schedules the async chat handler."""
         self.last_activity = time.time()
@@ -1006,12 +950,24 @@ class OracoloUI(tk.Tk):
                 history=self.chat_state.history,
                 topic=self.chat_state.topic_text,
                 mode=mode,
+
+        try:
+            ans, used_ctx = self.controller.send_chat(
+                text,
+                self.lang_map.get(self.lang_choice.get(), "auto"),
+                self.mode_map.get(self.mode_choice.get(), "detailed"),
+                self.style_var.get(),
+                self.sandbox_var.get(),
+
             )
             self.last_sources = used_ctx
         except Exception as e:
             ans = f"Errore: {e}"
             self.last_sources = []
         self.conv.push_assistant(ans)
+
+        self._append_chat("assistant", ans)
+        self._append_citations(self.last_sources)
         self.last_activity = time.time()
         self.after(0, self._append_chat, "assistant", ans)
         self.after(0, self._append_citations, self.last_sources)
@@ -2046,13 +2002,10 @@ class OracoloUI(tk.Tk):
                 f"Domain: topic={dom['topic']} kw={dom['keywords']} weights={dom['weights']} acc={dom['accept_threshold']} clar={dom['clarify_margin']} wake={dom['always_accept_wake']}\n",
                 "DOMAIN",
             )
-            routed_save(
-                self.base_settings,
-                self.local_settings,
-                self.settings,
-                self.root_dir,
-                self._append_log,
-            )
+            self.controller.save_settings(self._append_log)
+            self.base_settings = self.controller.base_settings
+            self.local_settings = self.controller.local_settings
+            self.settings = self.controller.settings
             win.destroy()
 
         ttk.Button(win, text="OK", command=on_ok).grid(row=8, column=0, columnspan=2, pady=10)
@@ -2158,14 +2111,10 @@ class OracoloUI(tk.Tk):
         self.settings["topic_threshold"] = float(self.topic_threshold.get())
         self.settings["keywords"] = self.keywords
         try:
-            routed_save(
-                self.base_settings,
-                self.local_settings,
-                self.settings,
-                self.root_dir,
-                self._append_log,
-            )
-            self.base_settings, self.local_settings, self.settings = load_settings_pair(self.root_dir)
+            self.controller.save_settings(self._append_log)
+            self.base_settings = self.controller.base_settings
+            self.local_settings = self.controller.local_settings
+            self.settings = self.controller.settings
             self.keywords = list(self.settings.get("keywords", []))
             self.keyword_listbox.delete(0, "end")
             for kw in self.keywords:
@@ -2183,6 +2132,13 @@ class OracoloUI(tk.Tk):
     def start_oracolo(self) -> None:
         if self.proc and self.proc.poll() is None:
             messagebox.showinfo("Oracolo", "È già in esecuzione.")
+            return
+        audio_cfg = self.settings.get("audio", {})
+        try:
+            validate_device_config(audio_cfg)
+        except ValueError as e:
+            messagebox.showerror("Audio", str(e))
+            logging.error("Invalid device configuration: %s", e)
             return
         try:
             self._clear_log()
@@ -2392,6 +2348,12 @@ class OracoloUI(tk.Tk):
 
         # applica dispositivi audio da settings come default
         audio = self.settings.get("audio", {})
+        try:
+            validate_device_config(audio)
+        except ValueError as e:
+            messagebox.showerror("Audio", str(e))
+            logging.error("Invalid device configuration: %s", e)
+            return
         in_dev = audio.get("input_device", None)
         out_dev = audio.get("output_device", None)
         sd.default.device = (in_dev, out_dev)
@@ -2508,7 +2470,9 @@ UILogHandler = OracoloUI.UILogHandler
 
 # ----------------------------- entry point -------------------------------- #
 def main() -> None:
-    app = OracoloUI()
+    state = UIState()
+    controller = UIController(state)
+    app = OracoloUI(state=state, controller=controller)
     app.mainloop()
 
 
