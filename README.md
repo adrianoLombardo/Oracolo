@@ -78,7 +78,16 @@ python -m src.main
 
 Opzioni principali:
 - `--autostart` avvia subito l'ascolto senza prompt
-- `--quiet` riduce i log a schermo
+- `--quiet` nasconde i log dalla console (vista conversazione pulita)
+
+Per separare conversazione e log in due "viewport" da terminale:
+
+```bash
+python -m src.main --quiet       # terminale principale, solo conversazione
+tail -f data/logs/oracolo.log    # secondo terminale o pannello tmux per i log
+```
+
+Se si sviluppa un'interfaccia web, prevedere due componenti: una per la chat in tempo reale e una seconda, comprimibile, per mostrare i log solo all'occorrenza.
 
 In Windows è disponibile uno script PS:
 

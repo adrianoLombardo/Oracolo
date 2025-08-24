@@ -36,9 +36,8 @@ def _ensure_utf8_stdout() -> None:
         pass
 
 
-def say(msg: str, quiet: bool = False) -> None:
-    if quiet:
-        return
+def say(msg: str) -> None:
+    """Print a message intended for the user conversation."""
     print(msg, flush=True)
 
 
@@ -154,14 +153,18 @@ def oracle_greeting(lang: str) -> str:
 def main() -> None:
     _ensure_utf8_stdout()
 
-    listener = setup_logging(Path("data/logs/oracolo.log"))
-
     parser = argparse.ArgumentParser(description="Occhio Onniveggente · Oracolo")
     parser.add_argument("--autostart", action="store_true", help="Avvia direttamente senza prompt input()")
-    parser.add_argument("--quiet", action="store_true", help="Riduce i log a schermo")
+    parser.add_argument(
+        "--quiet",
+        action="store_true",
+        help="Nasconde i log dalla console (vista conversazione pulita)",
+    )
     args = parser.parse_args()
 
-    say("Occhio Onniveggente · Oracolo ✨", quiet=args.quiet)
+    listener = setup_logging(Path("data/logs/oracolo.log"), console=not args.quiet)
+
+    say("Occhio Onniveggente · Oracolo ✨")
 
     load_dotenv()
 
@@ -328,7 +331,7 @@ def main() -> None:
 
             # timeout inattività globale
             if WAKE_ENABLED and dlg.timed_out(now):
-                say("🌘 Torno al silenzio. Di' «ciao oracolo» per riattivarmi.", quiet=args.quiet)
+                say("🌘 Torno al silenzio. Di' «ciao oracolo» per riattivarmi.")
                 dlg.transition(DialogState.SLEEP)
                 countdown_last = -1
                 if not args.quiet:
@@ -339,7 +342,7 @@ def main() -> None:
             if WAKE_ENABLED and dlg.state == DialogState.SLEEP:
                 if dlg.is_processing:
                     continue
-                say("💤 In ascolto della parola chiave…  IT: «ciao oracolo» | EN: «hello oracle»", quiet=args.quiet)
+                say("💤 In ascolto della parola chiave…  IT: «ciao oracolo» | EN: «hello oracle»")
                 ok = record_until_silence(
                     INPUT_WAV,
                     AUDIO_SR,
@@ -351,14 +354,14 @@ def main() -> None:
                 if not ok:
                     continue
                 text, lang = transcribe(INPUT_WAV, client, STT_MODEL, debug=DEBUG and (not args.quiet))
-                say(f"📝 Riconosciuto: {text}", quiet=args.quiet)
+                say(f"📝 Riconosciuto: {text}")
                 if lang in ("it", "en"):
                     session_lang = lang
                 is_it = _match_hotword(text, WAKE_IT)
                 is_en = _match_hotword(text, WAKE_EN)
                 if not (is_it or is_en):
                     if DEBUG:
-                        say("…hotword non riconosciuta, continuo l'attesa.", quiet=False)
+                        say("…hotword non riconosciuta, continuo l'attesa.")
                     continue
                 wake_lang = "it" if is_it and not is_en else "en" if is_en and not is_it else (session_lang or "it")
                 dlg.transition(DialogState.AWAKE)
@@ -399,7 +402,6 @@ def main() -> None:
                     continue
                 say(
                     "🎤 Parla pure (VAD energia, max %.1fs)…" % (SET.vad.max_ms / 1000.0),
-                    quiet=args.quiet,
                 )
                 ok = record_until_silence(
                     INPUT_WAV,
@@ -413,7 +415,7 @@ def main() -> None:
                     continue
                 dlg.refresh_deadline()
                 q, qlang = transcribe(INPUT_WAV, client, STT_MODEL, debug=DEBUG and (not args.quiet))
-                say(f"📝 Domanda: {q}", quiet=args.quiet)
+                say(f"📝 Domanda: {q}")
                 if not q:
                     continue
                 if session_lang not in ("it", "en"):
@@ -429,18 +431,18 @@ def main() -> None:
                         eff_lang = "it"
                 if PROF.contains_profanity(q):
                     if FILTER_MODE == "block":
-                        say("🚫 Linguaggio offensivo/bestemmie non ammessi. Riformula in italiano o inglese.", quiet=args.quiet)
+                        say("🚫 Linguaggio offensivo/bestemmie non ammessi. Riformula in italiano o inglese.")
                         continue
                     else:
                         q = PROF.mask(q)
-                        say("⚠️ Testo filtrato: " + q, quiet=args.quiet)
+                        say("⚠️ Testo filtrato: " + q)
                 pending_q = q
                 pending_lang = eff_lang
                 if CHAT_ENABLED:
                     chat.push_user(q)
                     changed = chat.update_topic(q, client, EMB_MODEL)
                     if changed:
-                        say("🔀 Cambio tema.", quiet=args.quiet)
+                        say("🔀 Cambio tema.")
                     pending_topic = chat.topic_text
                     pending_history = chat.history
                 else:
@@ -468,14 +470,14 @@ def main() -> None:
                     history=pending_history,
                 )
                 if DEBUG:
-                    say(f"[VAL] {reason}", quiet=False)
+                    say(f"[VAL] {reason}")
                 if not ok and clarify and suggestion and suggestion != pending_topic:
-                    say(f"Vuoi cambiare argomento in: {suggestion}?", quiet=args.quiet)
+                    say(f"Vuoi cambiare argomento in: {suggestion}?")
                     dlg.end_processing()
                     dlg.transition(DialogState.LISTENING)
                     continue
                 if not ok and clarify:
-                    say("🤔 Puoi chiarire meglio la tua domanda?", quiet=args.quiet)
+                    say("🤔 Puoi chiarire meglio la tua domanda?")
                     dlg.end_processing()
                     dlg.transition(DialogState.LISTENING)
                     continue
@@ -508,7 +510,7 @@ def main() -> None:
                 print(f"🔮 Oracolo: {pending_answer}", flush=True)
                 if PROF.contains_profanity(pending_answer):
                     if FILTER_MODE == "block":
-                        say("⚠️ La risposta conteneva termini non ammessi, riformulo…", quiet=args.quiet)
+                        say("⚠️ La risposta conteneva termini non ammessi, riformulo…")
                         pending_answer = client.responses.create(
                             model=LLM_MODEL,
                             instructions=ORACLE_SYSTEM + " Evita qualsiasi offesa o blasfemia.",
@@ -560,13 +562,13 @@ def main() -> None:
                 processing_turn = dlg.turn_id
                 if interrupted:
                     dlg.transition(DialogState.INTERRUPTED)
-                    say("⚠️ Interrotto.", quiet=args.quiet)
+                    say("⚠️ Interrotto.")
                     dlg.transition(DialogState.LISTENING)
                     continue
                 dlg.refresh_deadline()
                 if WAKE_ENABLED and WAKE_SINGLE_TURN:
                     dlg.transition(DialogState.SLEEP)
-                    say("🌘 Torno al silenzio. Di' «ciao oracolo» per riattivarmi.", quiet=args.quiet)
+                    say("🌘 Torno al silenzio. Di' «ciao oracolo» per riattivarmi.")
                     countdown_last = -1
                     if not args.quiet:
                         print()
