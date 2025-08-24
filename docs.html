@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Docs</title>
+</head>
+<body>
+  <h1>Gestione documenti</h1>
+  <textarea id="docText" rows="6" cols="60" placeholder="Inserisci testo"></textarea><br/>
+  <button id="saveBtn">Salva</button>
+  <button id="applyBtn">Applica</button>
+  <div id="message"></div>
+
+  <script>
+    async function postData(url, payload) {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (!res.ok) {
+        throw new Error('Request failed');
+      }
+      return res.json();
+    }
+
+    document.getElementById('saveBtn').addEventListener('click', async () => {
+      const text = document.getElementById('docText').value;
+      try {
+        await postData('/api/docs/save', { text });
+        document.getElementById('message').textContent = 'Documento salvato';
+      } catch (err) {
+        document.getElementById('message').textContent = 'Errore nel salvataggio';
+      }
+    });
+
+    document.getElementById('applyBtn').addEventListener('click', async () => {
+      const text = document.getElementById('docText').value;
+      try {
+        await postData('/api/docs/apply', { text });
+        document.getElementById('message').textContent = 'Documento applicato alla chat';
+      } catch (err) {
+        document.getElementById('message').textContent = 'Errore nell\'applicazione';
+      }
+    });
+  </script>
+</body>
+</html>

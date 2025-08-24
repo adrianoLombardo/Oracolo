@@ -20,3 +20,17 @@ class UIState:
     settings: dict[str, Any] = field(default_factory=dict)
     conversation: ConversationManager | None = None
     audio: Any | None = None
+
+
+def apply_to_chat(state: UIState, text: str) -> None:
+    """Append ``text`` to the current conversation history.
+
+    A new :class:`ConversationManager` is created if one isn't present yet.
+    Empty strings are ignored.
+    """
+
+    if not text:
+        return
+    if state.conversation is None:
+        state.conversation = ConversationManager()
+    state.conversation.push_user(text)
