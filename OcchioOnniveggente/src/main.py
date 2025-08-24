@@ -161,36 +161,30 @@ def oracle_greeting(lang: str) -> str:
 
 def get_active_profile(SETTINGS):
     if isinstance(SETTINGS, dict):
-        prof_name = (SETTINGS.get("profile") or {}).get("current", "museo")
-        profiles = SETTINGS.get("profiles") or {}
+        dom = SETTINGS.get("domain", {}) or {}
+        prof_name = dom.get("profile", "museo")
+        profiles = dom.get("profiles", {}) or {}
         prof = profiles.get(prof_name, {})
     else:
-        prof_name = getattr(getattr(SETTINGS, "profile", {}), "current", "museo")
-        profiles = getattr(SETTINGS, "profiles", {}) or {}
+        dom = getattr(SETTINGS, "domain", None)
+        prof_name = getattr(dom, "profile", "museo") if dom else "museo"
+        profiles = getattr(dom, "profiles", {}) if dom else {}
         prof = profiles.get(prof_name, {})
     return prof_name, prof
 
 
-def make_domain_settings(base_settings, prof):
+def make_domain_settings(base_settings, prof_name):
     if isinstance(base_settings, dict):
         new_s = dict(base_settings)
-        new_s["domain"] = {
-            "enabled": True,
-            "keywords": prof.get("keywords", []),
-            "weights": prof.get("weights", {}),
-            "accept_threshold": prof.get("accept_threshold"),
-            "clarify_margin": prof.get("clarify_margin"),
-        }
+        dom = dict(new_s.get("domain") or {})
+        dom["enabled"] = True
+        dom["profile"] = prof_name
+        new_s["domain"] = dom
         return new_s
     else:
         try:
             base_settings.domain.enabled = True
-            base_settings.domain.keywords = prof.get("keywords", [])
-            base_settings.domain.weights = prof.get("weights", {})
-            if prof.get("accept_threshold") is not None:
-                base_settings.domain.accept_threshold = prof.get("accept_threshold")
-            if prof.get("clarify_margin") is not None:
-                base_settings.domain.clarify_margin = prof.get("clarify_margin")
+            base_settings.domain.profile = prof_name
         except Exception:
             pass
         return base_settings
@@ -574,7 +568,7 @@ def main() -> None:
                 effective_top_k = int(
                     prof.get("retrieval_top_k") or getattr(SET, "retrieval_top_k", 3)
                 )
-                settings_for_domain = make_domain_settings(SET, prof)
+                settings_for_domain = make_domain_settings(SET, prof_name)
                 ok, context, clarify, reason, suggestion = validate_question(
                     pending_q,
                     pending_lang,
@@ -583,7 +577,7 @@ def main() -> None:
                     docstore_path=effective_docstore,
                     top_k=effective_top_k,
                     embed_model=embed_model,
-                    topic=prof.get("topic"),
+                    topic=prof_name,
                     history=pending_history,
                 )
                 if DEBUG:
@@ -622,7 +616,7 @@ def main() -> None:
                     effective_system if STYLE_ENABLED else "",
                     context=context_texts,
                     history=pending_history,
-                    topic=prof.get("topic"),
+                    topic=prof_name,
                     policy_prompt=ORACLE_POLICY,
                     mode=ANSWER_MODE,
                 )

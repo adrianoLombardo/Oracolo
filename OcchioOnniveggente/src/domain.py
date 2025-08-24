@@ -148,11 +148,12 @@ def validate_question(
 
     enabled = True
     keywords: list[str] = []
-    weights: dict[str, float] = {"kw": 0.4, "emb": 0.3, "rag": 0.3}
-    accept_threshold = 0.5
-    clarify_margin = 0.15
+    weights: dict[str, float] = {"kw": 0.7, "emb": 0.15, "rag": 0.15}
+    accept_threshold = 0.75
+    clarify_margin = 0.10
     emb_min_sim = 0.22  # conservato per compatibilità (non usato come soglia dura qui)
     dom_topic = ""
+    profile_name = ""
     always_accept_wake = True
 
     if dom:
@@ -164,12 +165,33 @@ def validate_question(
                 enabled = bool(dom.get("enabled", True))  # type: ignore[attr-defined]
             except Exception:
                 enabled = True
-        # keywords
+        # profile
+        try:
+            profile_name = str(getattr(dom, "profile", "") or "")
+        except Exception:
+            try:
+                profile_name = str(dom.get("profile", "") or "")  # type: ignore[attr-defined]
+            except Exception:
+                profile_name = ""
+        # keywords (global or per-profile)
         try:
             keywords = list(getattr(dom, "keywords", []) or [])
         except Exception:
             try:
                 keywords = list(dom.get("keywords", []) or [])  # type: ignore[attr-defined]
+            except Exception:
+                keywords = []
+        if not keywords and profile_name:
+            try:
+                profiles = getattr(dom, "profiles", {}) or {}
+            except Exception:
+                try:
+                    profiles = dom.get("profiles", {}) or {}  # type: ignore[attr-defined]
+                except Exception:
+                    profiles = {}
+            prof_conf = profiles.get(profile_name, {}) if isinstance(profiles, dict) else {}
+            try:
+                keywords = list(prof_conf.get("keywords", []) or [])
             except Exception:
                 keywords = []
         # pesi
@@ -203,14 +225,8 @@ def validate_question(
                 clarify_margin = float(val)  # type: ignore[arg-type]
             elif var_name == "emb_min_sim":
                 emb_min_sim = float(val)  # type: ignore[arg-type]
-        # topic
-        try:
-            dom_topic = str(getattr(dom, "topic", "") or "")
-        except Exception:
-            try:
-                dom_topic = str(dom.get("topic", "") or "")
-            except Exception:
-                dom_topic = ""
+        # topic defaults to profile name if present
+        dom_topic = profile_name or ""
         # always_accept_wake
         try:
             always_accept_wake = bool(getattr(dom, "always_accept_wake", True))
@@ -260,26 +276,7 @@ def validate_question(
         ctx = _try_retrieve(question, settings, docstore_path, top_k, use_topic, client, emb_model or embed_model)
         return True, ctx, False, "no keywords", None
 
-    # ---- Boost terms (accettazione immediata se compaiono) ----
-    boost_terms = [
-        "neuro", "neuroscienze", "neuroscience", "cervello", "sinaps",
-        "brain", "cortex", "neurone", "neuroni", "neuroestetica",
-        "arte", "estetica", "percezione",
-        "ia", "intelligenza artificiale", "ai",
-        "cosmo", "universo", "stella", "stelle", "mare",
-    ]
-    has_boost = any(bt in q_norm for bt in boost_terms)
-    if has_boost:
-        ctx = _try_retrieve(
-            question,
-            settings,
-            docstore_path,
-            top_k,
-            use_topic,
-            client,
-            emb_model or embed_model,
-        )
-        return True, ctx, False, "boost", None
+    has_boost = False
 
     # ---- Overlap parole chiave ----
     kw_score = _keyword_overlap_score(question, keywords)
