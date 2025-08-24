@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from src.config import Settings
+from src.config import Settings, get_openai_api_key
 from src.hotword import strip_hotword_prefix
 from src.oracle import transcribe, oracle_answer
 from src.chat import ChatState
@@ -412,7 +412,8 @@ main
 
         from openai import OpenAI
         load_dotenv()
-        client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+        api_key = get_openai_api_key(self.SET)
+        client = OpenAI(api_key=api_key) if api_key else OpenAI()
 
         text, lang = transcribe(
             audio_bytes, client, self.SET.openai.stt_model, debug=self.SET.debug

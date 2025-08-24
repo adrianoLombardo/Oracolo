@@ -19,7 +19,7 @@ from dotenv import load_dotenv
 from openai import OpenAI
 from pydantic import ValidationError
 
-from src.config import Settings
+from src.config import Settings, get_openai_api_key
 from src.filters import ProfanityFilter
 from src.audio import record_until_silence, play_and_pulse
 from src.lights import SacnLight, WledLight, color_from_text
@@ -210,7 +210,7 @@ def main() -> None:
         raw_settings = {}
         SET = Settings()
 
-    api_key = os.environ.get("OPENAI_API_KEY") or getattr(SET.openai, "api_key", "")
+    api_key = get_openai_api_key(SET)
     client = OpenAI(api_key=api_key) if api_key else OpenAI()
 
     session_profile_name, _ = get_active_profile(raw_settings)

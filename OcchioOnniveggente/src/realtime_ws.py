@@ -6,15 +6,17 @@ Non è integrato nel main loop; usalo per prove e poi lo innestiamo.
 import asyncio, json, os, sys, wave
 import websockets
 
-OPENAI_KEY = os.getenv("OPENAI_API_KEY")
+from src.config import get_openai_api_key
+
 REALTIME_MODEL = os.getenv("REALTIME_MODEL", "gpt-4o-realtime-preview")
 WS_URL = f"wss://api.openai.com/v1/realtime?model={REALTIME_MODEL}"
 
-async def run():
+
+async def run(api_key: str):
     async with websockets.connect(
         WS_URL,
         extra_headers={
-            "Authorization": f"Bearer {OPENAI_KEY}",
+            "Authorization": f"Bearer {api_key}",
             "OpenAI-Beta": "realtime=v1",
         },
         max_size=10_000_000,
@@ -27,8 +29,10 @@ async def run():
             msg = await ws.recv()
             print(msg)
 
+
 if __name__ == "__main__":
-    if not OPENAI_KEY:
+    api_key = get_openai_api_key()
+    if not api_key:
         print("⚠️ Set OPENAI_API_KEY first.")
         sys.exit(1)
-    asyncio.run(run())
+    asyncio.run(run(api_key))
