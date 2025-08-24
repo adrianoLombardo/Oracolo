@@ -31,34 +31,44 @@ END_SIL_MS = 700
 MAX_UTT_MS = 15_000
 
 
-def get_active_profile(SETTINGS):
+def get_active_profile(SETTINGS, forced_name: str | None = None):
     if isinstance(SETTINGS, dict):
-        prof_name = (SETTINGS.get("profile") or {}).get("current", "museo")
-        profiles = SETTINGS.get("profiles") or {}
+        dom = SETTINGS.get("domain") or {}
+        prof_name = forced_name or dom.get("profile", "museo")
+        profiles = dom.get("profiles", {}) or {}
         prof = profiles.get(prof_name, {})
     else:
-        prof_name = getattr(getattr(SETTINGS, "profile", {}), "current", "museo")
-        profiles = getattr(SETTINGS, "profiles", {}) or {}
+        dom = getattr(SETTINGS, "domain", None)
+        prof_name = forced_name or getattr(dom, "profile", "museo")
+        profiles = getattr(dom, "profiles", {}) or {}
         prof = profiles.get(prof_name, {})
     return prof_name, prof
 
 
-def make_domain_settings(base_settings, prof):
+def make_domain_settings(base_settings, prof_name: str, prof):
     if isinstance(base_settings, dict):
         new_s = dict(base_settings)
-        new_s["domain"] = {
+        dom = dict(new_s.get("domain", {}))
+        dom.update({
             "enabled": True,
+            "profile": prof_name,
             "keywords": prof.get("keywords", []),
-            "weights": prof.get("weights", {}),
-            "accept_threshold": prof.get("accept_threshold"),
-            "clarify_margin": prof.get("clarify_margin"),
-        }
+        })
+        if prof.get("weights"):
+            dom["weights"] = prof.get("weights")
+        if prof.get("accept_threshold") is not None:
+            dom["accept_threshold"] = prof.get("accept_threshold")
+        if prof.get("clarify_margin") is not None:
+            dom["clarify_margin"] = prof.get("clarify_margin")
+        new_s["domain"] = dom
         return new_s
     else:
         try:
             base_settings.domain.enabled = True
+            base_settings.domain.profile = prof_name
             base_settings.domain.keywords = prof.get("keywords", [])
-            base_settings.domain.weights = prof.get("weights", {})
+            if prof.get("weights"):
+                base_settings.domain.weights = prof.get("weights")
             if prof.get("accept_threshold") is not None:
                 base_settings.domain.accept_threshold = prof.get("accept_threshold")
             if prof.get("clarify_margin") is not None:
@@ -144,15 +154,19 @@ class RTSession:
         self.ms_since_voice = 0
         self.barge = False
 
-        self.profiles = raw.get("profiles", {})
-        self.profile = (raw.get("profile") or {}).get("current", "")
+        dom = raw.get("domain", {})
+        self.profiles = dom.get("profiles", {})
+        self.profile = dom.get("profile", "museo")
         prof = self.profiles.get(self.profile, {})
-        self.docstore_path = prof.get("docstore_path", getattr(setts, "docstore_path", "DataBase/index.json"))
-        self.topic = prof.get("topic", "")
+        self.docstore_path = prof.get(
+            "docstore_path", getattr(setts, "docstore_path", "DataBase/index.json")
+        )
         self.domain_keywords = prof.get("keywords", [])
         self.domain_weights = prof.get("weights", {})
         self.system_hint = prof.get("system_hint", "")
-        self.retrieval_top_k = int(prof.get("retrieval_top_k") or getattr(setts, "retrieval_top_k", 3))
+        self.retrieval_top_k = int(
+            prof.get("retrieval_top_k") or getattr(setts, "retrieval_top_k", 3)
+        )
 
         self.active_until = 0.0
         self.wake_phrases = []
@@ -394,7 +408,7 @@ class RTSession:
 
         embed_model = getattr(self.SET.openai, "embed_model", None)
         settings_for_domain = make_domain_settings(
-            self.SET, {"keywords": self.domain_keywords, "weights": self.domain_weights}
+            self.SET, self.profile, {"keywords": self.domain_keywords, "weights": self.domain_weights}
         )
         ok, ctx, clarify, reason, _ = validate_question(
             text,
@@ -404,7 +418,7 @@ class RTSession:
             docstore_path=self.docstore_path,
             top_k=self.retrieval_top_k,
             embed_model=embed_model,
-            topic=self.topic,
+            topic=self.profile,
             history=(self.chat.history if self.chat_enabled else None),
         )
         if not ok:
@@ -431,7 +445,7 @@ class RTSession:
             effective_system,
             context=context_texts,
             history=(self.chat.history if self.chat_enabled else None),
-            topic=self.topic,
+            topic=self.profile,
         )
         if self.chat_enabled:
             self.chat.push_user(text)
@@ -489,7 +503,6 @@ async def handler(ws):
                     sess.docstore_path = prof.get(
                         "docstore_path", getattr(sess.SET, "docstore_path", "DataBase/index.json")
                     )
-                    sess.topic = prof.get("topic", "")
                     sess.domain_keywords = prof.get("keywords", [])
                     sess.domain_weights = prof.get("weights", {})
                     sess.system_hint = prof.get("system_hint", "")
