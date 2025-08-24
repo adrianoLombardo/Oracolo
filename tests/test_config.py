@@ -1,6 +1,8 @@
 import sys
 from pathlib import Path
+
 import pytest
+import yaml
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 from OcchioOnniveggente.src.config import Settings
@@ -18,3 +20,13 @@ def test_model_validate_yaml_valid_yaml(tmp_path: Path) -> None:
     good.write_text("debug: true", encoding="utf-8")
     settings = Settings.model_validate_yaml(good)
     assert settings.debug is True
+
+
+def test_round_trip_defaults(tmp_path: Path) -> None:
+    original = Settings()
+    path = tmp_path / "settings.yaml"
+    path.write_text(yaml.safe_dump(original.model_dump()), encoding="utf-8")
+    loaded = Settings.model_validate_yaml(path)
+    assert loaded == original
+    assert loaded.domain.profile == "museo"
+    assert loaded.domain.topic == ""

@@ -42,6 +42,21 @@ def _tokens(s: str) -> list[str]:
     return _WORD_RE.findall(_norm(s))
 
 
+def _get_field(obj: Any, name: str, default: Any | None = None) -> Any:
+    """Access ``name`` from ``obj`` treating dicts and objects uniformly."""
+    if obj is None:
+        return default
+    if isinstance(obj, dict):
+        return obj.get(name, default)
+    val = getattr(obj, name, default)
+    if val is default and hasattr(obj, "__getitem__"):
+        try:
+            return obj[name]  # type: ignore[index]
+        except Exception:
+            return default
+    return val
+
+
 def _keyword_overlap_score(text: str, keywords: Iterable[str]) -> float:
     toks = set(_tokens(text))
     kw_tokens: set[str] = set()
@@ -104,6 +119,137 @@ def _normalize_context_list(ctx: Any) -> list[str]:
     return out
 
 
+def _read_config(settings: Any, top_k: int | None, topic: str | None):
+    top_k = int(top_k if top_k is not None else _get_field(settings, "retrieval_top_k", 3))
+    dom = _get_field(settings, "domain")
+    enabled = True
+    keywords: list[str] = []
+    weights: dict[str, float] = {"kw": 0.7, "emb": 0.15, "rag": 0.15}
+    accept_threshold = 0.75
+    clarify_margin = 0.10
+    fallback_accept_threshold = 0.4
+    emb_min_sim = 0.22
+    dom_topic = ""
+    dom_profile = ""
+    profiles: dict[str, Any] = {}
+    always_accept_wake = True
+    if dom:
+        enabled = bool(_get_field(dom, "enabled", True))
+        dom_profile = str(_get_field(dom, "profile", "") or "")
+        keywords = list(_get_field(dom, "keywords", []) or [])
+        if not keywords and dom_profile:
+            profiles = _get_field(dom, "profiles", {}) or {}
+            prof_conf = profiles.get(dom_profile, {}) if isinstance(profiles, dict) else {}
+            keywords = list(_get_field(prof_conf, "keywords", []) or [])
+        weights = dict(_get_field(dom, "weights", weights) or weights)
+        accept_threshold = float(_get_field(dom, "accept_threshold", accept_threshold))
+        clarify_margin = float(_get_field(dom, "clarify_margin", clarify_margin))
+        fallback_accept_threshold = float(
+            _get_field(dom, "fallback_accept_threshold", fallback_accept_threshold)
+        )
+        emb_min_sim = float(_get_field(dom, "emb_min_sim", emb_min_sim))
+        dom_topic = str(_get_field(dom, "topic", dom_profile or ""))
+        profiles = dict(_get_field(dom, "profiles", {}) or {})
+        always_accept_wake = bool(_get_field(dom, "always_accept_wake", True))
+    if not keywords and dom_profile and profiles:
+        prof_obj = profiles.get(dom_profile, {})
+        keywords = list(_get_field(prof_obj, "keywords", []) or [])
+        w = _get_field(prof_obj, "weights")
+        if w:
+            weights = dict(w)
+        at = _get_field(prof_obj, "accept_threshold")
+        if at is not None:
+            accept_threshold = float(at)
+        cm = _get_field(prof_obj, "clarify_margin")
+        if cm is not None:
+            clarify_margin = float(cm)
+        fat = _get_field(prof_obj, "fallback_accept_threshold")
+        if fat is not None:
+            fallback_accept_threshold = float(fat)
+    if not dom_topic:
+        dom_topic = dom_profile
+    use_topic = dom_topic or topic
+    wake_phrases: list[str] = []
+    w = _get_field(settings, "wake")
+    if w:
+        for lst in ("it_phrases", "en_phrases"):
+            wake_phrases.extend(_get_field(w, lst, []) or [])
+    return (
+        top_k,
+        enabled,
+        keywords,
+        weights,
+        accept_threshold,
+        clarify_margin,
+        fallback_accept_threshold,
+        emb_min_sim,
+        use_topic,
+        always_accept_wake,
+        wake_phrases,
+    )
+
+
+def _embedding_score(question: str, keywords: list[str], client: Any, model: str | None) -> float:
+    if client is None or not model or not keywords:
+        return 0.0
+    try:
+        vecs = _embed_texts(client, model, [question, " ".join(keywords)])
+        if len(vecs) == 2:
+            return _cosine(vecs[0], vecs[1])
+    except Exception:
+        pass
+    return 0.0
+
+
+def _retrieval_score(
+    question: str,
+    settings: Any,
+    docstore_path: str | Path | None,
+    top_k: int,
+    topic: str | None,
+    client: Any,
+    emb_model: str | None,
+) -> tuple[list[dict], float, int]:
+    ctx = _try_retrieve(question, settings, docstore_path, top_k, topic, client, emb_model)
+    hits = len(ctx)
+    score = hits / float(top_k or 1)
+    return ctx, score, hits
+
+
+def _adapt_thresholds(
+    question: str,
+    history: list[dict[str, str]] | None,
+    keywords: list[str],
+    kw_score: float,
+    rag_hits: int,
+    emb_sim: float,
+    accept_threshold: float,
+    fallback_accept_threshold: float,
+    weights: dict[str, float],
+) -> tuple[float, dict[str, float]]:
+    hist_tokens: set[str] = set()
+    if history:
+        for turn in history[-6:]:
+            if turn.get("role") == "user":
+                hist_tokens.update(_tokens(turn.get("content", "")))
+    if hist_tokens & set(_tokens(" ".join(keywords))):
+        weights["kw"] = min(1.0, weights.get("kw", 0.4) + 0.1)
+    if history:
+        recent_msgs = [t.get("content", "") for t in history[-4:] if t.get("role") == "user"]
+        if recent_msgs:
+            overlaps = [_keyword_overlap_score(m, keywords) for m in recent_msgs]
+            div = sum(1 for s in overlaps if s < 0.2)
+            coh = sum(1 for s in overlaps if s > 0.6)
+            accept_threshold += 0.05 * div - 0.05 * coh
+            accept_threshold = min(max(accept_threshold, 0.1), 0.9)
+    q_tok_count = len(_tokens(question))
+    if q_tok_count <= 4 and kw_score > 0:
+        accept_threshold -= 0.05 * (5 - q_tok_count)
+    if emb_sim == 0.0 and rag_hits == 0 and kw_score > 0:
+        accept_threshold = min(accept_threshold, fallback_accept_threshold)
+    return accept_threshold, weights
+
+
 # ------------------------- funzione principale ------------------------- #
 def validate_question(
     question: str,
@@ -126,279 +272,54 @@ def validate_question(
       (is_ok, context_list, needs_clarification, reason_str, topic_suggestion or None).
     """
     q_norm = _norm(question)
-
-    # ---- parametri retrieval ----
-    if top_k is None and settings is not None:
-        try:
-            top_k = int(getattr(settings, "retrieval_top_k", 3))
-        except Exception:
-            try:
-                top_k = int(settings.get("retrieval_top_k", 3))  # type: ignore[attr-defined]
-            except Exception:
-                top_k = 3
-    top_k = int(top_k or 3)
-
-    # ---- leggi settings.domain ----
-    dom = None
-    if settings is not None:
-        try:
-            dom = getattr(settings, "domain", None)
-        except Exception:
-            try:
-                dom = (settings or {}).get("domain")  # type: ignore[attr-defined]
-            except Exception:
-                dom = None
-
-    enabled = True
-    keywords: list[str] = []
-    weights: dict[str, float] = {"kw": 0.7, "emb": 0.15, "rag": 0.15}
-    accept_threshold = 0.75
-    clarify_margin = 0.10
-    fallback_accept_threshold = 0.4
-    emb_min_sim = 0.22  # conservato per compatibilità (non usato come soglia dura qui)
-    dom_topic = ""
-    profile_name = ""
-    dom_profile = ""
-    profiles: dict[str, Any] = {}
-    always_accept_wake = True
-
-    if dom:
-        # enabled (default True)
-        try:
-            enabled = bool(getattr(dom, "enabled", True))
-        except Exception:
-            try:
-                enabled = bool(dom.get("enabled", True))  # type: ignore[attr-defined]
-            except Exception:
-                enabled = True
-        # profile
-        try:
-            profile_name = str(getattr(dom, "profile", "") or "")
-        except Exception:
-            try:
-                profile_name = str(dom.get("profile", "") or "")  # type: ignore[attr-defined]
-            except Exception:
-                profile_name = ""
-        # keywords (global or per-profile)
-        try:
-            keywords = list(getattr(dom, "keywords", []) or [])
-        except Exception:
-            try:
-                keywords = list(dom.get("keywords", []) or [])  # type: ignore[attr-defined]
-            except Exception:
-                keywords = []
-        if not keywords and profile_name:
-            try:
-                profiles = getattr(dom, "profiles", {}) or {}
-            except Exception:
-                try:
-                    profiles = dom.get("profiles", {}) or {}  # type: ignore[attr-defined]
-                except Exception:
-                    profiles = {}
-            prof_conf = profiles.get(profile_name, {}) if isinstance(profiles, dict) else {}
-            try:
-                keywords = list(prof_conf.get("keywords", []) or [])
-            except Exception:
-                keywords = []
-        # pesi
-        try:
-            weights = dict(getattr(dom, "weights", weights))
-        except Exception:
-            try:
-                weights = dict(dom.get("weights", weights))  # type: ignore[attr-defined]
-            except Exception:
-                weights = weights
-        # soglie
-        for (attr, var_name, cast, default) in [
-            ("accept_threshold", "accept_threshold", float, accept_threshold),
-            ("clarify_margin", "clarify_margin", float, clarify_margin),
-            ("fallback_accept_threshold", "fallback_accept_threshold", float, fallback_accept_threshold),
-            ("emb_min_sim", "emb_min_sim", float, emb_min_sim),
-        ]:
-            try:
-                val = getattr(dom, attr, default)
-            except Exception:
-                try:
-                    val = dom.get(attr, default)  # type: ignore[attr-defined]
-                except Exception:
-                    val = default
-            try:
-                val = cast(val)  # type: ignore[misc]
-            except Exception:
-                val = default
-            if var_name == "accept_threshold":
-                accept_threshold = float(val)  # type: ignore[arg-type]
-            elif var_name == "clarify_margin":
-                clarify_margin = float(val)  # type: ignore[arg-type]
-            elif var_name == "fallback_accept_threshold":
-                fallback_accept_threshold = float(val)  # type: ignore[arg-type]
-            elif var_name == "emb_min_sim":
-                emb_min_sim = float(val)  # type: ignore[arg-type]
-
-        # topic defaults to profile name if present
-        dom_topic = profile_name or ""
-        
-        # topic/profile
-        try:
-            dom_topic = str(getattr(dom, "topic", "") or "")
-        except Exception:
-            try:
-                dom_topic = str(dom.get("topic", "") or "")
-            except Exception:
-                dom_topic = ""
-        try:
-            dom_profile = str(getattr(dom, "profile", "") or "")
-        except Exception:
-            try:
-                dom_profile = str(dom.get("profile", "") or "")  # type: ignore[attr-defined]
-            except Exception:
-                dom_profile = ""
-        try:
-            profiles = dict(getattr(dom, "profiles", {}) or {})
-        except Exception:
-            try:
-                profiles = dict(dom.get("profiles", {}) or {})  # type: ignore[attr-defined]
-            except Exception:
-                profiles = {}
-
-        # always_accept_wake
-        try:
-            always_accept_wake = bool(getattr(dom, "always_accept_wake", True))
-        except Exception:
-            try:
-                always_accept_wake = bool(dom.get("always_accept_wake", True))  # type: ignore[attr-defined]
-            except Exception:
-                always_accept_wake = True
-
-    if not keywords and dom_profile and profiles:
-        prof_obj = profiles.get(dom_profile, {})
-        try:
-            keywords = list(getattr(prof_obj, "keywords", []) or [])
-        except Exception:
-            try:
-                keywords = list(prof_obj.get("keywords", []) or [])  # type: ignore[attr-defined]
-            except Exception:
-                keywords = []
-        # override weights/thresholds if profile provides them
-        try:
-            w = getattr(prof_obj, "weights", None) or prof_obj.get("weights")  # type: ignore[attr-defined]
-            if w:
-                weights = dict(w)
-        except Exception:
-            pass
-        try:
-            at = getattr(prof_obj, "accept_threshold", None) or prof_obj.get("accept_threshold")  # type: ignore[attr-defined]
-            if at is not None:
-                accept_threshold = float(at)
-        except Exception:
-            pass
-        try:
-            cm = getattr(prof_obj, "clarify_margin", None) or prof_obj.get("clarify_margin")  # type: ignore[attr-defined]
-            if cm is not None:
-                clarify_margin = float(cm)
-        except Exception:
-            pass
-        try:
-            fat = getattr(prof_obj, "fallback_accept_threshold", None) or prof_obj.get("fallback_accept_threshold")  # type: ignore[attr-defined]
-            if fat is not None:
-                fallback_accept_threshold = float(fat)
-        except Exception:
-            pass
-
-    if not dom_topic:
-        dom_topic = dom_profile
-
-    use_topic = dom_topic or topic
-
-    # frasi di saluto/wake words
-    wake_phrases: list[str] = []
-    try:
-        w = getattr(settings, "wake", None)
-    except Exception:
-        try:
-            w = (settings or {}).get("wake")  # type: ignore[attr-defined]
-        except Exception:
-            w = None
-    if w:
-        for lst in ("it_phrases", "en_phrases"):
-            try:
-                wake_phrases.extend(getattr(w, lst, []) or [])
-            except Exception:
-                try:
-                    wake_phrases.extend(w.get(lst, []) or [])  # type: ignore[attr-defined]
-                except Exception:
-                    pass
-
+    (
+        top_k,
+        enabled,
+        keywords,
+        weights,
+        accept_threshold,
+        clarify_margin,
+        fallback_accept_threshold,
+        emb_min_sim,
+        use_topic,
+        always_accept_wake,
+        wake_phrases,
+    ) = _read_config(settings, top_k, topic)
+    emb_model = emb_model or embed_model
     if always_accept_wake and wake_phrases:
         cleaned = re.sub(r"[\W_]+", "", q_norm)
         for phr in wake_phrases:
             if re.sub(r"[\W_]+", "", _norm(phr)) == cleaned:
-                ctx = _try_retrieve(
-                    question, settings, docstore_path, top_k, use_topic, client, emb_model or embed_model
+                ctx, _, _ = _retrieval_score(
+                    question, settings, docstore_path, top_k, use_topic, client, emb_model
                 )
                 return True, ctx, False, "wake", None
-
-    # Se il filtro non è abilitato → sempre OK
     if not enabled:
-        ctx = _try_retrieve(question, settings, docstore_path, top_k, use_topic, client, emb_model or embed_model)
+        ctx, _, _ = _retrieval_score(
+            question, settings, docstore_path, top_k, use_topic, client, emb_model
+        )
         return True, ctx, False, "disabled", None
-
-    # Se NON ci sono keywords → non filtriamo (sempre OK)
     if not keywords:
-        ctx = _try_retrieve(question, settings, docstore_path, top_k, use_topic, client, emb_model or embed_model)
+        ctx, _, _ = _retrieval_score(
+            question, settings, docstore_path, top_k, use_topic, client, emb_model
+        )
         return True, ctx, False, "no keywords", None
-
-    has_boost = False
-
-    # ---- Overlap parole chiave ----
     kw_score = _keyword_overlap_score(question, keywords)
-
-    # segnali dinamici (aumenta un po' il peso kw se la storia utente contiene keyword)
-    hist_tokens: set[str] = set()
-    if history:
-        for turn in history[-6:]:
-            if turn.get("role") == "user":
-                hist_tokens.update(_tokens(turn.get("content", "")))
-    if hist_tokens & set(_tokens(" ".join(keywords))):
-        weights["kw"] = min(1.0, weights.get("kw", 0.4) + 0.1)
-
-    # soglie adattive: alza o abbassa la soglia di accettazione in base alla coerenza recente
-    if history:
-        recent_msgs = [t.get("content", "") for t in history[-4:] if t.get("role") == "user"]
-        if recent_msgs:
-            overlaps = [_keyword_overlap_score(m, keywords) for m in recent_msgs]
-            div = sum(1 for s in overlaps if s < 0.2)
-            coh = sum(1 for s in overlaps if s > 0.6)
-            accept_threshold += 0.05 * div - 0.05 * coh
-            accept_threshold = min(max(accept_threshold, 0.1), 0.9)
-
-    # domande molto corte possono avere punteggi distorti: abbassa la soglia
-    # di accettazione proporzionalmente.
-    q_tok_count = len(_tokens(question))
-    if q_tok_count <= 4 and kw_score > 0:
-        accept_threshold -= 0.05 * (5 - q_tok_count)
-
-    # ---- Retrieval ----
-    ctx = _try_retrieve(question, settings, docstore_path, top_k, use_topic, client, emb_model or embed_model)
-    rag_hits = len(ctx)
-    rag_score = rag_hits / float(top_k or 1)
-
-    # ---- Embeddings (similitudine domanda vs keyword aggregate) ----
-    emb_model = emb_model or embed_model
-    emb_sim = 0.0
-    if client is not None and emb_model and keywords:
-        try:
-            vecs = _embed_texts(client, emb_model, [question, " ".join(keywords)])
-            if len(vecs) == 2:
-                emb_sim = _cosine(vecs[0], vecs[1])
-        except Exception:
-            emb_sim = 0.0
-
-    # se mancano embedding e documenti ma c'è una keyword, rilassa la soglia
-    if emb_sim == 0.0 and rag_hits == 0 and kw_score > 0:
-        accept_threshold = min(accept_threshold, fallback_accept_threshold)
-
-    # punteggio finale
+    ctx, rag_score, rag_hits = _retrieval_score(
+        question, settings, docstore_path, top_k, use_topic, client, emb_model
+    )
+    emb_sim = _embedding_score(question, keywords, client, emb_model)
+    accept_threshold, weights = _adapt_thresholds(
+        question,
+        history,
+        keywords,
+        kw_score,
+        rag_hits,
+        emb_sim,
+        accept_threshold,
+        fallback_accept_threshold,
+        weights,
+    )
     score = (
         weights.get("kw", 0.0) * kw_score
         + weights.get("emb", 0.0) * emb_sim
@@ -408,23 +329,16 @@ def validate_question(
     ok = score >= thr
     clarify = (not ok) and (score >= (thr - clarify_margin))
     reason = f"kw={kw_score:.2f} emb={emb_sim:.2f} rag={rag_score:.2f} score={score:.2f} thr={thr:.2f}"
-
     topic_suggestion = ""
-    # Se non c'è alcuna parola-chiave e non ci sono boost terms
-    # e il retrieval non ha restituito alcun risultato, la domanda
-    # è considerata fuori dominio anche se il punteggio totale supera la soglia.
-    if kw_score == 0 and rag_hits == 0 and not has_boost:
+    if kw_score == 0 and rag_hits == 0:
         ok = False
         clarify = score >= (thr - clarify_margin)
         ctx = []
         reason += f" kw0 rag_hits={rag_hits}"
     if clarify and docstore_path:
-        try:
-            alt_ctx = _try_retrieve(
-                question, settings, docstore_path, top_k, None, client, emb_model
-            )
-        except Exception:
-            alt_ctx = []
+        alt_ctx = _try_retrieve(
+            question, settings, docstore_path, top_k, None, client, emb_model
+        )
         for it in alt_ctx:
             t = str(it.get("topic") or "")
             if t and t != use_topic:
@@ -432,8 +346,6 @@ def validate_question(
                 break
         if topic_suggestion:
             reason += f" suggest={topic_suggestion}"
-
-    # logging decisione
     if log_path:
         try:
             Path(log_path).parent.mkdir(parents=True, exist_ok=True)
@@ -441,7 +353,6 @@ def validate_question(
                 f.write(f"{int(time.time())}\t{int(ok)}\t{int(clarify)}\t{reason}\t{question}\n")
         except Exception:
             pass
-
     return ok, ctx, clarify, reason, topic_suggestion
 
 
@@ -456,18 +367,12 @@ def _try_retrieve(
     emb_model: str | None,
 ) -> list[dict]:
     if docstore_path is None and settings is not None:
-        try:
-            docstore_path = getattr(settings, "docstore_path", None)
-        except Exception:
-            try:
-                docstore_path = settings.get("docstore_path")  # type: ignore[attr-defined]
-            except Exception:
-                pass
+        docstore_path = _get_field(settings, "docstore_path")
     if not docstore_path:
         return []
+    rewrite_model = _get_field(settings, "retrieval_rewrite_model")
+    rerank_model = _get_field(settings, "retrieval_rerank_model")
     try:
-        rewrite_model = getattr(settings, "retrieval_rewrite_model", None)
-        rerank_model = getattr(settings, "retrieval_rerank_model", None)
         raw_ctx = retrieve(
             question,
             docstore_path,
