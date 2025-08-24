@@ -8,6 +8,7 @@ import difflib
 import unicodedata
 import argparse
 import threading
+import uuid
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -154,7 +155,8 @@ def oracle_greeting(lang: str) -> str:
 def main() -> None:
     _ensure_utf8_stdout()
 
-    listener = setup_logging(Path("data/logs/oracolo.log"))
+    session_id = uuid.uuid4().hex
+    listener = setup_logging(Path("data/logs/oracolo.log"), session_id=session_id)
 
     parser = argparse.ArgumentParser(description="Occhio Onniveggente · Oracolo")
     parser.add_argument("--autostart", action="store_true", help="Avvia direttamente senza prompt input()")
