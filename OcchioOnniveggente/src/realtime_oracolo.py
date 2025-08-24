@@ -25,6 +25,11 @@ from src.dialogue import DialogueManager, DialogState
 
 
 SR = 24_000
+FRAME_MS = 20
+BLOCKSIZE = SR * FRAME_MS // 1000  # 480 campioni per 20ms @24k
+BYTES_PER_SAMPLE = 2  # int16
+CHANNELS = 1
+NEED_BYTES = BLOCKSIZE * BYTES_PER_SAMPLE * CHANNELS
 WS_URL = os.getenv("ORACOLO_WS_URL", "ws://localhost:8765")
 
 
@@ -54,7 +59,11 @@ async def _mic_worker(
                 )
 
     with sd.RawInputStream(
-        samplerate=sr, channels=1, dtype="int16", callback=callback
+        samplerate=sr,
+        channels=CHANNELS,
+        dtype="int16",
+        callback=callback,
+        blocksize=BLOCKSIZE,
     ):
         while True:
             await asyncio.sleep(0.1)
@@ -79,7 +88,7 @@ async def _player(
 
     def callback(outdata, frames, time_info, status) -> None:  # type: ignore[override]
         nonlocal buf
-        n = len(outdata)
+        n = NEED_BYTES
 
         while len(buf) < n:
             try:
@@ -100,9 +109,12 @@ async def _player(
             state["barge_sent"] = False
             dlg.transition(DialogState.LISTENING)
 
-    blocksize = int(sr * 0.02)  # ~20ms di audio
     with sd.RawOutputStream(
-        samplerate=sr, channels=1, dtype="int16", callback=callback, blocksize=blocksize
+        samplerate=sr,
+        channels=CHANNELS,
+        dtype="int16",
+        callback=callback,
+        blocksize=BLOCKSIZE,
     ):
         while True:
             await asyncio.sleep(0.1)
@@ -143,7 +155,12 @@ async def _run(url: str, sr: int) -> None:
     async with websockets.connect(url, ping_interval=20, ping_timeout=20) as ws:
         await ws.send(
             json.dumps(
-                {"type": "hello", "sr": sr, "format": "pcm_s16le", "channels": 1}
+                {
+                    "type": "hello",
+                    "sr": sr,
+                    "format": "pcm_s16le",
+                    "channels": CHANNELS,
+                }
             )
         )
         try:
