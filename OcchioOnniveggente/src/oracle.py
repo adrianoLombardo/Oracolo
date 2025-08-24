@@ -4,6 +4,7 @@ from datetime import datetime
 import io
 import json
 import re
+import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
@@ -256,6 +257,13 @@ def append_log(
     lang: str = "",
     topic: str | None = None,
     sources: list[dict[str, str]] | None = None,
+    session_id: str | None = None,
+) -> str:
+    """Append a structured CSV line with optional metadata.
+
+    If ``session_id`` is not provided, a new one is generated and returned.
+    """
+
 ) -> None:
 
     """Append a JSON line with optional metadata.
@@ -264,8 +272,11 @@ def append_log(
     ``a`` using :func:`extract_summary`.
     """
 
+
     log_path.parent.mkdir(parents=True, exist_ok=True)
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    if session_id is None:
+        session_id = uuid.uuid4().hex
 
     entry = {
         "timestamp": ts,
@@ -286,9 +297,26 @@ def append_log(
         "sources": sources or [],
     }
 
+
+    src_str = ";".join(
+        f"{s.get('id','')}:{s.get('score',0):.2f}" for s in (sources or [])
+    )
+    line = (
+        f'"{ts}","{session_id}","{lang}","{clean(topic or "")}",'
+        f'"{clean(q)}","{clean(a)}","{src_str}"\n'
+    )
+    if not log_path.exists():
+        log_path.write_text(
+            '"timestamp","session_id","lang","topic","question","answer","sources"\n',
+            encoding="utf-8",
+        )
+    with log_path.open("a", encoding="utf-8") as f:
+        f.write(line)
+    return session_id
     with log_path.open("a", encoding="utf-8") as f:
         f.write(json.dumps(entry, ensure_ascii=False) + "\n")
         f.write(json.dumps(record, ensure_ascii=False) + "\n")
+
 
 
 def extract_summary(answer: str) -> str:
