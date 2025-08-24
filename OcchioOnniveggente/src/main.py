@@ -109,64 +109,54 @@ def oracle_greeting(lang: str) -> str:
 
 
 def get_active_profile(SETTINGS, forced_name: str | None = None):
+    """Return the active profile name and configuration."""
     if isinstance(SETTINGS, dict):
-
         dom = SETTINGS.get("domain", {}) or {}
-        prof_name = dom.get("profile", "museo")
-        dom = SETTINGS.get("domain") or {}
         prof_name = forced_name or dom.get("profile", "museo")
         profiles = dom.get("profiles", {}) or {}
-        prof = profiles.get(prof_name, {})
     else:
         dom = getattr(SETTINGS, "domain", None)
-        prof_name = getattr(dom, "profile", "museo") if dom else "museo"
+        prof_name = forced_name or (
+            getattr(dom, "profile", "museo") if dom else "museo"
+        )
         profiles = getattr(dom, "profiles", {}) if dom else {}
-        prof_name = forced_name or getattr(dom, "profile", "museo")
-        profiles = getattr(dom, "profiles", {}) or {}
-        prof = profiles.get(prof_name, {})
+    prof = profiles.get(prof_name, {})
     return prof_name, prof
 
 
-
-def make_domain_settings(base_settings, prof_name):
-    if isinstance(base_settings, dict):
-        new_s = dict(base_settings)
-        dom = dict(new_s.get("domain") or {})
-        dom["enabled"] = True
-        dom["profile"] = prof_name
-
 def make_domain_settings(base_settings, prof_name: str, prof):
+    """Return ``base_settings`` with domain info replaced by ``prof``."""
     if isinstance(base_settings, dict):
         new_s = dict(base_settings)
         dom = dict(new_s.get("domain", {}))
-        dom.update({
-            "enabled": True,
-            "profile": prof.get("topic", ""),
-            "profile": prof_name,
-            "keywords": prof.get("keywords", []),
-        })
+        dom.update(
+            {
+                "enabled": True,
+                "profile": prof_name,
+                "topic": prof.get("topic", ""),
+                "keywords": prof.get("keywords", []),
+            }
+        )
         if prof.get("weights"):
-            dom["weights"] = prof.get("weights")
+            dom["weights"] = prof["weights"]
         if prof.get("accept_threshold") is not None:
-            dom["accept_threshold"] = prof.get("accept_threshold")
+            dom["accept_threshold"] = prof["accept_threshold"]
         if prof.get("clarify_margin") is not None:
-            dom["clarify_margin"] = prof.get("clarify_margin")
-
+            dom["clarify_margin"] = prof["clarify_margin"]
         new_s["domain"] = dom
         return new_s
     else:
         try:
             base_settings.domain.enabled = True
-            base_settings.domain.profile = prof.get("topic", "")
             base_settings.domain.profile = prof_name
+            base_settings.domain.topic = prof.get("topic", "")
             base_settings.domain.keywords = prof.get("keywords", [])
             if prof.get("weights"):
-                base_settings.domain.weights = prof.get("weights")
+                base_settings.domain.weights = prof["weights"]
             if prof.get("accept_threshold") is not None:
-                base_settings.domain.accept_threshold = prof.get("accept_threshold")
+                base_settings.domain.accept_threshold = prof["accept_threshold"]
             if prof.get("clarify_margin") is not None:
-                base_settings.domain.clarify_margin = prof.get("clarify_margin")
-
+                base_settings.domain.clarify_margin = prof["clarify_margin"]
         except Exception:
             pass
         return base_settings
