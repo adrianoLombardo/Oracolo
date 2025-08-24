@@ -831,21 +831,26 @@ class OracoloUI(tk.Tk):
             openai_conf = self.settings.get("openai", {})
             api_key = openai_conf.get("api_key") or os.environ.get("OPENAI_API_KEY")
             client = OpenAI(api_key=api_key) if api_key else OpenAI()
-            if not self.chat_state.topic_locked:
-                self.chat_state.update_topic(
-                    text,
-                    client,
-                    openai_conf.get("embed_model", "text-embedding-3-small"),
-                    threshold=float(self.topic_threshold.get()),
-                )
             style_prompt = self.settings.get("style_prompt", "") if self.style_var.get() else ""
             lang = self.lang_map.get(self.lang_choice.get(), "auto")
             mode = self.mode_map.get(self.mode_choice.get(), "detailed")
+            docstore_path = self.settings.get("docstore_path")
+            top_k = int(self.settings.get("retrieval_top_k", 3))
             ok, ctx, needs_clar, reason, _ = validate_question(
                 text,
                 settings=self.settings,
                 client=client,
+                docstore_path=docstore_path,
+                top_k=top_k,
+                embed_model=openai_conf.get("embed_model", "text-embedding-3-small"),
                 topic=self.chat_state.topic_text,
+
+                embed_model=openai_conf.get("embed_model", "text-embedding-3-small"),
+                topic=(self.settings.get("domain", {}) or {}).get("profile"),
+                topic=(self.settings.get("domain", {}).get("profile")),
+                embed_model=openai_conf.get("embed_model", "text-embedding-3-small"),
+                history=self.chat_state.history,
+main
             )
             if not ok:
                 if needs_clar:
@@ -871,7 +876,7 @@ class OracoloUI(tk.Tk):
                     text,
                     self.settings.get("docstore_path", ""),
                     top_k=int(self.settings.get("retrieval_top_k", 3)),
-                    topic=self.chat_state.topic_text,
+                    topic=(self.settings.get("domain", {}) or {}).get("profile"),
                 )
             pin_ctx = [{"id": f"pin{i}", "text": t} for i, t in enumerate(self.chat_state.pinned)]
             ctx = pin_ctx + ctx
@@ -1069,6 +1074,19 @@ class OracoloUI(tk.Tk):
                 client=client,
                 docstore_path=self.settings.get("docstore_path"),
                 top_k=k,
+
+                embed_model=openai_conf.get("embed_model", "text-embedding-3-small"),
+
+
+                embed_model=openai_conf.get("embed_model", "text-embedding-3-small")
+                if openai_conf
+                else None,
+                topic=(self.settings.get("domain", {}) or {}).get("profile"),
+
+                topic=(self.settings.get("domain", {}).get("profile")),
+                embed_model=openai_conf.get("embed_model", "text-embedding-3-small"),
+
+ main
             )
             end = time.time()
             m = _REASON_RE.search(reason)

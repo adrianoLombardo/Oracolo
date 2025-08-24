@@ -106,40 +106,65 @@ def oracle_greeting(lang: str) -> str:
     return "Ciao, sono l'Oracolo. Fai pure la tua domanda?"
 
 
-def get_active_profile(SETTINGS):
+def get_active_profile(SETTINGS, forced_name: str | None = None):
     if isinstance(SETTINGS, dict):
-        prof_name = (SETTINGS.get("profile") or {}).get("current", "museo")
-        profiles = SETTINGS.get("profiles") or {}
+
+        dom = SETTINGS.get("domain", {}) or {}
+        prof_name = dom.get("profile", "museo")
+        dom = SETTINGS.get("domain") or {}
+        prof_name = forced_name or dom.get("profile", "museo")
+        profiles = dom.get("profiles", {}) or {}
         prof = profiles.get(prof_name, {})
     else:
-        prof_name = getattr(getattr(SETTINGS, "profile", {}), "current", "museo")
-        profiles = getattr(SETTINGS, "profiles", {}) or {}
+        dom = getattr(SETTINGS, "domain", None)
+        prof_name = getattr(dom, "profile", "museo") if dom else "museo"
+        profiles = getattr(dom, "profiles", {}) if dom else {}
+        prof_name = forced_name or getattr(dom, "profile", "museo")
+        profiles = getattr(dom, "profiles", {}) or {}
         prof = profiles.get(prof_name, {})
     return prof_name, prof
 
 
-def make_domain_settings(base_settings, prof):
+
+def make_domain_settings(base_settings, prof_name):
     if isinstance(base_settings, dict):
         new_s = dict(base_settings)
-        new_s["domain"] = {
+        dom = dict(new_s.get("domain") or {})
+        dom["enabled"] = True
+        dom["profile"] = prof_name
+
+def make_domain_settings(base_settings, prof_name: str, prof):
+    if isinstance(base_settings, dict):
+        new_s = dict(base_settings)
+        dom = dict(new_s.get("domain", {}))
+        dom.update({
             "enabled": True,
             "profile": prof.get("topic", ""),
+            "profile": prof_name,
             "keywords": prof.get("keywords", []),
-            "weights": prof.get("weights", {}),
-            "accept_threshold": prof.get("accept_threshold"),
-            "clarify_margin": prof.get("clarify_margin"),
-        }
+        })
+        if prof.get("weights"):
+            dom["weights"] = prof.get("weights")
+        if prof.get("accept_threshold") is not None:
+            dom["accept_threshold"] = prof.get("accept_threshold")
+        if prof.get("clarify_margin") is not None:
+            dom["clarify_margin"] = prof.get("clarify_margin")
+
+        new_s["domain"] = dom
         return new_s
     else:
         try:
             base_settings.domain.enabled = True
             base_settings.domain.profile = prof.get("topic", "")
+            base_settings.domain.profile = prof_name
             base_settings.domain.keywords = prof.get("keywords", [])
-            base_settings.domain.weights = prof.get("weights", {})
+            if prof.get("weights"):
+                base_settings.domain.weights = prof.get("weights")
             if prof.get("accept_threshold") is not None:
                 base_settings.domain.accept_threshold = prof.get("accept_threshold")
             if prof.get("clarify_margin") is not None:
                 base_settings.domain.clarify_margin = prof.get("clarify_margin")
+
         except Exception:
             pass
         return base_settings
@@ -186,6 +211,8 @@ def main() -> None:
 
     api_key = os.environ.get("OPENAI_API_KEY") or getattr(SET.openai, "api_key", "")
     client = OpenAI(api_key=api_key) if api_key else OpenAI()
+
+    session_profile_name, _ = get_active_profile(raw_settings)
 
     DEBUG = bool(SET.debug) and (not args.quiet)
 
@@ -346,14 +373,14 @@ def main() -> None:
     try:
         while True:
             try:
-                CURRENT_CFG = yaml.safe_load(cfg_path.read_text(encoding="utf-8")) or {}
-            except Exception:
-                CURRENT_CFG = {}
-            prof_name, prof = get_active_profile(CURRENT_CFG)
-            if CHAT_ENABLED:
-                chat = chat_histories[prof_name]
-            else:
-                chat = None
+            CURRENT_CFG = yaml.safe_load(cfg_path.read_text(encoding="utf-8")) or {}
+        except Exception:
+            CURRENT_CFG = {}
+        prof_name, prof = get_active_profile(CURRENT_CFG, session_profile_name)
+        if CHAT_ENABLED:
+            chat = chat_histories[session_profile_name]
+        else:
+            chat = None
             if not args.autostart:
                 try:
                     cmd = input("\nPremi INVIO per ascoltare (q per uscire)… ")
@@ -396,6 +423,7 @@ def main() -> None:
                 )
                 if not ok:
                     continue
+
                 text = fast_transcribe(INPUT_WAV, client, STT_MODEL)
                 wake, lang = is_wake(text, WAKE_IT, WAKE_EN)
                 if not wake:
@@ -420,6 +448,35 @@ def main() -> None:
                 if lang in ("it", "en"):
                     session_lang = lang
                 wake_lang = session_lang or lang or "it"
+
+                # prova trascrizione forzando IT/EN per maggiore robustezza
+                text_it = fast_transcribe(INPUT_WAV, client, STT_MODEL, lang_hint="it")
+                text_en = fast_transcribe(INPUT_WAV, client, STT_MODEL, lang_hint="en")
+                is_en = _match_hotword(text_en, WAKE_EN)
+                is_it = _match_hotword(text_it, WAKE_IT)
+                if is_en:
+                    text = text_en
+                    session_lang = "en"
+                elif is_it:
+                    text = text_it
+                    session_lang = "it"
+                else:
+                    text = text_en or text_it
+                    if text_en:
+                        session_lang = "en"
+                    elif text_it:
+                        session_lang = "it"
+                say(f"📝 Riconosciuto: {text}")
+                if not (is_it or is_en):
+                    if DEBUG:
+                        say("…hotword non riconosciuta, continuo l'attesa.")
+                    continue
+                wake_lang = (
+                    "en"
+                    if is_en and not is_it
+                    else "it" if is_it and not is_en else (session_lang or "it")
+                )
+
                 dlg.transition(DialogState.AWAKE)
                 continue
 
@@ -556,11 +613,19 @@ def main() -> None:
                 effective_top_k = int(
                     prof.get("retrieval_top_k") or getattr(SET, "retrieval_top_k", 3)
                 )
+
                 settings_for_domain = make_domain_settings(SET, prof)
                 topic = (
                     getattr(getattr(settings_for_domain, "domain", {}), "profile", None)
                 )
                 pending_topic = topic
+
+
+                settings_for_domain = make_domain_settings(SET, prof_name)
+
+                settings_for_domain = make_domain_settings(SET, session_profile_name, prof)
+
+
                 ok, context, clarify, reason, suggestion = validate_question(
                     pending_q,
                     pending_lang,
@@ -570,6 +635,9 @@ def main() -> None:
                     top_k=effective_top_k,
                     embed_model=embed_model,
                     topic=topic,
+                    topic=prof_name,
+                    topic=session_profile_name,
+
                     history=pending_history,
                 )
                 if DEBUG:
@@ -580,9 +648,21 @@ def main() -> None:
                             "Domanda un po’ fuori ambito per questo profilo. Puoi riformularla in tema, oppure dire “cambia profilo”?"
                         )
                     else:
+
                         pending_answer = (
                             "Questa domanda è fuori dall’ambito selezionato. Per proseguire, resta sul tema o dì “cambia profilo”."
                         )
+
+                        if suggestion:
+                            pending_answer = (
+                                f"Questa domanda è fuori dall'ambito {session_profile_name}. "
+                                f"Vuoi passare a {suggestion}? (di' \"cambia profilo\" per confermare)"
+                            )
+                        else:
+                            pending_answer = (
+                                f"Questa domanda è fuori dall'ambito {session_profile_name}."
+                            )
+
                     pending_full_answer = pending_answer
                     if CHAT_ENABLED and chat is not None:
                         chat.push_assistant(pending_full_answer)
@@ -609,6 +689,8 @@ def main() -> None:
                     context=context_texts,
                     history=pending_history,
                     topic=topic,
+                    topic=prof_name,
+
                     policy_prompt=ORACLE_POLICY,
                     mode=ANSWER_MODE,
                 )

@@ -80,8 +80,16 @@ class PaletteItem(BaseModel):
     style: str
 
 
+class DomainProfileConfig(BaseModel):
+    keywords: List[str] = Field(default_factory=list)
+    weights: Dict[str, float] | None = None
+    accept_threshold: float | None = None
+    clarify_margin: float | None = None
+
+
 class DomainConfig(BaseModel):
     enabled: bool = True
+    profile: str = "museo"
     topic: str = ""
     profile: str = ""
     keywords: List[str] = Field(default_factory=list)
@@ -89,10 +97,11 @@ class DomainConfig(BaseModel):
     emb_min_sim: float = 0.22
     rag_min_hits: int = 1
     weights: Dict[str, float] = Field(
-        default_factory=lambda: {"kw": 0.45, "emb": 0.25, "rag": 0.30}
+        default_factory=lambda: {"kw": 0.6, "emb": 0.2, "rag": 0.2}
     )
-    accept_threshold: float = 0.5
-    clarify_margin: float = 0.15
+    accept_threshold: float = 0.65
+    clarify_margin: float = 0.10
+    profiles: Dict[str, DomainProfileConfig] = Field(default_factory=dict)
 
 
 class RetrievalConfig(BaseModel):
