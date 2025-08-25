@@ -5,7 +5,7 @@ import json
 import sys
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, AsyncIterable, Callable
 
 import numpy as np
 import websockets
@@ -63,52 +63,76 @@ def off_topic_message(profile: str, keywords: list[str]) -> str:
 async def stream_tts_pcm(
     ws,
     client,
-    text: str,
+    text_stream: AsyncIterable[str] | str,
     tts_model: str,
     tts_voice: str,
     sr: int = 24000,
     chunk_ms: int = 20,
+    *,
+    stop: Callable[[], bool] | None = None,
 ) -> None:
-    """Streamma TTS in PCM nativo se supportato, altrimenti decapsula WAV."""
+    """Streamma TTS per testo incrementale, interrompendo in caso di barge-in."""
+
+    def _wrap_stream(obj: AsyncIterable[str] | str) -> AsyncIterable[str]:
+        if isinstance(obj, str):
+            async def gen():
+                yield obj
+            return gen()
+        return obj
+
+    text_iter = _wrap_stream(text_stream)
+
     chunk_bytes = int(sr * 2 * chunk_ms / 1000)
     block_frames = int(sr * chunk_ms / 1000)
     try:
-        with client.audio.speech.with_streaming_response.create(
-            model=tts_model,
-            voice=tts_voice,
-            input=text,
-            response_format="pcm",
-            sample_rate=sr,
-        ) as resp:
-            for chunk in resp.iter_bytes(chunk_size=chunk_bytes):
-                await ws.send(chunk)
-                await asyncio.sleep(0)
-        return
-    except TypeError:
+        async for piece in text_iter:
+            if stop and stop():
+                break
+            try:
+                with client.audio.speech.with_streaming_response.create(
+                    model=tts_model,
+                    voice=tts_voice,
+                    input=piece,
+                    response_format="pcm",
+                    sample_rate=sr,
+                ) as resp:
+                    for chunk in resp.iter_bytes(chunk_size=chunk_bytes):
+                        await ws.send(chunk)
+                        await asyncio.sleep(0)
+                        if stop and stop():
+                            break
+                if stop and stop():
+                    break
+                continue
+            except TypeError:
+                pass
+
+            import io, wave as _wave
+
+            with client.audio.speech.with_streaming_response.create(
+                model=tts_model, voice=tts_voice, input=piece, response_format="wav"
+            ) as resp:
+                buf = io.BytesIO()
+                for chunk in resp.iter_bytes(chunk_size=4096):
+                    buf.write(chunk)
+                    if buf.tell() > 48:
+                        break
+                for chunk in resp.iter_bytes(chunk_size=8192):
+                    buf.write(chunk)
+
+            buf.seek(0)
+            with _wave.open(buf, "rb") as wf:
+                assert wf.getsampwidth() == 2 and wf.getnchannels() == 1
+                while True:
+                    frames = wf.readframes(block_frames)
+                    if not frames or (stop and stop()):
+                        break
+                    await ws.send(frames)
+                    await asyncio.sleep(0)
+            if stop and stop():
+                break
+    except Exception:
         pass
-
-    import io, wave as _wave
-
-    with client.audio.speech.with_streaming_response.create(
-        model=tts_model, voice=tts_voice, input=text, response_format="wav"
-    ) as resp:
-        buf = io.BytesIO()
-        for chunk in resp.iter_bytes(chunk_size=4096):
-            buf.write(chunk)
-            if buf.tell() > 48:
-                break
-        for chunk in resp.iter_bytes(chunk_size=8192):
-            buf.write(chunk)
-
-    buf.seek(0)
-    with _wave.open(buf, "rb") as wf:
-        assert wf.getsampwidth() == 2 and wf.getnchannels() == 1
-        while True:
-            frames = wf.readframes(block_frames)
-            if not frames:
-                break
-            await ws.send(frames)
-            await asyncio.sleep(0)
 
 
 class RTSession:
@@ -191,34 +215,6 @@ class RTSession:
         except Exception:
             pass
 
-    async def stream_tts_pcm(self, text: str, client: Any) -> None:
-        """Sintetizza e invia ``text`` in formato PCM con latenza ridotta."""
-        self.state = "tts"
-        self.barge = False
-        try:
-            chunk_bytes = int(
-                self.client_sr
-                * 2
-                * self.SET.realtime_audio.chunk_ms
-                / 1000
-            )
-            with client.audio.speech.with_streaming_response.create(
-                model=self.SET.openai.tts_model,
-                voice=self.SET.openai.tts_voice,
-                input=text,
-                response_format="pcm",
-                sample_rate=self.client_sr,
-            ) as resp:
-                for chunk in resp.iter_bytes(chunk_size=chunk_bytes):
-                    await self.ws.send(chunk)
-                    await asyncio.sleep(0)
-                    if self.barge:
-                        break
-        except Exception:
-            pass
-        self.state = "idle"
-        self.barge = False
-
     async def stream_sentences(self, text: str, client: Any) -> None:
         """Sintetizza ``text`` frase per frase, consentendo il barge-in."""
         import re
@@ -239,6 +235,7 @@ class RTSession:
                     self.SET.openai.tts_voice,
                     sr=self.client_sr,
                     chunk_ms=self.SET.realtime_audio.chunk_ms,
+                    stop=lambda: self.barge,
                 )
             except Exception:
                 break
