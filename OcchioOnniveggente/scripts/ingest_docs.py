@@ -243,7 +243,13 @@ def _detect_language(text: str) -> str:
 
 # ----------------------------- DB loader ------------------------------------- #
 def _load_db(path: str) -> object:
-    # prova a caricare un DocumentDB custom
+    if path.endswith(".db") or "://" in path:
+        try:
+            from src.metadata_store import MetadataStore
+            logging.info("Uso MetadataStore (%s)", path)
+            return MetadataStore(path)
+        except Exception as e:
+            logging.warning("MetadataStore non disponibile: %s", e)
     try:
         module = importlib.import_module("documentdb")
         DocumentDB = getattr(module, "DocumentDB")
@@ -252,6 +258,7 @@ def _load_db(path: str) -> object:
     except Exception:
         logging.info("Uso SimpleDocumentDB (fallback) → %s", path)
         return SimpleDocumentDB(path)
+
 
 
 def _backup_index(index_path: str) -> None:

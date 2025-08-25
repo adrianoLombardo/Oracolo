@@ -10,6 +10,12 @@ OcchioOnniveggente/
 ├── DataBase/         # archivio documenti indicizzati
 └── tests/            # test automatici (pytest)
 ```
+## Aggiornamenti backend
+
+- **MetadataStore**: nuovo archivio dei metadati basato su SQLite FTS o PostgreSQL, con supporto opzionale al vector store FAISS.
+- Le chiamate OpenAI pesanti possono ora essere eseguite in un thread pool tramite `openai_async.run_async`, evitando blocchi dell'applicazione.
+- Funzioni TTS/STT locali con utilità di streaming a chunk in `local_audio.py`.
+
 
 ---
 
@@ -185,6 +191,7 @@ python scripts/ingest_docs.py --reindex
 python scripts/ingest_docs.py --clear
 ```
 
+Lo script `scripts/ingest_docs.py` ora rileva automaticamente un percorso con estensione `.db` o un DSN (`sqlite:///` o `postgresql://`) e utilizza il nuovo `MetadataStore` con indice FTS.
 Il percorso dell'indice è configurabile con `docstore_path` in `settings.yaml`.
 Prima di `--remove`, `--clear` o `--reindex` lo script crea un backup
 `index.json.bak`. Per ripristinare l'indice basta copiare il file di backup
