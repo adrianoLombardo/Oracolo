@@ -5,7 +5,7 @@ import json
 import sys
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, AsyncIterable, Callable
 
 import numpy as np
 import websockets
@@ -21,6 +21,10 @@ from src.config import Settings, get_openai_api_key
 from src.domain import validate_question
 from src.hotword import strip_hotword_prefix
 from src.oracle import oracle_answer, transcribe
+from src.audio import AudioPreprocessor
+from src.oracle import oracle_answer_stream, transcribe_stream
+from src.oracle import oracle_answer_async, transcribe_async
+from src.oracle import oracle_answer_stream, transcribe
 from src.profile_utils import get_active_profile, make_domain_settings
 
 import wave
@@ -63,41 +67,100 @@ def off_topic_message(profile: str, keywords: list[str]) -> str:
 async def stream_tts_pcm(
     ws,
     client,
-    text: str,
+    text_stream: AsyncIterable[str] | str,
     tts_model: str,
     tts_voice: str,
     sr: int = 24000,
     chunk_ms: int = 20,
+    *,
+    stop: Callable[[], bool] | None = None,
 ) -> None:
-    """Streamma TTS in PCM nativo se supportato, altrimenti decapsula WAV."""
+    """Streamma TTS per testo incrementale, interrompendo in caso di barge-in."""
+
+    def _wrap_stream(obj: AsyncIterable[str] | str) -> AsyncIterable[str]:
+        if isinstance(obj, str):
+            async def gen():
+                yield obj
+            return gen()
+        return obj
+
+    text_iter = _wrap_stream(text_stream)
+
     chunk_bytes = int(sr * 2 * chunk_ms / 1000)
     block_frames = int(sr * chunk_ms / 1000)
     try:
-        with client.audio.speech.with_streaming_response.create(
+
+        async for piece in text_iter:
+            if stop and stop():
+                break
+            try:
+                with client.audio.speech.with_streaming_response.create(
+                    model=tts_model,
+                    voice=tts_voice,
+                    input=piece,
+                    response_format="pcm",
+                    sample_rate=sr,
+                ) as resp:
+                    for chunk in resp.iter_bytes(chunk_size=chunk_bytes):
+                        await ws.send(chunk)
+                        await asyncio.sleep(0)
+                        if stop and stop():
+                            break
+                if stop and stop():
+                    break
+                continue
+            except TypeError:
+                pass
+
+            import io, wave as _wave
+
+        async with client.audio.speech.with_streaming_response.create(
             model=tts_model,
             voice=tts_voice,
             input=text,
             response_format="pcm",
             sample_rate=sr,
         ) as resp:
-            for chunk in resp.iter_bytes(chunk_size=chunk_bytes):
+            async for chunk in resp.aiter_bytes(chunk_size=chunk_bytes):
                 await ws.send(chunk)
                 await asyncio.sleep(0)
         return
     except TypeError:
         pass
 
-    import io, wave as _wave
 
-    with client.audio.speech.with_streaming_response.create(
+            with client.audio.speech.with_streaming_response.create(
+                model=tts_model, voice=tts_voice, input=piece, response_format="wav"
+            ) as resp:
+                buf = io.BytesIO()
+                for chunk in resp.iter_bytes(chunk_size=4096):
+                    buf.write(chunk)
+                    if buf.tell() > 48:
+                        break
+                for chunk in resp.iter_bytes(chunk_size=8192):
+                    buf.write(chunk)
+
+
+            buf.seek(0)
+            with _wave.open(buf, "rb") as wf:
+                assert wf.getsampwidth() == 2 and wf.getnchannels() == 1
+                while True:
+                    frames = wf.readframes(block_frames)
+                    if not frames or (stop and stop()):
+                        break
+                    await ws.send(frames)
+                    await asyncio.sleep(0)
+            if stop and stop():
+
+    async with client.audio.speech.with_streaming_response.create(
         model=tts_model, voice=tts_voice, input=text, response_format="wav"
     ) as resp:
         buf = io.BytesIO()
-        for chunk in resp.iter_bytes(chunk_size=4096):
+        async for chunk in resp.aiter_bytes(chunk_size=4096):
             buf.write(chunk)
             if buf.tell() > 48:
                 break
-        for chunk in resp.iter_bytes(chunk_size=8192):
+        async for chunk in resp.aiter_bytes(chunk_size=8192):
             buf.write(chunk)
 
     buf.seek(0)
@@ -106,9 +169,10 @@ async def stream_tts_pcm(
         while True:
             frames = wf.readframes(block_frames)
             if not frames:
+
                 break
-            await ws.send(frames)
-            await asyncio.sleep(0)
+    except Exception:
+        pass
 
 
 class RTSession:
@@ -117,6 +181,11 @@ class RTSession:
         self.SET = setts
         self.raw = raw
         self.client_sr = setts.audio.sample_rate
+        self.preproc = AudioPreprocessor(
+            self.client_sr,
+            denoise=getattr(setts.audio, "denoise", False),
+            echo_cancel=getattr(setts.audio, "echo_cancel", False),
+        )
         self.buf = bytearray()
         self.state = "idle"
         self.ms_in_state = 0
@@ -191,6 +260,8 @@ class RTSession:
         except Exception:
             pass
 
+
+
     async def stream_tts_pcm(self, text: str, client: Any) -> None:
         """Sintetizza e invia ``text`` in formato PCM con latenza ridotta."""
         self.state = "tts"
@@ -202,14 +273,14 @@ class RTSession:
                 * self.SET.realtime_audio.chunk_ms
                 / 1000
             )
-            with client.audio.speech.with_streaming_response.create(
+            async with client.audio.speech.with_streaming_response.create(
                 model=self.SET.openai.tts_model,
                 voice=self.SET.openai.tts_voice,
                 input=text,
                 response_format="pcm",
                 sample_rate=self.client_sr,
             ) as resp:
-                for chunk in resp.iter_bytes(chunk_size=chunk_bytes):
+                async for chunk in resp.aiter_bytes(chunk_size=chunk_bytes):
                     await self.ws.send(chunk)
                     await asyncio.sleep(0)
                     if self.barge:
@@ -218,6 +289,7 @@ class RTSession:
             pass
         self.state = "idle"
         self.barge = False
+
 
     async def stream_sentences(self, text: str, client: Any) -> None:
         """Sintetizza ``text`` frase per frase, consentendo il barge-in."""
@@ -239,6 +311,7 @@ class RTSession:
                     self.SET.openai.tts_voice,
                     sr=self.client_sr,
                     chunk_ms=self.SET.realtime_audio.chunk_ms,
+                    stop=lambda: self.barge,
                 )
             except Exception:
                 break
@@ -278,19 +351,35 @@ class RTSession:
         if not self.buf:
             return
         audio_bytes = bytes(self.buf)
+        if self.preproc is not None:
+            arr = np.frombuffer(audio_bytes, dtype=np.int16).astype(np.float32) / 32768.0
+            arr = self.preproc.process(arr)
+            audio_bytes = (np.clip(arr, -1, 1) * 32767).astype(np.int16).tobytes()
         # Convert the raw PCM buffer to a temporary WAV file so that
         # OpenAI's transcription API receives a supported format.
         write_wav(self.in_wav, self.client_sr, audio_bytes)
+        self.barge = False
 
-        from openai import OpenAI
+        from openai import AsyncOpenAI
 
         load_dotenv()
         api_key = get_openai_api_key(self.SET)
-        client = OpenAI(api_key=api_key) if api_key else OpenAI()
+        client = AsyncOpenAI(api_key=api_key) if api_key else AsyncOpenAI()
 
-        text, lang = transcribe(
+
+        text = ""
+        async for chunk, done in transcribe_stream(
+            self.in_wav, client, self.SET.openai.stt_model
+        ):
+            if self.barge:
+                return
+            text = chunk
+        lang = "it"
+
+        text, lang = await transcribe_async(
             self.in_wav, client, self.SET.openai.stt_model, debug=self.SET.debug
         )
+
         if not text.strip():
             await self.send_partial("…silenzio…")
             return
@@ -351,7 +440,12 @@ class RTSession:
             effective_system = f"{base_system}\n\n[Profilo: {self.profile}]\n{profile_hint}"
         else:
             effective_system = base_system
-        ans, _ = oracle_answer(
+
+        ans, _ = await oracle_answer_async(
+
+        final = ""
+        async for chunk, done in oracle_answer_stream(
+
             text,
             lang,
             client,
@@ -360,12 +454,18 @@ class RTSession:
             context=context_texts,
             history=(self.chat.history if self.chat_enabled else None),
             topic=self.profile,
-        )
-        if self.chat_enabled:
+        ):
+            if self.barge:
+                return
+            if done:
+                final = chunk
+            else:
+                await self.send_partial(chunk)
+        if self.chat_enabled and final:
             self.chat.push_user(text)
-            self.chat.push_assistant(ans)
-        await self.send_answer(ans)
-        await self.stream_sentences(ans, client)
+            self.chat.push_assistant(final)
+        await self.send_answer(final)
+        await self.stream_sentences(final, client)
 
 
 async def handler(ws):

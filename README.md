@@ -13,7 +13,7 @@ OcchioOnniveggente/
 ## Aggiornamenti backend
 
 - **MetadataStore**: nuovo archivio dei metadati basato su SQLite FTS o PostgreSQL, con supporto opzionale al vector store FAISS.
-- Le chiamate OpenAI pesanti possono ora essere eseguite in un thread pool tramite `openai_async.run_async`, evitando blocchi dell'applicazione. Il numero di thread è configurabile via `openai.max_workers` o variabile d'ambiente `ORACOLO_MAX_WORKERS`.
+- Le chiamate OpenAI utilizzano ora il client asincrono nativo (`openai.AsyncOpenAI`), eliminando il thread pool e semplificando l'integrazione.
 - Funzioni TTS/STT locali con utilità di streaming a chunk in `local_audio.py`.
 
 

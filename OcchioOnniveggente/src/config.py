@@ -32,6 +32,8 @@ class AudioConfig(BaseModel):
     input_device: Optional[str | int] = None
     output_device: Optional[str | int] = None
     barge_rms_threshold: float = 0.25
+    denoise: bool = False
+    echo_cancel: bool = False
 
 
 class RecordingConfig(BaseModel):
@@ -117,6 +119,8 @@ class ChatConfig(BaseModel):
     inactivity_timeout_s: int = 60
     remember_turns: int = 8
     pinned: List[str] = Field(default_factory=list)
+    summary_model: str = "gpt-4o-mini"
+    summary_max_tokens: int = 256
 
 
 class RealtimeAudioConfig(BaseModel):
