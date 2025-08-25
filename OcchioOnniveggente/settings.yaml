@@ -17,6 +17,10 @@ openai:
   # (usato da src/domain.py se abilitato)
   embed_model: text-embedding-3-large   # opzionale; se mancante, niente embeddings
 
+  # Numero massimo di thread per le chiamate OpenAI
+  # Può essere sovrascritto con la variabile d'ambiente ORACOLO_MAX_WORKERS
+  max_workers: 4
+
 audio:
   # Audio I/O e file temporanei
   sample_rate: 24000
