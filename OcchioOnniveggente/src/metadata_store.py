@@ -11,7 +11,18 @@ This module provides two small helpers used to speed up backend operations:
   ``RuntimeError`` is raised at runtime.
 * :class:`VectorStore` – optional FAISS-based vector index with a pure Python
   fallback based on cosine similarity.  It is purposely minimal and intended
-  for small/medium collections.
+  for small/medium collections.  Instances can be persisted to disk with
+  :meth:`VectorStore.save` and restored through :meth:`VectorStore.load` which
+  serialise IDs, vectors and, when available, the FAISS index.
+
+Example
+-------
+
+>>> from pathlib import Path
+>>> vs = VectorStore(dim=3)
+>>> vs.add("doc1", [0.1, 0.2, 0.3])
+>>> vs.save(Path("index.bin"))
+>>> vs2 = VectorStore.load(Path("index.bin"))
 
 The classes are intentionally tiny so they can be imported without pulling in
 heavy dependencies when not used.
@@ -22,6 +33,7 @@ from typing import Iterable, List, Tuple, Dict, Any
 
 import sqlite3
 import numpy as np
+import pickle
 
 try:  # optional PostgreSQL backend
     import psycopg2  # type: ignore
@@ -191,3 +203,50 @@ class VectorStore:
             sims.append((did, sim))
         sims.sort(key=lambda x: x[1], reverse=True)
         return sims[:top_k]
+
+    # ------------------------------------------------------------------
+    # Persistence helpers
+    # ------------------------------------------------------------------
+    def save(self, path: Path) -> None:
+        """Serialise the store to ``path``.
+
+        The file contains the dimension, document IDs, vectors and the FAISS
+        index when available.  It can be reloaded with
+        :meth:`VectorStore.load`.
+        """
+
+        data = {
+            "dim": self.dim,
+            "ids": self.ids,
+            "vectors": [v.tolist() for v in self.vectors],
+            "index": None,
+        }
+        if faiss is not None and self.index is not None:  # pragma: no branch - optional
+            data["index"] = faiss.serialize_index(self.index)
+
+        path = Path(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("wb") as f:
+            pickle.dump(data, f)
+
+    @classmethod
+    def load(cls, path: Path) -> "VectorStore":
+        """Load a previously saved store from ``path``."""
+
+        with Path(path).open("rb") as f:
+            data = pickle.load(f)
+
+        store = cls(int(data.get("dim", 0)))
+        store.ids = list(data.get("ids", []))
+        store.vectors = [np.asarray(v, dtype=np.float32) for v in data.get("vectors", [])]
+
+        if faiss is not None:
+            index_bytes = data.get("index")
+            if index_bytes is not None:
+                store.index = faiss.deserialize_index(index_bytes)
+            elif store.vectors:
+                store.index.add(np.stack(store.vectors))
+        else:
+            store.index = None
+
+        return store
