@@ -8,9 +8,19 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
+
 find_package(Qt6 6.2 COMPONENTS Quick Qml WebSockets Multimedia REQUIRED)
 qt_policy(SET QTP0001 NEW)
 qt_policy(SET QTP0004 NEW)
+
+
+find_package(Qt6 6.2 COMPONENTS Quick Qml WebSockets Multimedia REQUIRED)
+qt_policy(SET QTP0001 NEW)
+qt_policy(SET QTP0001 NEW)
+
+find_package(Qt6 6.2 COMPONENTS Quick Qml WebSockets Multimedia REQUIRED)
+
+
 
 qt_add_executable(oracolo_client
     main.cpp
