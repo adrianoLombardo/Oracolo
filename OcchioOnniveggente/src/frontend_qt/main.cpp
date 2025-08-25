@@ -17,7 +17,7 @@ int main(int argc, char *argv[])
     // causing the application to fail to locate the QML resource at runtime.
     // See: https://doc.qt.io/qt-6/qtqml-cppintegration-topic.html
 
-    const QUrl url(u"qrc:/qt/qml/Oracolo/MainWindow.qml"_s);
+    const QUrl url(u"qrc:/qt/qml/Oracolo/qml/MainWindow.qml"_s);
     QObject::connect(&engine, &QQmlApplicationEngine::objectCreationFailed,
                      &app, [](){ QCoreApplication::exit(-1); }, Qt::QueuedConnection);
     engine.load(url);
