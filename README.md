@@ -17,7 +17,27 @@ OcchioOnniveggente/
 - Funzioni TTS/STT locali con utilità di streaming a chunk in `local_audio.py`.
 - Backend LLM locale opzionale tramite `llm_backend=local` con fallback automatico a OpenAI.
 
-### LLM locale
+## Monitoraggio risorse
+
+Il modulo `src.metrics` registra periodicamente lo stato di GPU e CPU e
+aggiorna tre metriche Prometheus:
+
+- `gpu_memory_bytes` – memoria GPU allocata.
+- `gpu_utilization_percent` – percentuale di utilizzo GPU.
+- `cpu_usage_percent` – uso medio della CPU.
+
+Il server realtime avvia automaticamente la raccolta e pubblica i valori
+sull'endpoint `/metrics`, interrogabile con strumenti come Prometheus:
+
+```bash
+curl http://localhost:8000/metrics
+```
+
+Nel log (livello `DEBUG`) sono visibili gli stessi dati. La funzione
+`resolve_device` utilizza `gpu_utilization_percent` per dirottare le nuove
+richieste sulla CPU quando l'uso della GPU supera il 90%.
+
+## LLM locale
 
 Per usare un modello eseguito in locale è possibile impostare `llm_backend: local`
 e indicare in `openai.llm_model` il percorso del modello. Il wrapper utilizza

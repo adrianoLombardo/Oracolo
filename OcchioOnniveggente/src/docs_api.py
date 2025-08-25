@@ -6,17 +6,19 @@ import sys
 import time
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 from urllib.parse import parse_qs, urlparse
 
 import yaml
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.security import APIKeyHeader
 from fastapi import FastAPI, BackgroundTasks
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from .service_container import container
 from .metrics import metrics_endpoint, metrics_middleware
+from .local_llm import stream_generate
 
 try:
     from .ui_state import UIState
@@ -140,6 +142,29 @@ def log_async(data: dict[str, Any], path: str, tasks: BackgroundTasks) -> dict[s
             fh.write(json.dumps(payload, ensure_ascii=False) + "\n")
     tasks.add_task(_write, data, path)
     return {"status": "queued"}
+
+
+@app.post("/api/local/stream")
+def local_stream(
+    messages: list[dict[str, str]],
+    model_path: str,
+    device: str = "cpu",
+    max_new_tokens: int = 256,
+    precision: str = "fp32",
+) -> StreamingResponse:
+    """Stream LLM tokens as Server-Sent Events."""
+
+    def _iter() -> Iterator[str]:
+        for tok in stream_generate(
+            messages,
+            model_path=model_path,
+            device=device,
+            max_new_tokens=max_new_tokens,
+            precision=precision,  # type: ignore[arg-type]
+        ):
+            yield f"data: {tok}\n\n"
+
+    return StreamingResponse(_iter(), media_type="text/event-stream")
 
 import json
 import sys

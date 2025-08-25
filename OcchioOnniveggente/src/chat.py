@@ -1,7 +1,7 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Dict, Optional, Any
+from typing import List, Dict, Optional, Any, Iterator
 import time, json
 import numpy as np
 from openai import OpenAI
@@ -90,6 +90,24 @@ class ChatState:
 
     def push_assistant(self, text: str) -> None:
         self.push_message("assistant", text)
+
+    def stream_assistant(self, tokens: "Iterator[str]") -> str:
+        """Consume ``tokens`` updating the last assistant message incrementally.
+
+        The generator is iterated token by token; after each token the partial
+        text is stored in :attr:`history`.  The full assistant message is
+        returned once the stream is exhausted so that callers can further
+        process it if needed.
+        """
+
+        text = ""
+        for chunk in tokens:
+            text += chunk
+            if self.history and self.history[-1].get("role") == "assistant":
+                self.history[-1]["content"] = text
+            else:
+                self.history.append({"role": "assistant", "content": text})
+        return text
 
     def pin_message(self, text: str) -> None:
         if not text:
