@@ -386,7 +386,6 @@ def main() -> None:
     group.add_argument("--remove", nargs="+", help="File o cartelle da rimuovere dall'indice")
     group.add_argument("--reindex", action="store_true", help="Rigenera l'indice rileggendo i file già noti")
     group.add_argument("--clear", action="store_true", help="Svuota completamente l'indice")
-    group.add_argument("--clear", action="store_true", help="Svuota completamente l’indice")
     args = parser.parse_args()
 
     if args.add:
