@@ -15,6 +15,16 @@ OcchioOnniveggente/
 - **MetadataStore**: nuovo archivio dei metadati basato su SQLite FTS o PostgreSQL, con supporto opzionale al vector store FAISS.
 - Le chiamate OpenAI pesanti possono ora essere eseguite in un thread pool tramite `openai_async.run_async`, evitando blocchi dell'applicazione. Il numero di thread è configurabile via `openai.max_workers` o variabile d'ambiente `ORACOLO_MAX_WORKERS`.
 - Funzioni TTS/STT locali con utilità di streaming a chunk in `local_audio.py`.
+- Backend LLM locale opzionale tramite `llm_backend=local` con fallback automatico a OpenAI.
+
+### LLM locale
+
+Per usare un modello eseguito in locale è possibile impostare `llm_backend: local`
+e indicare in `openai.llm_model` il percorso del modello. Il wrapper utilizza
+`transformers` (o `llama-cpp`) e richiede una GPU con almeno ~8 GB di VRAM per un
+modello da 7B quantizzato a 4‑bit. Modelli più grandi necessitano di maggiore
+memoria o di tecniche di quantizzazione appropriate. In caso di errore il
+sistema effettua automaticamente il fallback al backend OpenAI.
 
 
 ---
