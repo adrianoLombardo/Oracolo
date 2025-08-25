@@ -13,10 +13,63 @@ try:  # pragma: no cover - optional dependency
 except Exception:  # pragma: no cover
     sd = None
 
+try:  # pragma: no cover - optional dependency
+    import webrtc_audio_processing as wap  # type: ignore
+except Exception:  # pragma: no cover
+    wap = None
+try:  # pragma: no cover - optional dependency
+    import rnnoise  # type: ignore
+except Exception:  # pragma: no cover
+    rnnoise = None
+
 try:
     import webrtcvad  # type: ignore
 except Exception:
     webrtcvad = None
+
+
+class AudioPreprocessor:
+    """Optional noise suppression / echo cancellation / AGC processor."""
+
+    def __init__(
+        self,
+        sr: int,
+        *,
+        denoise: bool = False,
+        echo_cancel: bool = False,
+        agc: bool = True,
+    ) -> None:
+        self.sr = sr
+        self._proc: Any | None = None
+        self._kind = "none"
+        if wap is not None:
+            self._proc = wap.AudioProcessor(
+                enable_ns=denoise,
+                enable_agc=agc,
+                enable_aec=echo_cancel,
+            )
+            self._proc.set_stream_format(wap.StreamFormat(sr, 1))
+            self._kind = "webrtc"
+        elif rnnoise is not None and denoise:
+            self._proc = rnnoise.RNNoise()
+            self._kind = "rnnoise"
+
+    def process(self, y: np.ndarray) -> np.ndarray:
+        """Process ``y`` returning a cleaned signal."""
+        if self._proc is None:
+            return y
+        if self._kind == "webrtc":
+            arr = np.asarray(y, dtype=np.float32).reshape(-1, 1)
+            out = self._proc.process_stream(arr)
+            return out.reshape(-1)
+        if self._kind == "rnnoise":
+            frame = 480
+            padded = np.pad(y, (0, (-len(y)) % frame), mode="constant")
+            out = np.empty_like(padded)
+            for i in range(0, len(padded), frame):
+                out[i : i + frame] = self._proc.process_frame(padded[i : i + frame])
+            return out[: len(y)]
+        return y
 
 
 def load_audio_as_float(path: Path, target_sr: int) -> Tuple[np.ndarray, int]:
@@ -81,6 +134,7 @@ def _record_with_webrtcvad(
     recording_conf: Dict[str, Any],
     input_device_id: Any | None,
     tts_playing: threading.Event | None = None,
+    preprocessor: AudioPreprocessor | None = None,
 ) -> bool:
     frame_ms = 20
     frame_samples = int(sr * frame_ms / 1000)
@@ -129,6 +183,8 @@ def _record_with_webrtcvad(
         print("😴 Silenzio rilevato. Resto in attesa.")
         return False
     y = np.frombuffer(bytes(voiced), dtype=np.int16).astype(np.float32) / 32768.0
+    if preprocessor is not None:
+        y = preprocessor.process(y)
     peak = float(np.max(np.abs(y))) if y.size else 0.0
     if peak < MIN_SPEECH:
         print("😴 Non ho colto parole distinte. Resto in attesa.")
@@ -147,6 +203,7 @@ def record_until_silence(
     debug: bool = False,
     input_device_id: Any | None = None,
     tts_playing: threading.Event | None = None,
+    preprocessor: AudioPreprocessor | None = None,
 ) -> bool:
     """VAD basato sull'energia che termina quando rileva silenzio."""
     try:
@@ -156,7 +213,9 @@ def record_until_silence(
         pass
 
     if recording_conf.get("use_webrtcvad") and webrtcvad is not None:
-        return _record_with_webrtcvad(path, sr, recording_conf, input_device_id, tts_playing)
+        return _record_with_webrtcvad(
+            path, sr, recording_conf, input_device_id, tts_playing, preprocessor
+        )
 
     FRAME_MS = int(vad_conf.get("frame_ms", 30))
     START_MS = int(vad_conf.get("start_ms", 150))
@@ -253,6 +312,8 @@ def record_until_silence(
         return False
 
     y = np.concatenate(recorded_blocks, axis=0).astype(np.float32)
+    if preprocessor is not None:
+        y = preprocessor.process(y)
     peak = float(np.max(np.abs(y))) if y.size else 0.0
     if peak < MIN_SPEECH_LEVEL:
         if debug:

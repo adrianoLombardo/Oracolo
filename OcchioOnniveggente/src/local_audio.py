@@ -3,7 +3,20 @@ from __future__ import annotations
 """Local TTS/STT helpers and simple chunked streaming utilities."""
 
 from pathlib import Path
+
 from typing import Generator, Literal
+
+from typing import Generator
+import logging
+
+
+logger = logging.getLogger(__name__)
+
+import numpy as np
+
+from .audio import AudioPreprocessor, load_audio_as_float
+from .config import Settings
+
 
 
 def stream_file(path: Path, chunk_size: int = 4096) -> Generator[bytes, None, None]:
@@ -53,28 +66,91 @@ def tts_local(
     out_path.write_bytes(b"")
 
 
+
 def stt_local(
     audio_path: Path,
     *,
     lang: str = "it",
     device: Literal["auto", "cpu", "cuda"] = "auto",
 ) -> str:
+
+def stt_local(audio_path: Path, lang: str = "it") -> str:
+
+
     """Attempt a local transcription of ``audio_path``.
 
-    The function uses `speech_recognition` with the PocketSphinx backend when
-    available.  It is intentionally simple and meant only as a latency saving
-    fallback.
+    The function prefers the `faster-whisper` package, automatically
+    selecting GPU or CPU and using quantized models when available.  If the
+    library is missing it falls back to ``speech_recognition`` with the
+    PocketSphinx backend.  On failure an empty string is returned.
     """
+
+    """Attempt a local transcription of ``audio_path`` using a cleaned signal."""
+
+
+    try:
+        from faster_whisper import WhisperModel  # type: ignore
+
+        try:
+            import torch  # type: ignore
+
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+        except Exception:
+            device = "cpu"
+        compute_type = "int8_float16" if device == "cuda" else "int8"
+        model = WhisperModel("base", device=device, compute_type=compute_type)
+        segments, _ = model.transcribe(audio_path.as_posix(), language=lang, task="transcribe")
+        return "".join(seg.text for seg in segments).strip()
+    except Exception:
+        pass
 
     try:
         import speech_recognition as sr  # type: ignore
 
+        setts = Settings.model_validate_yaml(Path("settings.yaml"))
+        sr_cfg = setts.audio.sample_rate
+        pre = AudioPreprocessor(
+            sr_cfg,
+            denoise=getattr(setts.audio, "denoise", False),
+            echo_cancel=getattr(setts.audio, "echo_cancel", False),
+        )
+        y, sr_in = load_audio_as_float(audio_path, sr_cfg)
+        y = pre.process(y)
+        pcm = (np.clip(y, -1, 1) * 32767).astype(np.int16).tobytes()
+        audio = sr.AudioData(pcm, sr_in, 2)
         r = sr.Recognizer()
-        with sr.AudioFile(str(audio_path)) as source:
-            audio = r.record(source)
         try:
             return r.recognize_sphinx(audio, language=lang)
         except Exception:
             return ""
     except Exception:
+        return ""
+
+
+def stt_local_faster(
+    audio_path: Path,
+    lang: str = "it",
+    *,
+    device: str = "cpu",
+    compute_type: str = "int8",
+) -> str:
+    """Transcribe ``audio_path`` using ``faster-whisper`` if available.
+
+    ``device`` can be ``"cpu"`` or ``"cuda"``; ``compute_type`` controls the
+    precision used by the model.  On failure or missing dependencies an empty
+    string is returned.
+    """
+
+    try:
+        from faster_whisper import WhisperModel  # type: ignore
+    except Exception:
+        logger.warning("faster-whisper non disponibile, fallback a stt_local")
+        return stt_local(audio_path, lang)
+
+    try:
+        model = WhisperModel("base", device=device, compute_type=compute_type)
+        segments, _ = model.transcribe(str(audio_path), language=lang)
+        return "".join(seg.text for seg in segments).strip()
+    except Exception:
+        logger.error("Errore trascrizione locale con faster-whisper", exc_info=True)
         return ""

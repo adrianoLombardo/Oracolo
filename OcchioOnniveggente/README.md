@@ -26,6 +26,7 @@ Un `settings.yaml` minimale potrebbe essere:
 
 ```yaml
 debug: true
+stt_backend: openai  # openai | whisper
 openai:
   stt_model: gpt-4o-mini-transcribe
 ```
@@ -37,6 +38,11 @@ domain:
   profile: "museo"  # profilo selezionato
   topic: ""        # contesto specifico opzionale
 ```
+
+Per utilizzare `stt_backend: whisper` sono necessari i modelli
+`faster-whisper`; per prestazioni ottimali è consigliata una GPU NVIDIA
+con almeno 4 GB di VRAM, altrimenti la trascrizione avviene via CPU con
+prestazioni inferiori.
 
 Se ad esempio `audio.sample_rate` contiene una stringa (`"ventiquattromila"`) invece di un
 numero, Pydantic segnalerà `Input should be a valid integer` e userà `24000`.
