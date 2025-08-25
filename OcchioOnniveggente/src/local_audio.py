@@ -16,6 +16,7 @@ import numpy as np
 
 from .audio import AudioPreprocessor, load_audio_as_float
 from .config import Settings
+from .utils.device import resolve_device
 
 
 
@@ -91,12 +92,7 @@ def stt_local(audio_path: Path, lang: str = "it") -> str:
     try:
         from faster_whisper import WhisperModel  # type: ignore
 
-        try:
-            import torch  # type: ignore
-
-            device = "cuda" if torch.cuda.is_available() else "cpu"
-        except Exception:
-            device = "cpu"
+        device = resolve_device("auto")
         compute_type = "int8_float16" if device == "cuda" else "int8"
         model = WhisperModel("base", device=device, compute_type=compute_type)
         segments, _ = model.transcribe(audio_path.as_posix(), language=lang, task="transcribe")

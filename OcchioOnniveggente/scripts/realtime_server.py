@@ -13,18 +13,6 @@ import numpy as np
 import websockets
 import yaml
 from dotenv import load_dotenv
-try:
-    import torch
-except Exception:  # pragma: no cover - fallback when torch isn't installed
-    class _CudaStub:
-        @staticmethod
-        def is_available() -> bool:
-            return False
-
-    class _TorchStub:
-        cuda = _CudaStub()
-
-    torch = _TorchStub()  # type: ignore
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -40,6 +28,7 @@ from src.oracle import oracle_answer_stream, transcribe_stream
 from src.oracle import oracle_answer_async, transcribe_async
 from src.oracle import oracle_answer_stream, transcribe
 from src.profile_utils import get_active_profile, make_domain_settings
+from src.utils.device import resolve_device
 
 import wave
 
@@ -56,7 +45,7 @@ class Orchestrator:
     """Simple orchestrator to balance STT (GPU) and TTS (CPU) tasks."""
 
     def __init__(self) -> None:
-        self.gpu_available = torch.cuda.is_available()
+        self.gpu_available = resolve_device("auto") == "cuda"
         self._gpu_sem = asyncio.Semaphore(1 if self.gpu_available else 0)
         self._cpu_sem = asyncio.Semaphore(4)
         self.metrics: list[dict[str, Any]] = []
