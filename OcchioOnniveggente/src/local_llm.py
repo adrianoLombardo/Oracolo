@@ -8,30 +8,9 @@ dependencies when the local backend is not used. It provides a single
 returns the generated text.
 """
 
-from typing import Dict, List, Tuple
+from typing import Dict, List
 
-# simple in-memory cache so that the model is loaded only once
-_MODEL_CACHE: dict[Tuple[str, str], Tuple[object, object]] = {}
-
-
-def _load_model(model_path: str, device: str) -> Tuple[object, object]:
-    """Load the model/tokenizer pair for the given path and device."""
-    try:
-        from transformers import AutoModelForCausalLM, AutoTokenizer
-        import torch
-    except Exception as exc:  # pragma: no cover - import error handled at runtime
-        raise RuntimeError(
-            "transformers and torch are required for the local LLM backend"
-        ) from exc
-
-    key = (model_path, device)
-    if key not in _MODEL_CACHE:
-        tokenizer = AutoTokenizer.from_pretrained(model_path)
-        model = AutoModelForCausalLM.from_pretrained(model_path)
-        model.to(device)
-        model.eval()
-        _MODEL_CACHE[key] = (tokenizer, model)
-    return _MODEL_CACHE[key]
+from .service_container import container
 
 
 def generate(
@@ -54,7 +33,7 @@ def generate(
     max_new_tokens:
         Number of tokens to generate.
     """
-    tokenizer, model = _load_model(model_path, device)
+    tokenizer, model = container.load_llm(model_path, device)
 
     prompt = "\n".join(f"{m['role']}: {m['content']}" for m in messages)
     inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
