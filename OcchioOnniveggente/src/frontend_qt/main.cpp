@@ -2,6 +2,7 @@
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include "RealtimeClient.h"
+using namespace Qt::StringLiterals;
 
 int main(int argc, char *argv[])
 {
@@ -11,7 +12,7 @@ int main(int argc, char *argv[])
     RealtimeClient client;
     engine.rootContext()->setContextProperty("realtimeClient", &client);
 
-    const QUrl url(u"qrc:/Oracolo/MainWindow.qml"_qs);
+    const QUrl url(u"qrc:/Oracolo/MainWindow.qml"_s);
     QObject::connect(&engine, &QQmlApplicationEngine::objectCreationFailed,
                      &app, [](){ QCoreApplication::exit(-1); }, Qt::QueuedConnection);
     engine.load(url);
