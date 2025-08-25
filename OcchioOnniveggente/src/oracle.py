@@ -5,6 +5,7 @@ import json
 import re
 import uuid
 import csv
+import hashlib
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
@@ -12,6 +13,7 @@ import asyncio
 import logging
 import openai
 from .utils import retry_with_backoff
+from .cache import cache_get_json, cache_set_json
 
 
 logger = logging.getLogger(__name__)
@@ -52,6 +54,20 @@ def transcribe(
     ``lang_hint`` forza la lingua ("it" o "en") migliorando l'accuratezza
     della trascrizione quando la lingua di conversazione è nota.
     """
+    data_bytes: bytes
+    try:
+        if isinstance(path_or_bytes, (str, Path)):
+            data_bytes = Path(path_or_bytes).read_bytes()
+        else:
+            data_bytes = path_or_bytes
+    except Exception:
+        data_bytes = b''
+    key_hash = hashlib.sha1(data_bytes).hexdigest()
+    cache_key = f"transcribe:{key_hash}:{lang_hint or ''}"
+    cached = cache_get_json(cache_key)
+    if cached:
+        return cached.get('text', ''), cached.get('lang', '')
+
     try:
         kwargs: Dict[str, Any] = {
             "model": stt_model,
@@ -84,6 +100,7 @@ def transcribe(
     if debug and lang_code:
         logger.info("🌐 Lingua rilevata: %s", lang_code.upper())
 
+    cache_set_json(cache_key, {'text': text, 'lang': lang_code})
     return text, lang_code
 
 
@@ -106,6 +123,13 @@ def oracle_answer(
     augments it with simple policy instructions and attempts the request up to
     three times to handle transient API errors gracefully.
     """
+    payload = {'q': question, 'lang': lang_hint, 'context': context, 'history': history, 'topic': topic, 'policy': policy_prompt, 'mode': mode}
+    key_hash = hashlib.sha1(json.dumps(payload, sort_keys=True, default=str).encode('utf-8')).hexdigest()
+    cache_key = f'oracle:{key_hash}'
+    cached = cache_get_json(cache_key)
+    if cached is not None:
+        return cached, context or []
+
     logger.info("✨ Interrogo l’Oracolo…")
 
     lang_clause = "Answer in English." if lang_hint == "en" else "Rispondi in italiano."
@@ -158,11 +182,11 @@ def oracle_answer(
     try:
         resp = retry_with_backoff(do_request)
         ans = resp.output_text.strip()
+        cache_set_json(cache_key, ans)
         return ans, context or []
     except openai.OpenAIError as e:
         logger.error("Errore OpenAI: %s", e)
         return "", context or []
-
 
 async def oracle_answer_async(
     question: str,

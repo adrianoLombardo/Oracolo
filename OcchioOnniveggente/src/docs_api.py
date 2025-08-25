@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from fastapi import FastAPI
+from fastapi import FastAPI, BackgroundTasks
 from pydantic import BaseModel, Field
 
 from .ui_state import UIState
@@ -50,6 +50,35 @@ def update_docs_options(opts: DocsOptions) -> dict[str, Any]:
         data.update(payload)
         _save_settings(data)
     return {"status": "ok", "settings": STATE.settings}
+
+
+@app.post("/api/ingest")
+def ingest_async(path: str, tasks: BackgroundTasks) -> dict[str, str]:
+    from scripts import ingest_docs  # type: ignore
+    tasks.add_task(ingest_docs.ingest, path)
+    return {"status": "queued"}
+
+
+@app.post("/api/embeddings")
+def embeddings_async(texts: list[str], model: str, tasks: BackgroundTasks) -> dict[str, str]:
+    from openai import OpenAI  # type: ignore
+    from .retrieval import _embed_texts
+    client = OpenAI()
+    tasks.add_task(_embed_texts, client, model, texts)
+    return {"status": "queued"}
+
+
+@app.post("/api/log")
+def log_async(data: dict[str, Any], path: str, tasks: BackgroundTasks) -> dict[str, str]:
+    import json
+    from pathlib import Path
+    def _write(payload: dict[str, Any], dest: str) -> None:
+        p = Path(dest)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        with p.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(payload, ensure_ascii=False) + "\n")
+    tasks.add_task(_write, data, path)
+    return {"status": "queued"}
 
 import json
 import sys
