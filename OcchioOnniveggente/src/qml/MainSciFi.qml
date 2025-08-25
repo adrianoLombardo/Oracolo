@@ -11,11 +11,14 @@ Rectangle {
     border.color: "#3df5ff"
     border.width: 2
 
-    // neon glow effect using MultiEffect from QtQuick.Effects
-    layer.enabled: true
-    layer.effect: MultiEffect {
+    MultiEffect {
+        anchors.fill: parent
+        source: root
         shadowEnabled: true
         shadowColor: "#3df5ff"
+        shadowBlur: 1.0
+        shadowHorizontalOffset: 0
+        shadowVerticalOffset: 0
     }
 
     ColumnLayout {
