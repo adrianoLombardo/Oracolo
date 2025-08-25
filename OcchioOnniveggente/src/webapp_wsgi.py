@@ -1,46 +1,69 @@
 from __future__ import annotations
 
 import json
+from contextvars import ContextVar
 
 from src.profile_utils import save_profile
 from src.ui_state import UIState, apply_to_chat
 
-# Global UI state used by the application.
-_STATE = UIState()
+# Per-request UI state container.
+_STATE_VAR: ContextVar[UIState] = ContextVar("ui_state")
 
 
 def _read_json(environ) -> dict:
-    """Return request body as JSON dict."""
+    """Return request body as JSON dict.
+
+    Raises ``ValueError`` if the body does not contain valid JSON.
+    """
+
     try:
         length = int(environ.get("CONTENT_LENGTH", 0))
     except (TypeError, ValueError):
         length = 0
     body = environ["wsgi.input"].read(length) if length else b""
-    try:
-        return json.loads(body.decode("utf-8") or "{}")
-    except Exception:
+    if not body:
         return {}
+    try:
+        return json.loads(body.decode("utf-8"))
+    except json.JSONDecodeError as exc:  # pragma: no cover - defensive
+        raise ValueError("Invalid JSON") from exc
 
 
 def app(environ, start_response):
     """Minimal WSGI application exposing a couple of endpoints."""
-    method = environ.get("REQUEST_METHOD", "")
-    path = environ.get("PATH_INFO", "")
+    token = _STATE_VAR.set(UIState())
+    try:
+        method = environ.get("REQUEST_METHOD", "")
+        path = environ.get("PATH_INFO", "")
 
-    if method == "POST" and path == "/api/docs/save":
-        data = _read_json(environ)
-        save_profile(data)
-        start_response("200 OK", [("Content-Type", "application/json")])
-        return [b'{"status": "saved"}']
+        if method == "POST" and path == "/api/docs/save":
+            try:
+                data = _read_json(environ)
+            except ValueError:
+                start_response(
+                    "400 Bad Request", [("Content-Type", "application/json")]
+                )
+                return [b'{"error": "invalid json"}']
+            save_profile(data)
+            start_response("200 OK", [("Content-Type", "application/json")])
+            return [b'{"status": "saved"}']
 
-    if method == "POST" and path == "/api/docs/apply":
-        data = _read_json(environ)
-        apply_to_chat(_STATE, data.get("text", ""))
-        start_response("200 OK", [("Content-Type", "application/json")])
-        return [b'{"status": "applied"}']
+        if method == "POST" and path == "/api/docs/apply":
+            try:
+                data = _read_json(environ)
+            except ValueError:
+                start_response(
+                    "400 Bad Request", [("Content-Type", "application/json")]
+                )
+                return [b'{"error": "invalid json"}']
+            apply_to_chat(_STATE_VAR.get(), data.get("text", ""))
+            start_response("200 OK", [("Content-Type", "application/json")])
+            return [b'{"status": "applied"}']
 
-    start_response("404 Not Found", [("Content-Type", "text/plain")])
-    return [b"Not Found"]
+        start_response("404 Not Found", [("Content-Type", "text/plain")])
+        return [b"Not Found"]
+    finally:
+        _STATE_VAR.reset(token)
 
 
 if __name__ == "__main__":  # pragma: no cover - manual invocation helper
