@@ -34,6 +34,7 @@ from .config import Settings, get_openai_api_key
 from .ui_state import UIState
 from . import openai_async
 from .utils.device import resolve_device
+from .llm_batcher import LLMBatcher
 
 
 @dataclass
@@ -49,6 +50,7 @@ class ServiceContainer:
     _executor: ProcessPoolExecutor | None = field(default=None, init=False)
 
     _openai_client: AsyncOpenAI | None = field(default=None, init=False)
+    _llm_batcher: LLMBatcher | None = field(default=None, init=False)
 
 
     def openai_client(self) -> AsyncOpenAI:
@@ -75,6 +77,10 @@ class ServiceContainer:
             self._executor.shutdown(wait=True)
             self._executor = None
 
+        if self._llm_batcher is not None:
+            self._llm_batcher.shutdown()
+            self._llm_batcher = None
+
 
     def close(self) -> None:
         """Shutdown all services and free cached models."""
@@ -88,6 +94,22 @@ class ServiceContainer:
             _WHISPER_CACHE.clear()
         except Exception:  # pragma: no cover - se il modulo non è caricato
             pass
+
+        if self._llm_batcher is not None:
+            self._llm_batcher.shutdown()
+            self._llm_batcher = None
+
+    def llm_batcher(self) -> LLMBatcher:
+        if self._llm_batcher is None:
+            cfg = self.settings.compute.llm
+            self._llm_batcher = LLMBatcher(
+                model_path=self.settings.openai.llm_model,
+                device=cfg.device,
+                precision=cfg.precision,
+                batch_interval=cfg.batch_interval,
+                max_batch_size=cfg.max_batch_size,
+            )
+        return self._llm_batcher
 
 
 # Default container used by the application
