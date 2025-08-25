@@ -5,8 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 
 from typing import Generator, Literal
-
-from typing import Generator
 import logging
 
 
@@ -17,6 +15,31 @@ import numpy as np
 from .audio import AudioPreprocessor, load_audio_as_float
 from .config import Settings
 from .utils.device import resolve_device
+
+
+# Cache per i modelli Whisper caricati localmente. La chiave identifica
+# la combinazione ``(device, compute_type)`` utilizzata per costruire il
+# modello e consente di riutilizzare la stessa istanza tra più chiamate
+# senza ricaricarlo in VRAM.
+_WHISPER_CACHE: dict[tuple[str, str], "WhisperModel"] = {}
+
+
+def _get_whisper(model_name: str, device: str, compute_type: str) -> "WhisperModel":
+    """Restituisce un'istanza ``WhisperModel`` riutilizzabile.
+
+    Se la combinazione ``device``/``compute_type`` è già stata utilizzata,
+    viene ritornato il modello memorizzato; altrimenti il modello viene
+    costruito e salvato nel cache.
+    """
+
+    from faster_whisper import WhisperModel  # type: ignore
+
+    key = (device, compute_type)
+    model = _WHISPER_CACHE.get(key)
+    if model is None:
+        model = WhisperModel(model_name, device=device, compute_type=compute_type)
+        _WHISPER_CACHE[key] = model
+    return model
 
 
 
@@ -74,28 +97,31 @@ def stt_local(
     lang: str = "it",
     device: Literal["auto", "cpu", "cuda"] = "auto",
 ) -> str:
-
-def stt_local(audio_path: Path, lang: str = "it") -> str:
-
-
-    """Attempt a local transcription of ``audio_path``.
-
-    The function prefers the `faster-whisper` package, automatically
-    selecting GPU or CPU and using quantized models when available.  If the
-    library is missing it falls back to ``speech_recognition`` with the
-    PocketSphinx backend.  On failure an empty string is returned.
-    """
-
     """Attempt a local transcription of ``audio_path`` using a cleaned signal."""
 
+    try:
+        import torch  # type: ignore
+
+
+        actual_device = (
+            "cuda" if device == "auto" and torch.cuda.is_available() else device
+        )
+    except Exception:
+        actual_device = "cpu" if device == "auto" else device
+
+    compute_type = "int8_float16" if actual_device == "cuda" else "int8"
 
     try:
-        from faster_whisper import WhisperModel  # type: ignore
+        model = _get_whisper("base", actual_device, compute_type)
+        segments, _ = model.transcribe(
+            audio_path.as_posix(), language=lang, task="transcribe"
+        )
 
         device = resolve_device("auto")
         compute_type = "int8_float16" if device == "cuda" else "int8"
         model = WhisperModel("base", device=device, compute_type=compute_type)
         segments, _ = model.transcribe(audio_path.as_posix(), language=lang, task="transcribe")
+
         return "".join(seg.text for seg in segments).strip()
     except Exception:
         pass
@@ -138,13 +164,12 @@ def stt_local_faster(
     """
 
     try:
-        from faster_whisper import WhisperModel  # type: ignore
+        model = _get_whisper("base", device, compute_type)
     except Exception:
         logger.warning("faster-whisper non disponibile, fallback a stt_local")
         return stt_local(audio_path, lang)
 
     try:
-        model = WhisperModel("base", device=device, compute_type=compute_type)
         segments, _ = model.transcribe(str(audio_path), language=lang)
         return "".join(seg.text for seg in segments).strip()
     except Exception:

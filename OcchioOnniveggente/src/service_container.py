@@ -77,9 +77,17 @@ class ServiceContainer:
 
 
     def close(self) -> None:
-        """Shutdown all services including async helpers."""
+        """Shutdown all services and free cached models."""
 
         openai_async.shutdown()
+
+        # Svuota il cache dei modelli Whisper per liberare la VRAM
+        try:
+            from .local_audio import _WHISPER_CACHE
+
+            _WHISPER_CACHE.clear()
+        except Exception:  # pragma: no cover - se il modulo non è caricato
+            pass
 
 
 # Default container used by the application
