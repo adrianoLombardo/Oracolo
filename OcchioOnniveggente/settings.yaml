@@ -4,6 +4,10 @@
 debug: false
 
 
+cache_dir: "data/cache"
+cache_ttl: 3600
+
+
 compute:
   # Device di default per il calcolo (auto|cpu|cuda)
   device: auto

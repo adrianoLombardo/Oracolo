@@ -6,6 +6,8 @@ from pathlib import Path
 
 from typing import Generator, Literal
 import logging
+import hashlib
+import shutil
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +20,8 @@ from . import metrics
 
 from .service_container import container
 from .utils.device import resolve_device
+from .cache import get_tts_cache, set_tts_cache, get_stt_cache, set_stt_cache
+from .service_container import container
 
 
 # Cache per i modelli Whisper caricati localmente. La chiave identifica
@@ -68,6 +72,32 @@ def tts_local(
 ) -> None:
     """Synthesize ``text`` using a cached local backend when available."""
 
+
+    cached = get_tts_cache(text, lang)
+    if cached is not None:
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(cached, out_path)
+        return
+
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    try:  # gTTS first because it is tiny and widely available
+        from gtts import gTTS  # type: ignore
+
+        gTTS(text=text, lang=lang).save(out_path.as_posix())
+        set_tts_cache(text, lang, out_path)
+        return
+    except Exception:
+        pass
+
+    try:  # fall back to pyttsx3 (offline, cross-platform)
+        import pyttsx3  # type: ignore
+
+        engine = pyttsx3.init()
+        engine.save_to_file(text, out_path.as_posix())
+        engine.runAndWait()
+        set_tts_cache(text, lang, out_path)
+        return
+
     metrics.record_system_metrics()
     out_path.parent.mkdir(parents=True, exist_ok=True)
     backend, engine = container.load_tts_model()
@@ -79,6 +109,7 @@ def tts_local(
             engine.save_to_file(text, out_path.as_posix())
             engine.runAndWait()
             return
+
     except Exception:
         logger.warning("Errore sintesi vocale locale", exc_info=True)
 
@@ -193,8 +224,26 @@ def stt_local_faster(
     string is returned.
     """
 
+
+    setts = container.settings
+    pre = AudioPreprocessor(
+        setts.audio.sample_rate,
+        denoise=getattr(setts.audio, "denoise", False),
+        echo_cancel=getattr(setts.audio, "echo_cancel", False),
+    )
+    y, _ = load_audio_as_float(audio_path, setts.audio.sample_rate)
+    y = pre.process(y)
+    pcm = (np.clip(y, -1, 1) * 32767).astype(np.int16).tobytes()
+    audio_hash = hashlib.sha256(pcm).hexdigest()
+
+    cached = get_stt_cache(audio_hash)
+    if cached is not None:
+        return cached
+
+
     device = metrics.resolve_device(device)
     metrics.record_system_metrics()
+
     try:
         model = _get_whisper("base", device, compute_type)
     except Exception:
@@ -204,7 +253,9 @@ def stt_local_faster(
 
     try:
         segments, _ = model.transcribe(str(audio_path), language=lang)
-        return "".join(seg.text for seg in segments).strip()
+        text = "".join(seg.text for seg in segments).strip()
+        set_stt_cache(audio_hash, text)
+        return text
     except Exception:
         logger.error("Errore trascrizione locale con faster-whisper", exc_info=True)
         return ""
