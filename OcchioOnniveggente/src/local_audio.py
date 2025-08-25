@@ -4,6 +4,10 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Generator
+import logging
+
+
+logger = logging.getLogger(__name__)
 
 import numpy as np
 
@@ -101,4 +105,33 @@ def stt_local(audio_path: Path, lang: str = "it") -> str:
         except Exception:
             return ""
     except Exception:
+        return ""
+
+
+def stt_local_faster(
+    audio_path: Path,
+    lang: str = "it",
+    *,
+    device: str = "cpu",
+    compute_type: str = "int8",
+) -> str:
+    """Transcribe ``audio_path`` using ``faster-whisper`` if available.
+
+    ``device`` can be ``"cpu"`` or ``"cuda"``; ``compute_type`` controls the
+    precision used by the model.  On failure or missing dependencies an empty
+    string is returned.
+    """
+
+    try:
+        from faster_whisper import WhisperModel  # type: ignore
+    except Exception:
+        logger.warning("faster-whisper non disponibile, fallback a stt_local")
+        return stt_local(audio_path, lang)
+
+    try:
+        model = WhisperModel("base", device=device, compute_type=compute_type)
+        segments, _ = model.transcribe(str(audio_path), language=lang)
+        return "".join(seg.text for seg in segments).strip()
+    except Exception:
+        logger.error("Errore trascrizione locale con faster-whisper", exc_info=True)
         return ""

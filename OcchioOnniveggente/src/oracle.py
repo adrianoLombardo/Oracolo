@@ -21,6 +21,8 @@ import openai
 import websockets
 
 from .openai_async import run_async
+from .local_audio import tts_local, stt_local_faster
+from .utils import retry_with_backoff
 from .openai_async import run
 from .local_audio import tts_local, stt_local
 from .cache import cache_get_json, cache_set_json
@@ -41,6 +43,8 @@ async def fast_transcribe_async(
     client,
     stt_model: str,
     lang_hint: str | None = None,
+    *,
+    device: str = "cpu",
 ) -> str | None:
     """Perform a single transcription call with optional language hint."""
 
@@ -68,7 +72,7 @@ async def fast_transcribe_async(
                     tmp.write(path_or_bytes)
                     tmp_path = Path(tmp.name)
                 p = tmp_path
-            return stt_local(p, lang_hint or "it")
+            return stt_local_faster(p, lang_hint or "it", device=device)
 
         kwargs: Dict[str, Any] = {}
         if lang_hint in ("it", "en"):
@@ -183,9 +187,13 @@ async def transcribe_async(
     debug: bool = False,
     lang_hint: str | None = None,
 
+    device: str = "cpu",
+
+
     backend: str | None = None,
 
     state: ChatState | None = None,
+
 
 ) -> Tuple[str | None, str]:
 
@@ -229,7 +237,7 @@ async def transcribe_async(
                     tmp.write(path_or_bytes)
                     tmp_path = Path(tmp.name)
                 p = tmp_path
-            return stt_local(p, lang_hint or "it"), lang_hint or ""
+            return stt_local_faster(p, lang_hint or "it", device=device), lang_hint or ""
         finally:
             if tmp_path:
                 try:
