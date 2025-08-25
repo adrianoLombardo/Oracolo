@@ -35,11 +35,15 @@ def _safe_call(func, *args, **kwargs):
 
 def cache_get(key: str) -> str | None:
     """Retrieve a raw string value from Redis."""
+    if _cache is None:
+        return None
     return _safe_call(_cache.get, key)  # type: ignore[arg-type]
 
 
 def cache_set(key: str, value: str, *, ex: int = 3600) -> None:
     """Store a raw string value in Redis with optional expiry."""
+    if _cache is None:
+        return None
     _safe_call(_cache.set, key, value, ex=ex)  # type: ignore[arg-type]
 
 
@@ -54,10 +58,10 @@ def cache_get_json(key: str) -> Any:
         return None
 
 
-def cache_set_json(key: str, value: Any, *, ex: int = 3600) -> None:
+def cache_set_json(key: str, value: Any, *, ttl: int = 3600) -> None:
     """Store a JSON-serialisable object in Redis."""
     try:
         data = json.dumps(value, ensure_ascii=False)
     except TypeError:
         data = json.dumps(str(value))
-    cache_set(key, data, ex=ex)
+    cache_set(key, data, ex=ttl)

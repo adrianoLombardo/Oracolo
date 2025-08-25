@@ -143,6 +143,7 @@ class Settings(BaseModel):
     retrieval: RetrievalConfig = RetrievalConfig()
     chat: ChatConfig = ChatConfig()
     realtime: RealtimeConfig = RealtimeConfig()
+    cache_ttl: int = 3600
     
     @classmethod
     def model_validate_yaml(cls, path: Path) -> "Settings":
