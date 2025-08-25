@@ -28,10 +28,12 @@ from .service_container import container
 # la combinazione ``(device, compute_type)`` utilizzata per costruire il
 # modello e consente di riutilizzare la stessa istanza tra più chiamate
 # senza ricaricarlo in VRAM.
-_WHISPER_CACHE: dict[tuple[str, str], "WhisperModel"] = {}
+_WHISPER_CACHE: dict[tuple[str, str, bool], object] = {}
 
 
-def _get_whisper(model_name: str, device: str, compute_type: str) -> "WhisperModel":
+def _get_whisper(
+    model_name: str, device: str, compute_type: str, use_onnx: bool = False
+) -> object:
     """Restituisce un'istanza ``WhisperModel`` riutilizzabile.
 
     Se la combinazione ``device``/``compute_type`` è già stata utilizzata,
@@ -39,9 +41,21 @@ def _get_whisper(model_name: str, device: str, compute_type: str) -> "WhisperMod
     costruito e salvato nel cache.
     """
 
+    if use_onnx and device == "cpu":
+        try:
+            import onnxruntime as ort
+        except Exception as exc:  # pragma: no cover - runtime dep
+            raise RuntimeError("onnxruntime è richiesto per modelli ONNX") from exc
+        key = (model_name, device, True)
+        model = _WHISPER_CACHE.get(key)
+        if model is None:
+            model = ort.InferenceSession(model_name)
+            _WHISPER_CACHE[key] = model
+        return model
+
     from faster_whisper import WhisperModel  # type: ignore
 
-    key = (device, compute_type)
+    key = (model_name, device, False)
     model = _WHISPER_CACHE.get(key)
     if model is None:
         model = WhisperModel(model_name, device=device, compute_type=compute_type)
@@ -212,6 +226,8 @@ def stt_local_faster(
     *,
     device: str = "cpu",
     compute_type: str = "int8",
+    model_path: str = "base",
+    use_onnx: bool = False,
 ) -> str:
     """Transcribe ``audio_path`` using a cached ``faster-whisper`` model."""
 
@@ -245,11 +261,15 @@ def stt_local_faster(
     metrics.record_system_metrics()
 
     try:
-        model = _get_whisper("base", device, compute_type)
+        model = _get_whisper(model_path, device, compute_type, use_onnx)
     except Exception:
 
         logger.warning("faster-whisper non disponibile, fallback a stt_local")
         return stt_local(audio_path, lang)
+
+    if use_onnx and device == "cpu":
+        logger.warning("Trascrizione ONNX semplificata non implementata")
+        return ""
 
     try:
         segments, _ = model.transcribe(str(audio_path), language=lang)

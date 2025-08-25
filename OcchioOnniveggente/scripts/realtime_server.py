@@ -1,3 +1,8 @@
+
+"""Utility e placeholder per il server realtime."""
+
+from __future__ import annotations
+
 """Minimal realtime server helpers used in tests."""
 from __future__ import annotations
 
@@ -191,19 +196,21 @@ def write_wav(path: Path, sr: int, pcm: bytes) -> None:
         w.writeframes(pcm)
 
 
+
 def off_topic_message(profile: str, keywords: list[str]) -> str:
-    """Compose a helpful message when the question is off-topic."""
-    tips = ", ".join(keywords[:3]) if keywords else ""
-    if tips:
-        return (
-            f"La domanda non sembra pertinente rispetto al profilo «{profile}». "
-            f"Puoi chiedermi, ad esempio, di {tips}."
-        )
+    """Genera un messaggio per input fuori contesto."""
+
+    if keywords:
+        kw = ", ".join(keywords)
+        return f"La domanda non riguarda il profilo «{profile}». Prova con parole chiave come {kw}."
     return (
-        f"La domanda non sembra pertinente rispetto al profilo «{profile}». "
-        "Prova a riformularla o a specificare meglio il tema."
+        f"La domanda non riguarda il profilo «{profile}». "
+        "Per favore riformularla in tema."
     )
 
+
+
+__all__ = ["off_topic_message"]
 
 
 async def stream_tts_pcm(
@@ -652,14 +659,18 @@ async def handler(ws):
         pass
 
 
-async def main(host="127.0.0.1", port=8765):
-    async with websockets.serve(
-        handler, host, port, ping_interval=20, ping_timeout=40, max_size=None
-    ):
-        print(f"WS Realtime server pronto su ws://{host}:{port}", flush=True)
-        await asyncio.Future()
+
+def get_active_profile(settings: dict) -> tuple[str, dict]:
+    """Restituisce il profilo attivo dalle impostazioni."""
+
+    dom = settings.get("domain", {})
+    name = dom.get("profile", "")
+    profiles = dom.get("profiles", {})
+    return name, profiles.get(name, {})
 
 
+
+__all__.append("get_active_profile")
 
 
 def off_topic_message(profile: str, keywords: List[str]) -> str:
@@ -671,6 +682,7 @@ def off_topic_message(profile: str, keywords: List[str]) -> str:
 
 
 __all__ = ["off_topic_message", "get_active_profile", "make_domain_settings"]
+
 
 
 
