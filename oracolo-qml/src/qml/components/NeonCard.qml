@@ -1,15 +1,16 @@
 import QtQuick
 import QtQuick.Effects
+import "../Palette.js" as Palette
 
 Rectangle {
   id: root
   property alias contentItem: content
-  color: "#10182A"; radius: 18; border.color: "#1B263B"; border.width: 1
+  color: Palette.card; radius: 18; border.color: Qt.darker(Palette.card, 1.3); border.width: 1
 
   layer.enabled: true
   layer.effect: MultiEffect {
     shadowEnabled: true
-    shadowColor: "#00E5FF"
+    shadowColor: Palette.accent
     shadowBlur: 0.55
     shadowHorizontalOffset: 0
     shadowVerticalOffset: 0
