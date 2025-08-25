@@ -1,5 +1,5 @@
-import QtQuick
-import QtQuick.Effects
+import QtQuick 2.15
+import QtQuick.Effects 1.15
 import "../Palette.js" as Palette
 
 Rectangle {
