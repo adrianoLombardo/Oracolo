@@ -13,6 +13,11 @@ from pathlib import Path
 from queue import Queue
 from typing import Optional
 
+try:
+    import sentry_sdk
+except Exception:  # pragma: no cover - optional dependency
+    sentry_sdk = None  # type: ignore[assignment]
+
 
 class JsonFormatter(logging.Formatter):
     """Formatter che serializza i record in JSON."""
@@ -37,6 +42,7 @@ def setup_logging(
     *,
     console: bool = True,
     session_id: Optional[str] = None,
+    sentry_dsn: Optional[str] = None,
 ) -> QueueListener:
     """Configure logging with a queue and rotating file handler.
 
@@ -53,6 +59,12 @@ def setup_logging(
     QueueListener
         The listener object managing the background logging thread. The caller
         is responsible for stopping it with ``listener.stop()`` on shutdown.
+
+    Notes
+    -----
+    If ``sentry_dsn`` is provided and ``sentry_sdk`` is installed, events of
+    level ERROR and above will also be sent to Sentry for centralized
+    monitoring.
     """
     log_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -64,6 +76,9 @@ def setup_logging(
     root = logging.getLogger()
     root.setLevel(level)
     root.addHandler(queue_handler)
+
+    if sentry_dsn and sentry_sdk is not None:
+        sentry_sdk.init(dsn=sentry_dsn)
 
     # Ensure each record has a session identifier for context
     old_factory = logging.getLogRecordFactory()

@@ -12,15 +12,28 @@ from urllib.parse import parse_qs, urlparse
 import yaml
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.security import APIKeyHeader
+from fastapi import FastAPI, BackgroundTasks
 from pydantic import BaseModel, Field
-
+from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from .service_container import container
+from .metrics import metrics_endpoint, metrics_middleware
+
+try:
+    from .ui_state import UIState
+except Exception:  # pragma: no cover - fallback for minimal environments
+    class UIState:  # type: ignore[no-redef]
+        def __init__(self) -> None:  # pragma: no cover - simple stub
+            self.settings: dict[str, Any] = {}
+
 
 STATE = container.ui_state
 ROOT = Path(__file__).resolve().parents[1]
 SETTINGS_PATH = ROOT / "settings.yaml"
 
 app = FastAPI()
+FastAPIInstrumentor.instrument_app(app)
+app.middleware("http")(metrics_middleware)
+app.get("/metrics")(metrics_endpoint)
 
 API_KEY_HEADER = APIKeyHeader(name="X-API-Key", auto_error=False)
 RATE_LIMIT = int(os.getenv("API_RATE_LIMIT", "5"))
@@ -98,6 +111,41 @@ def update_docs_options(
         data.update(payload)
         _save_settings(data)
     return {"status": "ok", "settings": STATE.settings}
+
+
+@app.post("/api/ingest")
+def ingest_async(path: str, tasks: BackgroundTasks) -> dict[str, str]:
+    from scripts import ingest_docs  # type: ignore
+    tasks.add_task(ingest_docs.ingest, path)
+    return {"status": "queued"}
+
+
+@app.post("/api/embeddings")
+def embeddings_async(texts: list[str], model: str, tasks: BackgroundTasks) -> dict[str, str]:
+    from openai import OpenAI  # type: ignore
+    from .retrieval import _embed_texts
+    client = OpenAI()
+    tasks.add_task(_embed_texts, client, model, texts)
+    return {"status": "queued"}
+
+
+@app.post("/api/log")
+def log_async(data: dict[str, Any], path: str, tasks: BackgroundTasks) -> dict[str, str]:
+    import json
+    from pathlib import Path
+    def _write(payload: dict[str, Any], dest: str) -> None:
+        p = Path(dest)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        with p.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(payload, ensure_ascii=False) + "\n")
+    tasks.add_task(_write, data, path)
+    return {"status": "queued"}
+
+import json
+import sys
+from http.server import SimpleHTTPRequestHandler, HTTPServer
+from pathlib import Path
+from urllib.parse import urlparse, parse_qs
 
 
 # Ensure project root on path to import scripts.ingest_docs

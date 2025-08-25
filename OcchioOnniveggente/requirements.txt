@@ -19,4 +19,11 @@ PySide6>=6.6
 PySide6-Addons>=6.6
 shiboken6>=6.6
 
+# Observability
+prometheus-client>=0.20.0
+opentelemetry-sdk>=1.25.0
+opentelemetry-instrumentation-fastapi>=0.45b0
+sentry-sdk>=2.0.0
+
 # PySide6 6.7+ may require PySide6-Essentials as well
+redis>=5.0.0

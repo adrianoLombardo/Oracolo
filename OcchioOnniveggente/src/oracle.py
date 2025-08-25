@@ -5,13 +5,17 @@ import json
 import re
 import uuid
 import csv
+import hashlib
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
 import asyncio
 import logging
 import openai
+from .openai_async import run_async
+from .local_audio import tts_local, stt_local
 from .utils import retry_with_backoff
+from .cache import cache_get_json, cache_set_json
 
 
 logger = logging.getLogger(__name__)
@@ -19,6 +23,11 @@ logger = logging.getLogger(__name__)
 
 def fast_transcribe(path_or_bytes, client, stt_model: str, lang_hint: str | None = None) -> str:
     """Perform a single transcription call with optional language hint."""
+    if stt_model == "local":
+        p = Path(path_or_bytes) if isinstance(path_or_bytes, (str, Path)) else Path("temp.wav")
+        if not isinstance(path_or_bytes, (str, Path)):
+            p.write_bytes(path_or_bytes)
+        return stt_local(p, lang_hint or "it")
     kwargs: Dict[str, Any] = {}
     if lang_hint in ("it", "en"):
         kwargs["language"] = lang_hint
@@ -52,6 +61,28 @@ def transcribe(
     ``lang_hint`` forza la lingua ("it" o "en") migliorando l'accuratezza
     della trascrizione quando la lingua di conversazione è nota.
     """
+
+    if stt_model == "local":
+        p = Path(path_or_bytes) if isinstance(path_or_bytes, (str, Path)) else Path("temp.wav")
+        if not isinstance(path_or_bytes, (str, Path)):
+            p.write_bytes(path_or_bytes)
+        return stt_local(p, lang_hint or "it"), lang_hint or ""
+
+    data_bytes: bytes
+    try:
+        if isinstance(path_or_bytes, (str, Path)):
+            data_bytes = Path(path_or_bytes).read_bytes()
+        else:
+            data_bytes = path_or_bytes
+    except Exception:
+        data_bytes = b''
+    key_hash = hashlib.sha1(data_bytes).hexdigest()
+    cache_key = f"transcribe:{key_hash}:{lang_hint or ''}"
+    cached = cache_get_json(cache_key)
+    if cached:
+        return cached.get('text', ''), cached.get('lang', '')
+
+
     try:
         kwargs: Dict[str, Any] = {
             "model": stt_model,
@@ -84,6 +115,7 @@ def transcribe(
     if debug and lang_code:
         logger.info("🌐 Lingua rilevata: %s", lang_code.upper())
 
+    cache_set_json(cache_key, {'text': text, 'lang': lang_code})
     return text, lang_code
 
 
@@ -106,6 +138,13 @@ def oracle_answer(
     augments it with simple policy instructions and attempts the request up to
     three times to handle transient API errors gracefully.
     """
+    payload = {'q': question, 'lang': lang_hint, 'context': context, 'history': history, 'topic': topic, 'policy': policy_prompt, 'mode': mode}
+    key_hash = hashlib.sha1(json.dumps(payload, sort_keys=True, default=str).encode('utf-8')).hexdigest()
+    cache_key = f'oracle:{key_hash}'
+    cached = cache_get_json(cache_key)
+    if cached is not None:
+        return cached, context or []
+
     logger.info("✨ Interrogo l’Oracolo…")
 
     lang_clause = "Answer in English." if lang_hint == "en" else "Rispondi in italiano."
@@ -158,11 +197,11 @@ def oracle_answer(
     try:
         resp = retry_with_backoff(do_request)
         ans = resp.output_text.strip()
+        cache_set_json(cache_key, ans)
         return ans, context or []
     except openai.OpenAIError as e:
         logger.error("Errore OpenAI: %s", e)
         return "", context or []
-
 
 async def oracle_answer_async(
     question: str,
@@ -178,7 +217,7 @@ async def oracle_answer_async(
     mode: str = "detailed",
 ) -> Tuple[str, List[Dict[str, Any]]]:
     """Asynchronous wrapper around :func:`oracle_answer`."""
-    return await asyncio.to_thread(
+    return await run_async(
         oracle_answer,
         question,
         lang_hint,
@@ -195,6 +234,10 @@ async def oracle_answer_async(
 
 def synthesize(text: str, out_path: Path, client, tts_model: str, tts_voice: str) -> None:
     logger.info("🎧 Sintesi vocale…")
+    if tts_model == "local":
+        tts_local(text, out_path)
+        logger.info("✅ Audio → %s", out_path.name)
+        return
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
     def do_call() -> Path:
@@ -225,7 +268,7 @@ async def synthesize_async(
     text: str, out_path: Path, client, tts_model: str, tts_voice: str
 ) -> None:
     """Asynchronously run :func:`synthesize` in a thread."""
-    await asyncio.to_thread(synthesize, text, out_path, client, tts_model, tts_voice)
+    await run_async(synthesize, text, out_path, client, tts_model, tts_voice)
 
 
 def export_audio_answer(
