@@ -41,10 +41,27 @@ richieste sulla CPU quando l'uso della GPU supera il 90%.
 
 Per usare un modello eseguito in locale è possibile impostare `llm_backend: local`
 e indicare in `openai.llm_model` il percorso del modello. Il wrapper utilizza
-`transformers` (o `llama-cpp`) e richiede una GPU con almeno ~8 GB di VRAM per un
-modello da 7B quantizzato a 4‑bit. Modelli più grandi necessitano di maggiore
-memoria o di tecniche di quantizzazione appropriate. In caso di errore il
-sistema effettua automaticamente il fallback al backend OpenAI.
+`transformers` (o `llama-cpp`) e supporta diversi livelli di precisione per
+riduire il consumo di memoria.
+
+Requisiti indicativi:
+
+- **fp32/fp16/bf16** – precisione piena o a 16 bit, richiede una GPU con almeno
+  ~8‑16 GB di VRAM a seconda delle dimensioni del modello.
+- **int4** – quantizzazione a 4 bit tramite `bitsandbytes`, consente di eseguire
+  un modello 7B con ~4 GB di VRAM.
+
+La precisione si seleziona in `settings.yaml` tramite `compute.llm.precision`:
+
+```yaml
+compute:
+  llm:
+    device: cuda         # auto | cpu | cuda
+    precision: int4      # fp32 | fp16 | bf16 | int4
+```
+
+In caso di errore il sistema effettua automaticamente il fallback al backend
+OpenAI.
 
 
 ---
@@ -60,6 +77,11 @@ Servono inoltre:
 - **Python 3.10+**
 - Un'API key OpenAI (`OPENAI_API_KEY`)
 - (Opzionale) GPU NVIDIA con ≥4 GB di VRAM per usare modelli Whisper locali; in assenza viene usata la CPU (più lenta).
+  La selezione del device è gestita da `resolve_device` e può essere
+  personalizzata impostando `compute.device` in `settings.yaml` o la
+  variabile d'ambiente `ORACOLO_DEVICE` (`auto`, `cpu`, `cuda`). La soglia
+  minima di VRAM (4 GB di default) è configurabile tramite
+  `ORACOLO_MIN_CUDA_GB`.
 
 ---
 
