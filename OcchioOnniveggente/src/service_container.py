@@ -12,8 +12,24 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import atexit
-from openai import AsyncOpenAI
 
+from concurrent.futures import ProcessPoolExecutor
+
+import openai
+try:
+    import torch
+except Exception:  # pragma: no cover
+    class _CudaStub:
+        @staticmethod
+        def is_available() -> bool:
+            return False
+
+    class _TorchStub:
+        cuda = _CudaStub()
+
+    torch = _TorchStub()  # type: ignore
+
+from openai import AsyncOpenAI
 from .config import Settings, get_openai_api_key
 from .ui_state import UIState
 from . import openai_async
@@ -27,7 +43,12 @@ class ServiceContainer:
     ui_state: UIState = field(default_factory=UIState)
     datastore: Any | None = None
     audio_module: Any | None = None
+
+    _openai_client: openai.OpenAI | None = field(default=None, init=False)
+    _executor: ProcessPoolExecutor | None = field(default=None, init=False)
+
     _openai_client: AsyncOpenAI | None = field(default=None, init=False)
+
 
     def openai_client(self) -> AsyncOpenAI:
         """Return a lazily initialized OpenAI client."""
@@ -36,6 +57,23 @@ class ServiceContainer:
             api_key = get_openai_api_key(self.settings)
             self._openai_client = AsyncOpenAI(api_key=api_key)
         return self._openai_client
+
+
+    def executor(self) -> ProcessPoolExecutor:
+        """Return a lazily initialized process pool executor."""
+
+        if self._executor is None:
+            workers = 1 if torch.cuda.is_available() else self.settings.openai.max_workers
+            self._executor = ProcessPoolExecutor(max_workers=workers)
+        return self._executor
+
+    def shutdown(self) -> None:
+        """Shutdown managed resources."""
+
+        if self._executor is not None:
+            self._executor.shutdown(wait=True)
+            self._executor = None
+
 
     def close(self) -> None:
         """Shutdown all services including async helpers."""
