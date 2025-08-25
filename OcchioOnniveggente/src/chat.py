@@ -17,6 +17,7 @@ class ChatState:
     topic_locked: bool = False
     pinned: List[str] = field(default_factory=list)
     summary: str = ""
+    language: Optional[str] = None
     pinned_limit: int = 5
 
     def reset(self) -> None:

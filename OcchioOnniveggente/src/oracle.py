@@ -11,12 +11,16 @@ from typing import Any, Dict, List, Tuple
 
 import asyncio
 import logging
+import io
+from langdetect import detect
+from pydub import AudioSegment
 import openai
 from .openai_async import run_async
 from .local_audio import tts_local, stt_local
 from .utils import retry_with_backoff
 from .cache import cache_get_json, cache_set_json
 from .service_container import container
+from .chat import ChatState
 
 
 logger = logging.getLogger(__name__)
@@ -54,6 +58,53 @@ def fast_transcribe(
     return (getattr(tx, "text", "") or "").strip()
 
 
+def detect_language(
+    path_or_bytes: str | Path | bytes | None = None,
+    text: str | None = None,
+    *,
+    client: Any | None = None,
+    stt_model: str = "",
+    state: ChatState | None = None,
+) -> str:
+    """Detect conversation language from audio or text.
+
+    Returns ``"it"`` for Italian, ``"en"`` for English or ``""`` if unknown.
+    When ``state`` is provided the detected language is stored in
+    ``state.language`` for future reuse.
+    """
+
+    snippet = ""
+    if text:
+        snippet = text
+    elif path_or_bytes is not None and client is not None and stt_model:
+        try:
+            if isinstance(path_or_bytes, (str, Path)):
+                audio = AudioSegment.from_file(path_or_bytes)
+            else:
+                audio = AudioSegment.from_file(io.BytesIO(path_or_bytes))
+            audio = audio[:2000]
+            buf = io.BytesIO()
+            audio.export(buf, format="wav")
+            buf.seek(0)
+            snippet = fast_transcribe(buf, client, stt_model) or ""
+        except Exception as e:
+            logger.error("Errore rilevamento lingua: %s", e, exc_info=True)
+
+    lang = ""
+    if snippet:
+        try:
+            det = detect(snippet)
+            if det.startswith("it"):
+                lang = "it"
+            elif det.startswith("en"):
+                lang = "en"
+        except Exception:
+            lang = ""
+
+    if state is not None and lang in ("it", "en"):
+        state.language = lang
+    return lang
+
 def transcribe(
     path_or_bytes: str | Path | bytes,
     client,
@@ -61,12 +112,23 @@ def transcribe(
     *,
     debug: bool = False,
     lang_hint: str | None = None,
+    state: ChatState | None = None,
 ) -> Tuple[str | None, str]:
     """Trascrive un percorso o dei ``bytes`` e restituisce testo e lingua.
 
     ``lang_hint`` forza la lingua ("it" o "en") migliorando l'accuratezza
     della trascrizione quando la lingua di conversazione è nota.
     """
+
+    if lang_hint not in ("it", "en") and state and state.language in ("it", "en"):
+        lang_hint = state.language
+    if lang_hint not in ("it", "en"):
+        lang_hint = detect_language(
+            path_or_bytes,
+            client=client,
+            stt_model=stt_model,
+            state=state,
+        )
 
     if stt_model == "local":
         p = Path(path_or_bytes) if isinstance(path_or_bytes, (str, Path)) else Path("temp.wav")
@@ -89,10 +151,13 @@ def transcribe(
     if cached:
         return cached.get('text', ''), cached.get('lang', '')
 
+    model_to_use = stt_model
+    if lang_hint in ("it", "en") and "{lang}" in stt_model:
+        model_to_use = stt_model.replace("{lang}", lang_hint)
 
     try:
         kwargs: Dict[str, Any] = {
-            "model": stt_model,
+            "model": model_to_use,
             "response_format": "json",
         }
         if lang_hint in ("it", "en"):
