@@ -118,6 +118,13 @@ class ChatConfig(BaseModel):
     pinned: List[str] = Field(default_factory=list)
 
 
+class RealtimeAudioConfig(BaseModel):
+    chunk_ms: int = 20
+    start_level: int = 300
+    end_sil_ms: int = 700
+    max_utt_ms: int = 15_000
+
+
 class RealtimeConfig(BaseModel):
     barge_in_threshold: float = 0.55
     ducking_db: float = -12.0
@@ -143,6 +150,7 @@ class Settings(BaseModel):
     retrieval: RetrievalConfig = RetrievalConfig()
     chat: ChatConfig = ChatConfig()
     realtime: RealtimeConfig = RealtimeConfig()
+    realtime_audio: RealtimeAudioConfig = RealtimeAudioConfig()
     
     @classmethod
     def model_validate_yaml(cls, path: Path) -> "Settings":
