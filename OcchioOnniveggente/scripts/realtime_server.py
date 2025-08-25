@@ -176,31 +176,6 @@ async def stream_tts_pcm(
         return
     except TypeError:
         pass
-
-
-            with client.audio.speech.with_streaming_response.create(
-                model=tts_model, voice=tts_voice, input=piece, response_format="wav"
-            ) as resp:
-                buf = io.BytesIO()
-                for chunk in resp.iter_bytes(chunk_size=4096):
-                    buf.write(chunk)
-                    if buf.tell() > 48:
-                        break
-                for chunk in resp.iter_bytes(chunk_size=8192):
-                    buf.write(chunk)
-
-
-            buf.seek(0)
-            with _wave.open(buf, "rb") as wf:
-                assert wf.getsampwidth() == 2 and wf.getnchannels() == 1
-                while True:
-                    frames = wf.readframes(block_frames)
-                    if not frames or (stop and stop()):
-                        break
-                    await ws.send(frames)
-                    await asyncio.sleep(0)
-            if stop and stop():
-
     async with client.audio.speech.with_streaming_response.create(
         model=tts_model, voice=tts_voice, input=text, response_format="wav"
     ) as resp:
@@ -220,9 +195,6 @@ async def stream_tts_pcm(
             if not frames:
 
                 break
-    except Exception:
-        pass
-
 
 class RTSession:
     def __init__(self, ws, setts: Settings, raw: dict) -> None:

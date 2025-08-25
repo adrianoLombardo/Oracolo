@@ -20,13 +20,10 @@ import json as _json
 import openai
 import websockets
 
-from .openai_async import run_async
-from .local_audio import tts_local, stt_local
+from .openai_async import run_async, run
+from .local_audio import tts_local, stt_local, stt_local_faster
 from .local_llm import llm_local
-from .local_audio import tts_local, stt_local_faster
 from .utils import retry_with_backoff
-from .openai_async import run
-from .local_audio import tts_local, stt_local
 from .cache import cache_get_json, cache_set_json
 from .service_container import container
 from .chat import ChatState
@@ -50,11 +47,14 @@ async def fast_transcribe_async(
 ) -> str | None:
     """Perform a single transcription call with optional language hint."""
 
+
+
     if container.settings.stt_backend != "openai":
         pass
 
-    if stt_model == "local":
 
+    if stt_model == "local":
+        container.load_stt_model()
         p = Path(path_or_bytes) if isinstance(path_or_bytes, (str, Path)) else Path("temp.wav")
         if not isinstance(path_or_bytes, (str, Path)):
             p.write_bytes(path_or_bytes)
@@ -67,6 +67,7 @@ async def fast_transcribe_async(
 
     try:
         if stt_model == "local":
+            container.load_stt_model()
             if isinstance(path_or_bytes, (str, Path)):
                 p = Path(path_or_bytes)
             else:
@@ -170,8 +171,6 @@ def detect_language(
     if state is not None and lang in ("it", "en"):
         state.language = lang
     return lang
-
-def transcribe(
 
 def fast_transcribe(
     path_or_bytes,
@@ -485,6 +484,7 @@ async def oracle_answer_async(
 
 
     if llm_model == "local":
+        container.load_llm(llm_model, container.settings.compute.llm.device)
         ans = llm_local(
             question,
             device=container.settings.compute.llm.device,
@@ -736,6 +736,7 @@ def synthesize(
 ) -> Path | None:
     logger.info("🎧 Sintesi vocale…")
     if tts_model == "local":
+        container.load_tts_model()
         tts_local(
             text,
             out_path,
