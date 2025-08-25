@@ -29,6 +29,7 @@ pip install pytest                     # necessario per eseguire i test
 Servono inoltre:
 - **Python 3.10+**
 - Un'API key OpenAI (`OPENAI_API_KEY`)
+- (Opzionale) GPU NVIDIA con ≥4 GB di VRAM per usare modelli Whisper locali; in assenza viene usata la CPU (più lenta).
 
 ---
 
@@ -39,9 +40,13 @@ Esempio minimale di `settings.yaml`:
 
 ```yaml
 debug: true
+stt_backend: openai  # openai | whisper
 openai:
   stt_model: gpt-4o-mini-transcribe
 ```
+
+`stt_backend` permette di usare l'API (`openai`) oppure una trascrizione
+locale tramite `faster-whisper` (`whisper`).
 
 Per avviare con dispositivi audio diversi:
 

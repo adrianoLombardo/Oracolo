@@ -29,7 +29,7 @@ def fast_transcribe(
     lang_hint: str | None = None,
 ) -> str | None:
     """Perform a single transcription call with optional language hint."""
-    if stt_model == "local":
+    if container.settings.stt_backend != "openai":
         p = Path(path_or_bytes) if isinstance(path_or_bytes, (str, Path)) else Path("temp.wav")
         if not isinstance(path_or_bytes, (str, Path)):
             p.write_bytes(path_or_bytes)
@@ -61,6 +61,7 @@ def transcribe(
     *,
     debug: bool = False,
     lang_hint: str | None = None,
+    backend: str | None = None,
 ) -> Tuple[str | None, str]:
     """Trascrive un percorso o dei ``bytes`` e restituisce testo e lingua.
 
@@ -68,7 +69,8 @@ def transcribe(
     della trascrizione quando la lingua di conversazione è nota.
     """
 
-    if stt_model == "local":
+    backend = backend or container.settings.stt_backend
+    if backend != "openai":
         p = Path(path_or_bytes) if isinstance(path_or_bytes, (str, Path)) else Path("temp.wav")
         if not isinstance(path_or_bytes, (str, Path)):
             p.write_bytes(path_or_bytes)

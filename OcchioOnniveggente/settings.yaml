@@ -3,6 +3,9 @@
 # Log di debug (mostra device audio e info VAD)
 debug: false
 
+# Backend STT: "openai" per l'API, "whisper" per modelli locali (faster-whisper, richiede ~4GB VRAM)
+stt_backend: openai
+
 openai:
   # Modello per trascrizione audio (puoi usare anche "whisper-1")
   stt_model: gpt-4o-mini-transcribe

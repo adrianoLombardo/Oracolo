@@ -50,10 +50,27 @@ def tts_local(text: str, out_path: Path, lang: str = "it") -> None:
 def stt_local(audio_path: Path, lang: str = "it") -> str:
     """Attempt a local transcription of ``audio_path``.
 
-    The function uses `speech_recognition` with the PocketSphinx backend when
-    available.  It is intentionally simple and meant only as a latency saving
-    fallback.
+    The function prefers the `faster-whisper` package, automatically
+    selecting GPU or CPU and using quantized models when available.  If the
+    library is missing it falls back to ``speech_recognition`` with the
+    PocketSphinx backend.  On failure an empty string is returned.
     """
+
+    try:
+        from faster_whisper import WhisperModel  # type: ignore
+
+        try:
+            import torch  # type: ignore
+
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+        except Exception:
+            device = "cpu"
+        compute_type = "int8_float16" if device == "cuda" else "int8"
+        model = WhisperModel("base", device=device, compute_type=compute_type)
+        segments, _ = model.transcribe(audio_path.as_posix(), language=lang, task="transcribe")
+        return "".join(seg.text for seg in segments).strip()
+    except Exception:
+        pass
 
     try:
         import speech_recognition as sr  # type: ignore
