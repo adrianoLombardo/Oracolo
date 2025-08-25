@@ -7,10 +7,14 @@ from pathlib import Path
 from typing import List, Dict, Tuple, Iterable, Optional, Any
 import numpy as np
 
+
 try:
     from .metadata_store import MetadataStore
 except Exception:  # pragma: no cover - optional
     MetadataStore = None  # type: ignore
+
+
+from .cache import cache_get_json, cache_set_json
 
 
 # Prova librerie migliori, ma non sono obbligatorie
@@ -134,11 +138,17 @@ def _embed_texts(
         return []
 
     results: List[Optional[np.ndarray]] = [None] * len(texts)
-    to_compute: List[Tuple[int, str, Path | None]] = []
+    to_compute: List[Tuple[int, str, str, Path | None]] = []
     cdir = Path(cache_dir) if cache_dir else None
     if cdir:
         cdir.mkdir(parents=True, exist_ok=True)
     for idx, txt in enumerate(texts):
+        key = hashlib.sha1(txt.encode("utf-8")).hexdigest()
+        cache_key = f"emb:{model}:{key}"
+        cached_vec = cache_get_json(cache_key)
+        if cached_vec is not None:
+            results[idx] = np.array(cached_vec, dtype=np.float32)
+            continue
         if cdir:
             h = hashlib.sha1(txt.encode("utf-8")).hexdigest()
             fp = cdir / f"{h}.npy"
@@ -148,17 +158,18 @@ def _embed_texts(
                     continue
                 except Exception:
                     pass
-            to_compute.append((idx, txt, fp))
+            to_compute.append((idx, txt, cache_key, fp))
         else:
-            to_compute.append((idx, txt, None))
+            to_compute.append((idx, txt, cache_key, None))
 
     if to_compute:
         resp = client.embeddings.create(  # type: ignore[attr-defined]
-            model=model, input=[t for _, t, _ in to_compute]
+            model=model, input=[t for _, t, _, _ in to_compute]
         )
-        for (idx, _txt, fp), item in zip(to_compute, resp.data):
+        for (idx, _txt, cache_key, fp), item in zip(to_compute, resp.data):
             vec = np.array(getattr(item, "embedding", []), dtype=np.float32)
             results[idx] = vec
+            cache_set_json(cache_key, vec.tolist(), ex=86400)
             if fp is not None:
                 try:
                     np.save(fp, vec)

@@ -3,16 +3,27 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from fastapi import FastAPI
+from fastapi import FastAPI, BackgroundTasks
 from pydantic import BaseModel, Field
+from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 
-from .ui_state import UIState
+from .metrics import metrics_endpoint, metrics_middleware
+
+try:
+    from .ui_state import UIState
+except Exception:  # pragma: no cover - fallback for minimal environments
+    class UIState:  # type: ignore[no-redef]
+        def __init__(self) -> None:  # pragma: no cover - simple stub
+            self.settings: dict[str, Any] = {}
 
 STATE = UIState()
 ROOT = Path(__file__).resolve().parents[1]
 SETTINGS_PATH = ROOT / "settings.yaml"
 
 app = FastAPI()
+FastAPIInstrumentor.instrument_app(app)
+app.middleware("http")(metrics_middleware)
+app.get("/metrics")(metrics_endpoint)
 
 
 class DocsOptions(BaseModel):
@@ -50,6 +61,35 @@ def update_docs_options(opts: DocsOptions) -> dict[str, Any]:
         data.update(payload)
         _save_settings(data)
     return {"status": "ok", "settings": STATE.settings}
+
+
+@app.post("/api/ingest")
+def ingest_async(path: str, tasks: BackgroundTasks) -> dict[str, str]:
+    from scripts import ingest_docs  # type: ignore
+    tasks.add_task(ingest_docs.ingest, path)
+    return {"status": "queued"}
+
+
+@app.post("/api/embeddings")
+def embeddings_async(texts: list[str], model: str, tasks: BackgroundTasks) -> dict[str, str]:
+    from openai import OpenAI  # type: ignore
+    from .retrieval import _embed_texts
+    client = OpenAI()
+    tasks.add_task(_embed_texts, client, model, texts)
+    return {"status": "queued"}
+
+
+@app.post("/api/log")
+def log_async(data: dict[str, Any], path: str, tasks: BackgroundTasks) -> dict[str, str]:
+    import json
+    from pathlib import Path
+    def _write(payload: dict[str, Any], dest: str) -> None:
+        p = Path(dest)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        with p.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(payload, ensure_ascii=False) + "\n")
+    tasks.add_task(_write, data, path)
+    return {"status": "queued"}
 
 import json
 import sys
