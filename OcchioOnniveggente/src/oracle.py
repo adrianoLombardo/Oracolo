@@ -21,6 +21,8 @@ import openai
 import websockets
 
 from .openai_async import run_async
+from .local_audio import tts_local, stt_local
+from .local_llm import llm_local
 from .local_audio import tts_local, stt_local_faster
 from .utils import retry_with_backoff
 from .openai_async import run
@@ -72,7 +74,15 @@ async def fast_transcribe_async(
                     tmp.write(path_or_bytes)
                     tmp_path = Path(tmp.name)
                 p = tmp_path
+
+            return stt_local(
+                p,
+                lang=lang_hint or "it",
+                device=container.settings.compute.stt.device,
+            )
+
             return stt_local_faster(p, lang_hint or "it", device=device)
+
 
         kwargs: Dict[str, Any] = {}
         if lang_hint in ("it", "en"):
@@ -237,7 +247,18 @@ async def transcribe_async(
                     tmp.write(path_or_bytes)
                     tmp_path = Path(tmp.name)
                 p = tmp_path
+
+            return (
+                stt_local(
+                    p,
+                    lang=lang_hint or "it",
+                    device=container.settings.compute.stt.device,
+                ),
+                lang_hint or "",
+            )
+
             return stt_local_faster(p, lang_hint or "it", device=device), lang_hint or ""
+
         finally:
             if tmp_path:
                 try:
@@ -459,6 +480,24 @@ async def oracle_answer_async(
     if cached is not None:
         return cached, context or []
     logger.info("✨ Interrogo l’Oracolo…")
+
+
+    if llm_model == "local":
+        ans = llm_local(
+            question,
+            device=container.settings.compute.llm.device,
+            style_prompt=style_prompt,
+            context=context,
+            history=history,
+            topic=topic,
+            policy_prompt=policy_prompt,
+            mode=mode,
+        )
+        cache_set_json(cache_key, ans, ttl=container.settings.cache_ttl)
+        return ans, context or []
+
+
+
     lang_clause = "Answer in English." if lang_hint == "en" else "Rispondi in italiano."
     topic_clause = (
         " Rispondi solo con informazioni coerenti al topic corrente; non mescolare altri temi a meno che l'utente lo chieda esplicitamente. Topic: "
@@ -661,7 +700,11 @@ def synthesize(
 ) -> Path | None:
     logger.info("🎧 Sintesi vocale…")
     if tts_model == "local":
-        tts_local(text, out_path)
+        tts_local(
+            text,
+            out_path,
+            device=container.settings.compute.tts.device,
+        )
         logger.info("✅ Audio → %s", out_path.name)
         return out_path
     out_path.parent.mkdir(parents=True, exist_ok=True)

@@ -24,6 +24,17 @@ class OpenAIConfig(BaseModel):
     max_workers: int = 4
 
 
+class ComputeModuleConfig(BaseModel):
+    device: Literal["auto", "cpu", "cuda"] = "auto"
+
+
+class ComputeConfig(BaseModel):
+    device: Literal["auto", "cpu", "cuda"] = "auto"
+    stt: ComputeModuleConfig = ComputeModuleConfig()
+    llm: ComputeModuleConfig = ComputeModuleConfig()
+    tts: ComputeModuleConfig = ComputeModuleConfig()
+
+
 class AudioConfig(BaseModel):
     sample_rate: int = 24_000
     ask_seconds: int = 10
@@ -140,6 +151,7 @@ class Settings(BaseModel):
     stt_backend: Literal["openai", "whisper"] = "openai"
     wakeword: Optional[str] = None
     openai: OpenAIConfig = OpenAIConfig()
+    compute: ComputeConfig = ComputeConfig()
     audio: AudioConfig = AudioConfig()
     recording: RecordingConfig = RecordingConfig()
     vad: VadConfig = VadConfig()
