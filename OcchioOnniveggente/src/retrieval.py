@@ -15,6 +15,7 @@ except Exception:  # pragma: no cover - optional
 
 
 from .cache import cache_get_json, cache_set_json
+from .openai_async import run
 
 
 # Prova librerie migliori, ma non sono obbligatorie
@@ -163,8 +164,10 @@ def _embed_texts(
             to_compute.append((idx, txt, cache_key, None))
 
     if to_compute:
-        resp = client.embeddings.create(  # type: ignore[attr-defined]
-            model=model, input=[t for _, t, _, _ in to_compute]
+        resp = run(
+            client.embeddings.create,  # type: ignore[attr-defined]
+            model=model,
+            input=[t for _, t, _, _ in to_compute],
         )
         for (idx, _txt, cache_key, fp), item in zip(to_compute, resp.data):
             vec = np.array(getattr(item, "embedding", []), dtype=np.float32)
@@ -187,13 +190,19 @@ def _rewrite_query(client: Any, model: str, query: str, n: int = 2) -> List[str]
     txt = ""
     try:
         # API 'responses' (OpenAI>=2024)
-        resp = client.responses.create(model=model, input=prompt)  # type: ignore[attr-defined]
+        resp = run(
+            client.responses.create,  # type: ignore[attr-defined]
+            model=model,
+            input=prompt,
+        )
         txt = getattr(resp, "output_text", "")
     except Exception:
         try:
             # compatibilità con chat.completions
-            resp = client.chat.completions.create(  # type: ignore[attr-defined]
-                model=model, messages=[{"role": "user", "content": prompt}]
+            resp = run(
+                client.chat.completions.create,  # type: ignore[attr-defined]
+                model=model,
+                messages=[{"role": "user", "content": prompt}],
             )
             txt = resp.choices[0].message.content  # type: ignore[index]
         except Exception:
