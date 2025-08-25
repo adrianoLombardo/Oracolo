@@ -11,7 +11,6 @@ Rectangle {
     border.color: "#3df5ff"
     border.width: 2
 
-
     // Neon glow effect: attempt to use MultiEffect from QtQuick.Effects (Qt 6.5+).
     // If QtQuick.Effects is missing (older Qt versions), fall back to
     // DropShadow from Qt5Compat.GraphicalEffects.
@@ -34,11 +33,12 @@ Rectangle {
         try {
             var component = Qt.createComponent("import QtQuick.Effects; MultiEffect { shadowEnabled: true; shadowColor: '#3df5ff' }");
             if (component.status === Component.Ready) {
-                root.layer.effect = component;
+                root.layer.effect = component.createObject(root);
             }
         } catch (e) {
             // QtQuick.Effects module not present; using DropShadow as fallback
         }
+    }
 
     MultiEffect {
         anchors.fill: parent
@@ -48,7 +48,6 @@ Rectangle {
         shadowBlur: 1.0
         shadowHorizontalOffset: 0
         shadowVerticalOffset: 0
-
     }
 
     ColumnLayout {
