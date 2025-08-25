@@ -34,9 +34,10 @@ qt_add_qml_module(oracolo_client
     URI Oracolo
     VERSION 1.0
     QML_FILES
-        qml/MainWindow.qml
-        qml/DocumentTable.qml
-        qml/RulesPanel.qml
+        MainWindow.qml
+        DocumentTable.qml
+        RulesPanel.qml
+    OUTPUT_DIRECTORY "."
 )
 
 target_link_libraries(oracolo_client
