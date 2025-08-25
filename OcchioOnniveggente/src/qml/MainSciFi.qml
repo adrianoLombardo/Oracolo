@@ -3,8 +3,9 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Effects
 
-Rectangle {
+Window {
     id: root
+    visible: true
     width: 1024
     height: 640
     color: "#0a0d12"
