@@ -44,7 +44,11 @@ async def fast_transcribe_async(
 ) -> str | None:
     """Perform a single transcription call with optional language hint."""
 
+    if container.settings.stt_backend != "openai":
+
+
     if stt_model == "local":
+
         p = Path(path_or_bytes) if isinstance(path_or_bytes, (str, Path)) else Path("temp.wav")
         if not isinstance(path_or_bytes, (str, Path)):
             p.write_bytes(path_or_bytes)
@@ -178,7 +182,11 @@ async def transcribe_async(
     *,
     debug: bool = False,
     lang_hint: str | None = None,
+
+    backend: str | None = None,
+
     state: ChatState | None = None,
+
 ) -> Tuple[str | None, str]:
 
     """Trascrive un percorso o dei ``bytes`` e restituisce testo e lingua.
@@ -186,6 +194,10 @@ async def transcribe_async(
     ``lang_hint`` forza la lingua ("it" o "en") migliorando l'accuratezza
     della trascrizione quando la lingua di conversazione è nota.
     """
+
+
+    backend = backend or container.settings.stt_backend
+    if backend != "openai":
 
     if lang_hint not in ("it", "en") and state and state.language in ("it", "en"):
         lang_hint = state.language
@@ -201,6 +213,7 @@ async def transcribe_async(
     """Trascrive un percorso o dei ``bytes`` e restituisce testo e lingua."""
 
     if stt_model == "local":
+
 
         p = Path(path_or_bytes) if isinstance(path_or_bytes, (str, Path)) else Path("temp.wav")
         if not isinstance(path_or_bytes, (str, Path)):

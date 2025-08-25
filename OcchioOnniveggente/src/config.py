@@ -137,6 +137,7 @@ class RealtimeConfig(BaseModel):
 
 class Settings(BaseModel):
     debug: bool = False
+    stt_backend: Literal["openai", "whisper"] = "openai"
     wakeword: Optional[str] = None
     openai: OpenAIConfig = OpenAIConfig()
     audio: AudioConfig = AudioConfig()
