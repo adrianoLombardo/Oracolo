@@ -21,6 +21,7 @@ from src.config import Settings, get_openai_api_key
 from src.domain import validate_question
 from src.hotword import strip_hotword_prefix
 from src.oracle import oracle_answer_async, transcribe_async
+from src.oracle import oracle_answer_stream, transcribe
 from src.profile_utils import get_active_profile, make_domain_settings
 
 import wave
@@ -351,7 +352,12 @@ class RTSession:
             effective_system = f"{base_system}\n\n[Profilo: {self.profile}]\n{profile_hint}"
         else:
             effective_system = base_system
+
         ans, _ = await oracle_answer_async(
+
+        final = ""
+        async for chunk, done in oracle_answer_stream(
+
             text,
             lang,
             client,
@@ -360,12 +366,16 @@ class RTSession:
             context=context_texts,
             history=(self.chat.history if self.chat_enabled else None),
             topic=self.profile,
-        )
-        if self.chat_enabled:
+        ):
+            if done:
+                final = chunk
+            else:
+                await self.send_partial(chunk)
+        if self.chat_enabled and final:
             self.chat.push_user(text)
-            self.chat.push_assistant(ans)
-        await self.send_answer(ans)
-        await self.stream_sentences(ans, client)
+            self.chat.push_assistant(final)
+        await self.send_answer(final)
+        await self.stream_sentences(final, client)
 
 
 async def handler(ws):
