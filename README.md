@@ -13,7 +13,7 @@ OcchioOnniveggente/
 ## Aggiornamenti backend
 
 - **MetadataStore**: nuovo archivio dei metadati basato su SQLite FTS o PostgreSQL, con supporto opzionale al vector store FAISS.
-- Le chiamate OpenAI pesanti possono ora essere eseguite in un thread pool tramite `openai_async.run_async`, evitando blocchi dell'applicazione. Il numero di thread è configurabile via `openai.max_workers` o variabile d'ambiente `ORACOLO_MAX_WORKERS`.
+- Le chiamate OpenAI utilizzano ora il client asincrono nativo (`openai.AsyncOpenAI`), eliminando il thread pool e semplificando l'integrazione.
 - Funzioni TTS/STT locali con utilità di streaming a chunk in `local_audio.py`.
 - Backend LLM locale opzionale tramite `llm_backend=local` con fallback automatico a OpenAI.
 
@@ -39,6 +39,7 @@ pip install pytest                     # necessario per eseguire i test
 Servono inoltre:
 - **Python 3.10+**
 - Un'API key OpenAI (`OPENAI_API_KEY`)
+- (Opzionale) GPU NVIDIA con ≥4 GB di VRAM per usare modelli Whisper locali; in assenza viene usata la CPU (più lenta).
 
 ---
 
@@ -49,9 +50,13 @@ Esempio minimale di `settings.yaml`:
 
 ```yaml
 debug: true
+stt_backend: openai  # openai | whisper
 openai:
   stt_model: gpt-4o-mini-transcribe
 ```
+
+`stt_backend` permette di usare l'API (`openai`) oppure una trascrizione
+locale tramite `faster-whisper` (`whisper`).
 
 Per avviare con dispositivi audio diversi:
 
