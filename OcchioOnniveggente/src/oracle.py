@@ -16,6 +16,7 @@ from .openai_async import run_async
 from .local_audio import tts_local, stt_local
 from .utils import retry_with_backoff
 from .cache import cache_get_json, cache_set_json
+from .service_container import container
 
 
 logger = logging.getLogger(__name__)
@@ -115,7 +116,11 @@ def transcribe(
     if debug and lang_code:
         logger.info("🌐 Lingua rilevata: %s", lang_code.upper())
 
-    cache_set_json(cache_key, {'text': text, 'lang': lang_code})
+    cache_set_json(
+        cache_key,
+        {'text': text, 'lang': lang_code},
+        ttl=container.settings.cache_ttl,
+    )
     return text, lang_code
 
 
@@ -197,7 +202,7 @@ def oracle_answer(
     try:
         resp = retry_with_backoff(do_request)
         ans = resp.output_text.strip()
-        cache_set_json(cache_key, ans)
+        cache_set_json(cache_key, ans, ttl=container.settings.cache_ttl)
         return ans, context or []
     except openai.OpenAIError as e:
         logger.error("Errore OpenAI: %s", e)
