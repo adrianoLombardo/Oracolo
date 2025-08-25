@@ -18,6 +18,7 @@ import openai
 
 from .config import Settings, get_openai_api_key
 from .ui_state import UIState
+from . import openai_async
 
 
 @dataclass
@@ -54,7 +55,13 @@ class ServiceContainer:
             self._executor.shutdown(wait=True)
             self._executor = None
 
+    def close(self) -> None:
+        """Shutdown all services including async helpers."""
+
+        self.shutdown()
+        openai_async.shutdown()
+
 
 # Default container used by the application
 container = ServiceContainer()
-atexit.register(container.shutdown)
+atexit.register(container.close)
