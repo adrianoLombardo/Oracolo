@@ -2,7 +2,7 @@
 
 #include <QObject>
 #include <QWebSocket>
-#include <QAudioOutput>
+#include <QAudioSink>
 #include <QIODevice>
 #include <QJsonObject>
 #include <QJsonArray>
@@ -21,20 +21,14 @@ public:
     Q_INVOKABLE void sendHello(int sampleRate, int channels);
     Q_INVOKABLE void sendText(const QString &text);
     Q_INVOKABLE void sendCommand(const QString &type, const QVariantMap &payload = {});
-
-signals:
-    void jsonMessageReceived(const QJsonObject &obj);
-    void docListReceived(const QJsonArray &docs);
-    void ruleUpdated(const QJsonObject &rule);
-    void policyStatusReceived(const QJsonObject &status);
-
     Q_INVOKABLE void requestDocuments();
     Q_INVOKABLE void applyRules(const QJsonObject &rules);
 
 signals:
     void jsonMessageReceived(const QJsonObject &obj);
     void documentsReceived(const QJsonArray &docs);
-
+    void ruleUpdated(const QJsonObject &rule);
+    void policyStatusReceived(const QJsonObject &status);
 
 private slots:
     void onConnected();
@@ -43,6 +37,6 @@ private slots:
 
 private:
     QWebSocket m_socket;
-    QAudioOutput *m_audioOutput = nullptr;
+    QAudioSink *m_audioOutput = nullptr;
     QIODevice *m_audioDevice = nullptr;
 };

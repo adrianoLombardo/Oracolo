@@ -11,10 +11,6 @@ ApplicationWindow {
     color: "#0a0d12"
     title: "Occhio Onniveggente"
 
-    ListModel {
-        id: docModel
-    }
-
     ComboBox {
         id: modeBox
         model: ["Museo", "Galleria", "Conferenze", "Didattica"]
@@ -72,26 +68,6 @@ ApplicationWindow {
                 anchors.fill: parent
                 spacing: 8
 
-
-                TableView {
-                    id: docTable
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    model: docModel
-                    clip: true
-                    delegate: Rectangle {
-                        implicitHeight: 32
-                        width: docTable.width
-                        color: index % 2 ? "#151a1f" : "#1e242b"
-                        Text {
-                            anchors.verticalCenter: parent.verticalCenter
-                            anchors.left: parent.left
-                            anchors.leftMargin: 8
-                            text: name
-                            color: "white"
-                        }
-                    }
-
                 RowLayout {
                     Layout.fillWidth: true
                     TextField {
@@ -134,7 +110,6 @@ ApplicationWindow {
                 target: realtimeClient
                 function onDocumentsReceived(docs) {
                     docTable.documents = docs
-
                 }
             }
         }
@@ -159,20 +134,6 @@ ApplicationWindow {
         function onJsonMessageReceived(obj) {
             if (obj.text) {
                 chatArea.text += "Oracolo: " + obj.text + "\n"
-            }
-        }
-        function onDocListReceived(docs) {
-            docModel.clear()
-            for (var i = 0; i < docs.length; ++i) {
-                var item = docs[i]
-                if (typeof item === "string")
-                    docModel.append({ name: item })
-                else if (item.name)
-                    docModel.append({ name: item.name })
-                else if (item.title)
-                    docModel.append({ name: item.title })
-                else
-                    docModel.append({ name: JSON.stringify(item) })
             }
         }
         function onRuleUpdated(rule) {
