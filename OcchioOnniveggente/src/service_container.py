@@ -11,6 +11,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+import atexit
+from concurrent.futures import ThreadPoolExecutor
+
 import openai
 
 from .config import Settings, get_openai_api_key
@@ -26,6 +29,7 @@ class ServiceContainer:
     datastore: Any | None = None
     audio_module: Any | None = None
     _openai_client: openai.OpenAI | None = field(default=None, init=False)
+    _executor: ThreadPoolExecutor | None = field(default=None, init=False)
 
     def openai_client(self) -> openai.OpenAI:
         """Return a lazily initialized OpenAI client."""
@@ -35,6 +39,22 @@ class ServiceContainer:
             self._openai_client = openai.OpenAI(api_key=api_key)
         return self._openai_client
 
+    def executor(self) -> ThreadPoolExecutor:
+        """Return a lazily initialized thread pool executor."""
+
+        if self._executor is None:
+            workers = self.settings.openai.max_workers
+            self._executor = ThreadPoolExecutor(max_workers=workers)
+        return self._executor
+
+    def shutdown(self) -> None:
+        """Shutdown managed resources."""
+
+        if self._executor is not None:
+            self._executor.shutdown(wait=True)
+            self._executor = None
+
 
 # Default container used by the application
 container = ServiceContainer()
+atexit.register(container.shutdown)
