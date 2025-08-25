@@ -18,6 +18,8 @@ qt_add_qml_module(oracolo_client
     VERSION 1.0
     QML_FILES
         qml/MainWindow.qml
+        qml/DocumentTable.qml
+        qml/RulesPanel.qml
 )
 
 target_link_libraries(oracolo_client
