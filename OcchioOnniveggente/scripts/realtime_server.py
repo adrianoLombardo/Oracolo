@@ -25,11 +25,6 @@ from src.profile_utils import get_active_profile, make_domain_settings
 
 import wave
 
-CHUNK_MS = 20
-START_LEVEL = 300
-END_SIL_MS = 700
-MAX_UTT_MS = 15_000
-
 
 
 
@@ -66,11 +61,17 @@ def off_topic_message(profile: str, keywords: list[str]) -> str:
 
 
 async def stream_tts_pcm(
-    ws, client, text: str, tts_model: str, tts_voice: str, sr: int = 24000
+    ws,
+    client,
+    text: str,
+    tts_model: str,
+    tts_voice: str,
+    sr: int = 24000,
+    chunk_ms: int = 20,
 ) -> None:
     """Streamma TTS in PCM nativo se supportato, altrimenti decapsula WAV."""
-    chunk_bytes = int(sr * 2 * CHUNK_MS / 1000)
-    block_frames = int(sr * CHUNK_MS / 1000)
+    chunk_bytes = int(sr * 2 * chunk_ms / 1000)
+    block_frames = int(sr * chunk_ms / 1000)
     try:
         with client.audio.speech.with_streaming_response.create(
             model=tts_model,
@@ -195,6 +196,12 @@ class RTSession:
         self.state = "tts"
         self.barge = False
         try:
+            chunk_bytes = int(
+                self.client_sr
+                * 2
+                * self.SET.realtime_audio.chunk_ms
+                / 1000
+            )
             with client.audio.speech.with_streaming_response.create(
                 model=self.SET.openai.tts_model,
                 voice=self.SET.openai.tts_voice,
@@ -202,7 +209,7 @@ class RTSession:
                 response_format="pcm",
                 sample_rate=self.client_sr,
             ) as resp:
-                for chunk in resp.iter_bytes(chunk_size=960):
+                for chunk in resp.iter_bytes(chunk_size=chunk_bytes):
                     await self.ws.send(chunk)
                     await asyncio.sleep(0)
                     if self.barge:
@@ -231,6 +238,7 @@ class RTSession:
                     self.SET.openai.tts_model,
                     self.SET.openai.tts_voice,
                     sr=self.client_sr,
+                    chunk_ms=self.SET.realtime_audio.chunk_ms,
                 )
             except Exception:
                 break
@@ -244,19 +252,22 @@ class RTSession:
         level = rms_level(data)
 
         self.ms_in_state += frame_ms
-        if level > START_LEVEL * 0.6:
+        start_level = self.SET.realtime_audio.start_level
+        end_sil_ms = self.SET.realtime_audio.end_sil_ms
+        max_utt_ms = self.SET.realtime_audio.max_utt_ms
+        if level > start_level * 0.6:
             self.ms_since_voice = 0
         else:
             self.ms_since_voice += frame_ms
 
         if self.state == "idle":
-            if level >= START_LEVEL:
+            if level >= start_level:
                 print("🎤 rilevato parlato", flush=True)
                 self.state = "talking"
                 self.ms_in_state = 0
                 self.ms_since_voice = 0
         elif self.state == "talking":
-            if self.ms_since_voice >= END_SIL_MS or self.ms_in_state >= MAX_UTT_MS:
+            if self.ms_since_voice >= end_sil_ms or self.ms_in_state >= max_utt_ms:
                 await self._finalize_utterance()
                 self.buf.clear()
                 self.state = "idle"

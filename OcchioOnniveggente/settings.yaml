@@ -239,6 +239,13 @@ realtime:
   ping_interval: 20              # opzionale, se il server richiede ping WS
   ping_timeout: 20
 
+# Parametri audio per il server realtime
+realtime_audio:
+  chunk_ms: 20
+  start_level: 300
+  end_sil_ms: 700
+  max_utt_ms: 15000
+
 # Stato conversazione (chat multi-turno)
 chat:
   enabled: true

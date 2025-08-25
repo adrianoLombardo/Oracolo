@@ -43,9 +43,12 @@ def cache_get(key: str) -> str | None:
 def cache_set(key: str, value: str, *, ex: int = 3600) -> None:
     """Store a raw string value in Redis with optional expiry."""
     if _cache is None:
+        return
+
 
         return None
         return
+
 
     _safe_call(_cache.set, key, value, ex=ex)  # type: ignore[arg-type]
 
