@@ -29,6 +29,7 @@ except Exception:  # pragma: no cover
     torch = _TorchStub()  # type: ignore
 
 from .config import Settings
+from .utils.device import resolve_device
 
 
 T = TypeVar("T")
@@ -49,7 +50,7 @@ def _get_max_workers() -> int:
 def _get_executor() -> ProcessPoolExecutor | None:
     """Create a process pool when a GPU is present."""
     global _executor
-    if _executor is None and torch.cuda.is_available():
+    if _executor is None and resolve_device("auto") == "cuda":
         workers = max(1, _get_max_workers())
         _executor = ProcessPoolExecutor(max_workers=workers)
         atexit.register(_executor.shutdown)

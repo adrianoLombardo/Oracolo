@@ -26,6 +26,7 @@ class OpenAIConfig(BaseModel):
 
 class ComputeModuleConfig(BaseModel):
     device: Literal["auto", "cpu", "cuda"] = "auto"
+    precision: Literal["fp32", "fp16", "bf16", "int4"] = "fp16"
 
 
 class ComputeConfig(BaseModel):
