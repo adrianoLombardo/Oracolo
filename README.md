@@ -117,6 +117,25 @@ La GUI offre inoltre:
 - Menu **Strumenti** per esportare la conversazione (TXT/MD/JSON), salvare le
   risposte in audio (WAV/MP3) e scaricare log o profili da condividere
 
+### Front-end Qt/QML (sperimentale)
+
+Per un'interfaccia moderna è incluso uno scheletro di client Qt/QML in
+`src/frontend_qt`. Utilizza `QWebSocket` per la conversazione realtime e
+riproduce l'audio PCM in streaming con `QAudioOutput`.
+
+Compilazione e avvio:
+
+```bash
+cd OcchioOnniveggente/src/frontend_qt
+mkdir build && cd build
+cmake .. && cmake --build .
+./oracolo_client
+```
+
+Il client espone le tab **Chat**, **Documenti** e **Impostazioni** oltre a un
+menu a tendina per selezionare la modalità (Museo, Galleria, Conferenze,
+Didattica).
+
 ---
 
 ## 4. Modalità Realtime (WebSocket)
