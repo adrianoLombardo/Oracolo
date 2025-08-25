@@ -9,13 +9,13 @@ from typing import Generator, Literal
 from typing import Generator
 import logging
 
-
 logger = logging.getLogger(__name__)
 
 import numpy as np
 
 from .audio import AudioPreprocessor, load_audio_as_float
 from .config import Settings
+from . import metrics
 
 
 
@@ -43,6 +43,7 @@ def tts_local(
     ``pyttsx3``) and falls back to an empty file if neither is available.
     """
 
+    metrics.record_system_metrics()
     out_path.parent.mkdir(parents=True, exist_ok=True)
     try:  # gTTS first because it is tiny and widely available
         from gtts import gTTS  # type: ignore
@@ -67,13 +68,6 @@ def tts_local(
 
 
 
-def stt_local(
-    audio_path: Path,
-    *,
-    lang: str = "it",
-    device: Literal["auto", "cpu", "cuda"] = "auto",
-) -> str:
-
 def stt_local(audio_path: Path, lang: str = "it") -> str:
 
 
@@ -87,14 +81,14 @@ def stt_local(audio_path: Path, lang: str = "it") -> str:
 
     """Attempt a local transcription of ``audio_path`` using a cleaned signal."""
 
-
+    metrics.record_system_metrics()
     try:
         from faster_whisper import WhisperModel  # type: ignore
 
         try:
             import torch  # type: ignore
 
-            device = "cuda" if torch.cuda.is_available() else "cpu"
+            device = metrics.resolve_device("auto")
         except Exception:
             device = "cpu"
         compute_type = "int8_float16" if device == "cuda" else "int8"
@@ -141,6 +135,8 @@ def stt_local_faster(
     string is returned.
     """
 
+    device = metrics.resolve_device(device)
+    metrics.record_system_metrics()
     try:
         from faster_whisper import WhisperModel  # type: ignore
     except Exception:
