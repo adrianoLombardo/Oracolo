@@ -8,7 +8,7 @@ dependencies when the local backend is not used. It provides a single
 returns the generated text.
 """
 
-from typing import Dict, List, Tuple, Literal
+from typing import Dict, List, Tuple, Literal, Iterator
 
 # simple in-memory cache so that the model is loaded only once
 _MODEL_CACHE: dict[Tuple[str, str, str], Tuple[object, object]] = {}
@@ -90,6 +90,47 @@ def generate(
     if text.startswith(prompt):
         text = text[len(prompt):]
     return text.strip()
+
+
+def stream_generate(
+    messages: List[Dict[str, str]],
+    *,
+    model_path: str,
+    device: str = "cpu",
+    max_new_tokens: int = 256,
+    precision: Literal["fp32", "fp16", "bf16", "int4"] = "fp32",
+) -> Iterator[str]:
+    """Yield generated tokens incrementally using :class:`TextIteratorStreamer`.
+
+    This helper mirrors :func:`generate` but returns an iterator that yields
+    partial text as soon as it is produced by the model.  It is designed for
+    interactive applications where the caller wants to update the UI token by
+    token.
+    """
+
+    from threading import Thread
+    from transformers import TextIteratorStreamer
+
+    tokenizer, model = _load_model(model_path, device, precision)
+
+    prompt = "\n".join(f"{m['role']}: {m['content']}" for m in messages)
+    inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
+
+    streamer = TextIteratorStreamer(
+        tokenizer, skip_prompt=True, skip_special_tokens=True
+    )
+    generation_kwargs = dict(
+        **inputs, max_new_tokens=max_new_tokens, streamer=streamer
+    )
+
+    thread = Thread(target=model.generate, kwargs=generation_kwargs)
+    thread.start()
+
+    try:
+        for text in streamer:
+            yield text
+    finally:
+        thread.join()
 
 """Placeholder helpers for local LLM inference.
 
