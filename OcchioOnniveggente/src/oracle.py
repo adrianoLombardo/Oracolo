@@ -14,7 +14,7 @@ import logging
 import tempfile
 import openai
 from .openai_async import run_async
-from .local_audio import tts_local, stt_local
+from .local_audio import tts_local, stt_local_faster
 from .utils import retry_with_backoff
 from .cache import cache_get_json, cache_set_json
 from .service_container import container
@@ -28,6 +28,8 @@ def fast_transcribe(
     client,
     stt_model: str,
     lang_hint: str | None = None,
+    *,
+    device: str = "cpu",
 ) -> str | None:
     """Perform a single transcription call with optional language hint."""
     tmp_path: Path | None = None
@@ -40,7 +42,7 @@ def fast_transcribe(
                     tmp.write(path_or_bytes)
                     tmp_path = Path(tmp.name)
                 p = tmp_path
-            return stt_local(p, lang_hint or "it")
+            return stt_local_faster(p, lang_hint or "it", device=device)
 
         kwargs: Dict[str, Any] = {}
         if lang_hint in ("it", "en"):
@@ -78,6 +80,7 @@ def transcribe(
     *,
     debug: bool = False,
     lang_hint: str | None = None,
+    device: str = "cpu",
 ) -> Tuple[str | None, str]:
     """Trascrive un percorso o dei ``bytes`` e restituisce testo e lingua.
 
@@ -95,7 +98,7 @@ def transcribe(
                     tmp.write(path_or_bytes)
                     tmp_path = Path(tmp.name)
                 p = tmp_path
-            return stt_local(p, lang_hint or "it"), lang_hint or ""
+            return stt_local_faster(p, lang_hint or "it", device=device), lang_hint or ""
         finally:
             if tmp_path:
                 try:
