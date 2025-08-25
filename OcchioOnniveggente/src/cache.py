@@ -45,11 +45,6 @@ def cache_set(key: str, value: str, *, ex: int = 3600) -> None:
     if _cache is None:
         return
 
-
-        return None
-        return
-
-
     _safe_call(_cache.set, key, value, ex=ex)  # type: ignore[arg-type]
 
 
