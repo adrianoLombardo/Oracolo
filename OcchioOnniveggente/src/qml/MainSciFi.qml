@@ -1,7 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import Qt5Compat.GraphicalEffects
+import QtQuick.Effects
 
 Rectangle {
     id: root
@@ -11,38 +11,8 @@ Rectangle {
     border.color: "#3df5ff"
     border.width: 2
 
-    // Neon glow effect: attempt to use MultiEffect from QtQuick.Effects (Qt 6.5+).
-    // If QtQuick.Effects is missing (older Qt versions), fall back to
-    // DropShadow from Qt5Compat.GraphicalEffects.
     layer.enabled: true
-    layer.effect: fallbackShadow
-
-    // Fallback DropShadow effect; replaced with MultiEffect if available
-    Component {
-        id: fallbackShadow
-        DropShadow {
-            color: "#3df5ff"
-            samples: 32
-            horizontalOffset: 0
-            verticalOffset: 0
-        }
-    }
-
-    // Attempt to dynamically load MultiEffect. Failure leaves DropShadow active.
-    Component.onCompleted: {
-        try {
-            var component = Qt.createComponent("import QtQuick.Effects; MultiEffect { shadowEnabled: true; shadowColor: '#3df5ff' }");
-            if (component.status === Component.Ready) {
-                root.layer.effect = component.createObject(root);
-            }
-        } catch (e) {
-            // QtQuick.Effects module not present; using DropShadow as fallback
-        }
-    }
-
-    MultiEffect {
-        anchors.fill: parent
-        source: root
+    layer.effect: MultiEffect {
         shadowEnabled: true
         shadowColor: "#3df5ff"
         shadowBlur: 1.0
