@@ -64,9 +64,53 @@ ApplicationWindow {
 
         Tab {
             title: "Documenti"
-            Label {
-                anchors.centerIn: parent
-                text: "Elenco documenti..."
+            ColumnLayout {
+                anchors.fill: parent
+                spacing: 8
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    TextField {
+                        id: searchField
+                        Layout.fillWidth: true
+                        placeholderText: "Cerca..."
+                        onTextChanged: docTable.filterText = text
+                    }
+                    Button {
+                        text: "Aggiorna"
+                        onClicked: realtimeClient.requestDocuments()
+                    }
+                }
+
+                RulesPanel {
+                    id: rulesPanel
+                    Layout.fillWidth: true
+                    onApplyRules: realtimeClient.applyRules(rules)
+                }
+
+                DocumentTable {
+                    id: docTable
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    onSelectedDocumentChanged: previewArea.text = selectedDocument ? JSON.stringify(selectedDocument, null, 2) : ""
+                }
+
+                TextArea {
+                    id: previewArea
+                    readOnly: true
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 120
+                    text: "Seleziona un documento"
+                }
+            }
+
+            Component.onCompleted: realtimeClient.requestDocuments()
+
+            Connections {
+                target: realtimeClient
+                function onDocumentsReceived(docs) {
+                    docTable.documents = docs
+                }
             }
         }
 
