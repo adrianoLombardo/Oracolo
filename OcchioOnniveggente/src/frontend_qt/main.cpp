@@ -12,15 +12,10 @@ int main(int argc, char *argv[])
     RealtimeClient client;
     engine.rootContext()->setContextProperty("realtimeClient", &client);
 
-    // When using qt_add_qml_module CMake helper, QML files are embedded under
-    // the prefix `qt/qml/<URI>/`.  The previous URL was missing this prefix,
-    // causing the application to fail to locate the QML resource at runtime.
-    // See: https://doc.qt.io/qt-6/qtqml-cppintegration-topic.html
+    // Load the main QML file from the Oracolo module.
+    engine.loadFromModule(u"Oracolo"_s, u"MainWindow"_s);
 
-    const QUrl url(u"qrc:/qt/qml/Oracolo/qml/MainWindow.qml"_s);
-    QObject::connect(&engine, &QQmlApplicationEngine::objectCreationFailed,
-                     &app, [](){ QCoreApplication::exit(-1); }, Qt::QueuedConnection);
-    engine.load(url);
-
+    if (engine.rootObjects().isEmpty())
+        return -1;
     return app.exec();
 }
