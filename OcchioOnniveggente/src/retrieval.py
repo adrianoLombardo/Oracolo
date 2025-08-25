@@ -7,6 +7,12 @@ from pathlib import Path
 from typing import List, Dict, Tuple, Iterable, Optional, Any
 import numpy as np
 
+try:
+    from .metadata_store import MetadataStore
+except Exception:  # pragma: no cover - optional
+    MetadataStore = None  # type: ignore
+
+
 # Prova librerie migliori, ma non sono obbligatorie
 try:
     from rank_bm25 import BM25Okapi  # pip install rank-bm25
@@ -252,7 +258,7 @@ def retrieve(
     embed_model: str | None = None,
     rewrite_model: str | None = None,
     rerank_model: str | None = None,
-) -> List[Dict]:
+    store: Any | None = None) -> List[Dict]:
     """Hybrid BM25 + embedding retrieval returning metadata for citations."""
     if client is not None and rewrite_model:
         try:
@@ -262,7 +268,10 @@ def retrieve(
         except Exception:
             pass
 
-    docs = _load_index(docstore_path)
+    if store is not None:
+        docs = store.get_documents() if hasattr(store, "get_documents") else []
+    else:
+        docs = _load_index(docstore_path)
     if topic:
         tnorm = str(topic).lower()
         docs = [d for d in docs if str(d.get("topic", "")).lower() == tnorm]
