@@ -67,10 +67,15 @@ class _TaskJob:
     args: tuple
     kwargs: dict
     submitted: float
+    future: asyncio.Future
+    tag: str
 
 
 class Orchestrator:
-    """Simple orchestrator to balance STT (GPU) and TTS (CPU) tasks."""
+    """Orchestrates CPU-bound and GPU-bound work using queues."""
+
+
+    def __init__(self, n_cpu: int = 4, n_gpu: int = 1) -> None:
 
     def __init__(self) -> None:
 
@@ -80,10 +85,90 @@ class Orchestrator:
         conc = max(1, int(getattr(settings.compute, "device_concurrency", 1)))
         self._gpu_sems = [asyncio.Semaphore(conc) for _ in range(self.n_gpu)]
         self._next_gpu = 0
+
         self.gpu_available = resolve_device("auto") == "cuda"
-        self._gpu_sem = asyncio.Semaphore(1 if self.gpu_available else 0)
-        self._cpu_sem = asyncio.Semaphore(4)
+        self.cpu_queue: asyncio.Queue[_TaskJob] = asyncio.Queue()
+        self.gpu_queue: asyncio.Queue[_TaskJob] = asyncio.Queue()
         self.metrics: list[dict[str, Any]] = []
+
+        self.cpu_workers = [asyncio.create_task(self._cpu_worker()) for _ in range(n_cpu)]
+        self.gpu_workers: list[asyncio.Task] = []
+        if self.gpu_available:
+            self.gpu_workers = [asyncio.create_task(self._gpu_worker()) for _ in range(n_gpu)]
+
+    async def _cpu_worker(self) -> None:
+        while True:
+            job = await self.cpu_queue.get()
+            start = time.time()
+            try:
+                if asyncio.iscoroutinefunction(job.func):
+                    res = await job.func(*job.args, **job.kwargs)
+                else:
+                    res = await asyncio.to_thread(job.func, *job.args, **job.kwargs)
+                job.future.set_result(res)
+            except Exception as exc:  # pragma: no cover - pass through
+                job.future.set_exception(exc)
+            finally:
+                qlen = self.cpu_queue.qsize()
+                sat = qlen / max(len(self.cpu_workers), 1)
+                self.metrics.append(
+                    {
+                        "task": job.tag,
+                        "queue_time": start - job.submitted,
+                        "device": "cpu",
+                        "saturation": sat,
+                    }
+                )
+                self.cpu_queue.task_done()
+
+    async def _gpu_worker(self) -> None:
+        while True:
+            job = await self.gpu_queue.get()
+            start = time.time()
+            try:
+                if asyncio.iscoroutinefunction(job.func):
+                    res = await job.func(*job.args, **job.kwargs)
+                else:
+                    res = await asyncio.to_thread(job.func, *job.args, **job.kwargs)
+                job.future.set_result(res)
+            except Exception as exc:  # pragma: no cover - pass through
+                job.future.set_exception(exc)
+            finally:
+                qlen = self.gpu_queue.qsize()
+                sat_base = len(self.gpu_workers) or 1
+                sat = qlen / sat_base
+                self.metrics.append(
+                    {
+                        "task": job.tag,
+                        "queue_time": start - job.submitted,
+                        "device": "cuda" if self.gpu_available else "cpu",
+                        "saturation": sat,
+                    }
+                )
+                self.gpu_queue.task_done()
+
+    async def run_cpu(self, func, *args, tag="cpu", **kwargs):
+        loop = asyncio.get_running_loop()
+        fut = loop.create_future()
+        job = _TaskJob(func, args, kwargs, time.time(), fut, tag)
+        await self.cpu_queue.put(job)
+        return await fut
+
+    async def run_gpu(self, func, *args, tag="gpu", **kwargs):
+        if not self.gpu_available:
+            return await self.run_cpu(func, *args, tag=tag, **kwargs)
+        loop = asyncio.get_running_loop()
+        fut = loop.create_future()
+        job = _TaskJob(func, args, kwargs, time.time(), fut, tag)
+        await self.gpu_queue.put(job)
+        return await fut
+
+    async def run_stt(self, func, *args, **kwargs):
+        return await self.run_gpu(func, *args, tag="stt", **kwargs)
+
+    async def run_tts(self, coro_func, *args, **kwargs):
+        return await self.run_cpu(coro_func, *args, tag="tts", **kwargs)
+
         self._metrics_task: asyncio.Task | None = None
 
     def _ensure_metrics_task(self) -> None:
@@ -175,7 +260,8 @@ class Orchestrator:
             return await coro_func(*job.args, **job.kwargs)
 
 
-ORCH = Orchestrator()
+
+ORCH: Orchestrator | None = None
 
 
 def rms_level(pcm_bytes: bytes) -> float:
@@ -234,14 +320,32 @@ async def stream_tts_pcm(
         return obj
 
     text_iter = _wrap_stream(text_stream)
-
     chunk_bytes = int(sr * 2 * chunk_ms / 1000)
-    block_frames = int(sr * chunk_ms / 1000)
-    try:
 
+    try:
         async for piece in text_iter:
             if stop and stop():
                 break
+
+            async with client.audio.speech.with_streaming_response.create(
+                model=tts_model,
+                voice=tts_voice,
+                input=piece,
+                response_format="pcm",
+                sample_rate=sr,
+            ) as resp:
+                async for chunk in resp.aiter_bytes(chunk_size=chunk_bytes):
+                    await ws.send(chunk)
+                    await asyncio.sleep(0)
+                    if stop and stop():
+                        break
+            if stop and stop():
+                break
+    except Exception:
+        pass
+        pass
+
+
             try:
                 with client.audio.speech.with_streaming_response.create(
                     model=tts_model,
@@ -295,6 +399,7 @@ async def stream_tts_pcm(
             if not frames:
 
                 break
+
 
 class RTSession:
     def __init__(self, ws, setts: Settings, raw: dict) -> None:
@@ -495,6 +600,7 @@ class RTSession:
             client,
             self.SET.openai.stt_model,
             debug=self.SET.debug,
+        )
 
         text = ""
         async for chunk, done in transcribe_stream(
@@ -505,9 +611,12 @@ class RTSession:
             text = chunk
         lang = "it"
 
-        text, lang = await transcribe_async(
-            self.in_wav, client, self.SET.openai.stt_model, debug=self.SET.debug
-
+        text, lang = await ORCH.run_gpu(
+            transcribe_async,
+            self.in_wav,
+            client,
+            self.SET.openai.stt_model,
+            debug=self.SET.debug,
         )
 
         if not text.strip():
@@ -571,7 +680,17 @@ class RTSession:
         else:
             effective_system = base_system
 
-        ans, _ = await oracle_answer_async(
+        ans, _ = await ORCH.run_gpu(
+            oracle_answer_async,
+            text,
+            lang,
+            client,
+            self.SET.openai.llm_model,
+            effective_system,
+            context=context_texts,
+            history=(self.chat.history if self.chat_enabled else None),
+            topic=self.profile,
+        )
 
         final = ""
         async for chunk, done in oracle_answer_stream(
@@ -599,8 +718,11 @@ class RTSession:
 
 
 async def handler(ws):
+    global ORCH
     raw_cfg = yaml.safe_load((ROOT / "settings.yaml").read_text(encoding="utf-8")) or {}
     SET = Settings.model_validate(raw_cfg)
+    if ORCH is None:
+        ORCH = Orchestrator(SET.realtime.cpu_workers, SET.realtime.gpu_workers)
     sess = RTSession(ws, SET, raw_cfg)
 
     try:

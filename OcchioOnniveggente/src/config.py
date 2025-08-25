@@ -152,6 +152,8 @@ class RealtimeAudioConfig(BaseModel):
 class RealtimeConfig(BaseModel):
     barge_in_threshold: float = 0.55
     ducking_db: float = -12.0
+    cpu_workers: int = 4
+    gpu_workers: int = 1
 
 
 class Settings(BaseModel):
