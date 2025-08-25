@@ -9,6 +9,7 @@ set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
 
+set(QT_QML_GENERATE_QMLLS_INI ON)
 find_package(Qt6 6.2 COMPONENTS Quick Qml WebSockets Multimedia REQUIRED)
 qt_policy(SET QTP0001 NEW)
 qt_policy(SET QTP0004 NEW)
