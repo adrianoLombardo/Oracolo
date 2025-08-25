@@ -20,6 +20,7 @@ from src.chat import ChatState
 from src.config import Settings, get_openai_api_key
 from src.domain import validate_question
 from src.hotword import strip_hotword_prefix
+from src.oracle import oracle_answer_stream, transcribe_stream
 from src.oracle import oracle_answer_async, transcribe_async
 from src.oracle import oracle_answer_stream, transcribe
 from src.profile_utils import get_active_profile, make_domain_settings
@@ -282,6 +283,7 @@ class RTSession:
         # Convert the raw PCM buffer to a temporary WAV file so that
         # OpenAI's transcription API receives a supported format.
         write_wav(self.in_wav, self.client_sr, audio_bytes)
+        self.barge = False
 
         from openai import AsyncOpenAI
 
@@ -289,9 +291,20 @@ class RTSession:
         api_key = get_openai_api_key(self.SET)
         client = AsyncOpenAI(api_key=api_key) if api_key else AsyncOpenAI()
 
+
+        text = ""
+        async for chunk, done in transcribe_stream(
+            self.in_wav, client, self.SET.openai.stt_model
+        ):
+            if self.barge:
+                return
+            text = chunk
+        lang = "it"
+
         text, lang = await transcribe_async(
             self.in_wav, client, self.SET.openai.stt_model, debug=self.SET.debug
         )
+
         if not text.strip():
             await self.send_partial("…silenzio…")
             return
@@ -367,6 +380,8 @@ class RTSession:
             history=(self.chat.history if self.chat_enabled else None),
             topic=self.profile,
         ):
+            if self.barge:
+                return
             if done:
                 final = chunk
             else:
