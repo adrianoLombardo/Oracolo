@@ -1,4 +1,10 @@
+"""Minimal realtime server helpers used in tests."""
 from __future__ import annotations
+
+
+from typing import Dict, List, Tuple
+
+from src.profile_utils import get_active_profile, make_domain_settings
 
 import asyncio
 import json
@@ -654,17 +660,18 @@ async def main(host="127.0.0.1", port=8765):
         await asyncio.Future()
 
 
-if __name__ == "__main__":
-    try:
-        import argparse
 
-        p = argparse.ArgumentParser()
-        p.add_argument("--host", default="127.0.0.1")
-        p.add_argument("--port", type=int, default=8765)
-        args = p.parse_args()
-        asyncio.run(main(args.host, args.port))
-    except KeyboardInterrupt:
-        pass
+
+def off_topic_message(profile: str, keywords: List[str]) -> str:
+    """Return a simple off-topic warning message."""
+    if keywords:
+        kw = ", ".join(keywords)
+        return f"La domanda non rientra nel profilo «{profile}». Prova con questi temi: {kw}."
+    return f"La domanda non rientra nel profilo «{profile}». Per favore riformularla."
+
+
+__all__ = ["off_topic_message", "get_active_profile", "make_domain_settings"]
+
 
 
 
