@@ -40,6 +40,11 @@ Servono inoltre:
 - **Python 3.10+**
 - Un'API key OpenAI (`OPENAI_API_KEY`)
 - (Opzionale) GPU NVIDIA con ≥4 GB di VRAM per usare modelli Whisper locali; in assenza viene usata la CPU (più lenta).
+  La selezione del device è gestita da `resolve_device` e può essere
+  personalizzata impostando `compute.device` in `settings.yaml` o la
+  variabile d'ambiente `ORACOLO_DEVICE` (`auto`, `cpu`, `cuda`). La soglia
+  minima di VRAM (4 GB di default) è configurabile tramite
+  `ORACOLO_MIN_CUDA_GB`.
 
 ---
 

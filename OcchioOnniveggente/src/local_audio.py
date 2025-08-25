@@ -14,6 +14,7 @@ import numpy as np
 
 from .audio import AudioPreprocessor, load_audio_as_float
 from .config import Settings
+from .utils.device import resolve_device
 
 
 # Cache per i modelli Whisper caricati localmente. La chiave identifica
@@ -101,6 +102,7 @@ def stt_local(
     try:
         import torch  # type: ignore
 
+
         actual_device = (
             "cuda" if device == "auto" and torch.cuda.is_available() else device
         )
@@ -114,6 +116,12 @@ def stt_local(
         segments, _ = model.transcribe(
             audio_path.as_posix(), language=lang, task="transcribe"
         )
+
+        device = resolve_device("auto")
+        compute_type = "int8_float16" if device == "cuda" else "int8"
+        model = WhisperModel("base", device=device, compute_type=compute_type)
+        segments, _ = model.transcribe(audio_path.as_posix(), language=lang, task="transcribe")
+
         return "".join(seg.text for seg in segments).strip()
     except Exception:
         pass
