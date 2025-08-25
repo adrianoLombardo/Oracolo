@@ -18,7 +18,7 @@ ApplicationWindow {
 
   Rectangle { anchors.fill: parent; color: bg }
 
-  // Sidebar (Modalità)
+  /* Sidebar (Modalità)
   Rectangle {
     id: sidebar
     width: 240; anchors.top: parent.top; anchors.bottom: parent.bottom; anchors.left: parent.left
@@ -91,24 +91,25 @@ ApplicationWindow {
       }
     }
   }
+  */
+
+  // Tabs top
+  TabBar {
+    id: tabs
+    anchors { left: parent.left; right: parent.right; top: parent.top }
+    TabButton { text: "Chat" }
+    TabButton { text: "Documenti" }
+    TabButton { text: "Impostazioni" }
+  }
 
   // Contenuto (tabs)
   StackLayout {
     id: stack
-    anchors { left: sidebar.right; right: parent.right; top: parent.top; bottom: parent.bottom; margins: 16 }
+    anchors { left: parent.left; right: parent.right; top: tabs.bottom; bottom: parent.bottom; margins: 16 }
     currentIndex: tabs.currentIndex
 
     ChatPage { }
     DocumentsPage { }
     SettingsPage { }
-  }
-
-  // Tabs top
-  TabBar {
-    id: tabs
-    anchors { left: sidebar.right; right: parent.right; top: parent.top; margins: 16 }
-    TabButton { text: "Chat" }
-    TabButton { text: "Documenti" }
-    TabButton { text: "Impostazioni" }
   }
 }
