@@ -16,16 +16,23 @@ void RealtimeClient::connectToServer(const QUrl &url)
     m_socket.open(url);
 }
 
+void RealtimeClient::sendCommand(const QString &type, const QVariantMap &payload)
+{
+    QJsonObject obj = QJsonObject::fromVariantMap(payload);
+    obj.insert("type", type);
+    m_socket.sendTextMessage(QJsonDocument(obj).toJson(QJsonDocument::Compact));
+}
+
 void RealtimeClient::sendHello(int sampleRate, int channels)
 {
-    QJsonObject obj{{"type", "hello"}, {"sr", sampleRate}, {"format", "pcm16"}, {"channels", channels}};
-    m_socket.sendTextMessage(QJsonDocument(obj).toJson(QJsonDocument::Compact));
+    QVariantMap payload{{"sr", sampleRate}, {"format", "pcm16"}, {"channels", channels}};
+    sendCommand("hello", payload);
 }
 
 void RealtimeClient::sendText(const QString &text)
 {
-    QJsonObject obj{{"type", "message"}, {"text", text}};
-    m_socket.sendTextMessage(QJsonDocument(obj).toJson(QJsonDocument::Compact));
+    QVariantMap payload{{"text", text}};
+    sendCommand("message", payload);
 }
 
 void RealtimeClient::onConnected()
@@ -50,6 +57,18 @@ void RealtimeClient::onBinaryMessageReceived(const QByteArray &message)
 void RealtimeClient::onTextMessageReceived(const QString &message)
 {
     QJsonDocument doc = QJsonDocument::fromJson(message.toUtf8());
-    if (doc.isObject())
-        emit jsonMessageReceived(doc.object());
+    if (!doc.isObject())
+        return;
+
+    QJsonObject obj = doc.object();
+    const QString type = obj.value("type").toString();
+    if (type == "doc_list") {
+        emit docListReceived(obj.value("docs").toArray());
+    } else if (type == "rule_update") {
+        emit ruleUpdated(obj.value("rule").toObject());
+    } else if (type == "policy_status") {
+        emit policyStatusReceived(obj.value("status").toObject());
+    } else {
+        emit jsonMessageReceived(obj);
+    }
 }
