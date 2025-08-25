@@ -22,7 +22,7 @@ import logging
 
 from src.config import Settings, get_openai_api_key
 from src.filters import ProfanityFilter
-from src.audio import record_until_silence, play_and_pulse
+from src.audio import AudioPreprocessor, record_until_silence, play_and_pulse
 from src.lights import SacnLight, WledLight, color_from_text
 from src.oracle import (
     transcribe,
@@ -106,6 +106,11 @@ def main() -> None:
     AUDIO_SR = AUDIO_CONF.sample_rate
     INPUT_WAV = Path(AUDIO_CONF.input_wav)
     OUTPUT_WAV = Path(AUDIO_CONF.output_wav)
+    PREPROC = AudioPreprocessor(
+        AUDIO_SR,
+        denoise=getattr(AUDIO_CONF, "denoise", False),
+        echo_cancel=getattr(AUDIO_CONF, "echo_cancel", False),
+    )
     in_spec = AUDIO_CONF.input_device
     out_spec = AUDIO_CONF.output_device
     in_dev = pick_device(in_spec, "input")
@@ -305,6 +310,7 @@ def main() -> None:
                     debug=DEBUG and (not args.quiet),
                     input_device_id=in_dev,
                     tts_playing=is_tts_playing,
+                    preprocessor=PREPROC,
                 )
                 if not ok:
                     continue
@@ -414,6 +420,7 @@ def main() -> None:
                     debug=DEBUG and (not args.quiet),
                     input_device_id=in_dev,
                     tts_playing=is_tts_playing,
+                    preprocessor=PREPROC,
                 )
                 if not ok:
                     continue
