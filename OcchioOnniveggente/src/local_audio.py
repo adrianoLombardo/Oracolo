@@ -3,7 +3,7 @@ from __future__ import annotations
 """Local TTS/STT helpers and simple chunked streaming utilities."""
 
 from pathlib import Path
-from typing import Generator
+from typing import Generator, Literal
 
 
 def stream_file(path: Path, chunk_size: int = 4096) -> Generator[bytes, None, None]:
@@ -17,7 +17,13 @@ def stream_file(path: Path, chunk_size: int = 4096) -> Generator[bytes, None, No
             yield chunk
 
 
-def tts_local(text: str, out_path: Path, lang: str = "it") -> None:
+def tts_local(
+    text: str,
+    out_path: Path,
+    *,
+    lang: str = "it",
+    device: Literal["auto", "cpu", "cuda"] = "auto",
+) -> None:
     """Synthesize ``text`` locally if possible.
 
     The function tries a couple of lightweight libraries (``gTTS`` and
@@ -47,7 +53,12 @@ def tts_local(text: str, out_path: Path, lang: str = "it") -> None:
     out_path.write_bytes(b"")
 
 
-def stt_local(audio_path: Path, lang: str = "it") -> str:
+def stt_local(
+    audio_path: Path,
+    *,
+    lang: str = "it",
+    device: Literal["auto", "cpu", "cuda"] = "auto",
+) -> str:
     """Attempt a local transcription of ``audio_path``.
 
     The function uses `speech_recognition` with the PocketSphinx backend when

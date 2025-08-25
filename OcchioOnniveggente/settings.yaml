@@ -3,6 +3,17 @@
 # Log di debug (mostra device audio e info VAD)
 debug: false
 
+compute:
+  # Device di default per il calcolo (auto|cpu|cuda)
+  device: auto
+  stt:
+    device: auto
+  llm:
+    device: auto
+    
+  tts:
+    device: auto
+
 openai:
   # Modello per trascrizione audio (puoi usare anche "whisper-1")
   stt_model: gpt-4o-mini-transcribe
