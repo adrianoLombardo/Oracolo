@@ -89,6 +89,17 @@ ApplicationWindow {
         Component.onCompleted: start()
         onTick: appendLevel(rt.level)
       }
+
+      DocumentsPanel {
+        width: parent.width - 4
+        onDocumentSelected: function(name) {
+          if (rt.connected) {
+            rt.sendDocument(name)
+          } else {
+            Qt.openUrlExternally(Qt.resolvedUrl(name))
+          }
+        }
+      }
     }
   }
 
