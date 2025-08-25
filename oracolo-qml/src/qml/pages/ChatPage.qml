@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import Oracolo
+import "../Palette.js" as Palette
 import "../components"
 
 Item {
@@ -24,14 +25,32 @@ Item {
 
     NeonCard {
       Layout.fillWidth: true; Layout.preferredHeight: 120
-      Label { text: "Parziali: " + rt.partial; color: "#D7FFF9"; wrapMode: Text.Wrap }
+      color: Palette.card
+      Label { text: "Parziali: " + rt.partial; color: Palette.text; wrapMode: Text.Wrap }
     }
 
     ListView {
       id: chatView
       Layout.fillWidth: true; Layout.fillHeight: true
+
+      color: Palette.card
+      Column {
+        anchors.fill: parent; anchors.margins: 0; spacing: 6
+        Label { text: "Ultima risposta"; color: Palette.accentLight; font.bold: true }
+        Flickable {
+          anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom; anchors.top: previous.bottom
+          contentWidth: parent.width; contentHeight: ansText.paintedHeight
+          clip: true
+          Text {
+            id: ansText; width: parent.width; color: Palette.text; wrapMode: Text.Wrap
+            text: rt.answer.length ? rt.answer : "—"
+          }
+        }
+      }
+
       model: conversationModel
       delegate: ChatBubble { text: model.text; fromUser: model.fromUser }
+
     }
   }
 

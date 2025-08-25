@@ -1,8 +1,9 @@
 import QtQuick
+import "../Palette.js" as Palette
 
 Canvas {
   id: canvas
-  property color colorLine: "#00E5FF"
+  property color colorLine: Palette.accent
   property var history: []
   signal tick()
   width: 240; height: 60
