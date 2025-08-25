@@ -2,7 +2,7 @@
 
 #include <QObject>
 #include <QWebSocket>
-#include <QAudioOutput>
+#include <QAudioSink>
 #include <QIODevice>
 #include <QJsonObject>
 #include <QJsonArray>
@@ -37,6 +37,6 @@ private slots:
 
 private:
     QWebSocket m_socket;
-    QAudioOutput *m_audioOutput = nullptr;
+    QAudioSink *m_audioOutput = nullptr;
     QIODevice *m_audioDevice = nullptr;
 };
