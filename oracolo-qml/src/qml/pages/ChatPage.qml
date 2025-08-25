@@ -3,12 +3,25 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import Oracolo
 import "../Palette.js" as Palette
+import "../components"
 
 Item {
   anchors.fill: parent
 
+  ListModel { id: conversationModel }
+
+  Connections {
+    target: rt
+    function onAnswerChanged() {
+      if (rt.answer.length) {
+        conversationModel.append({ text: rt.answer, fromUser: false })
+      }
+    }
+  }
+
   ColumnLayout {
     anchors.fill: parent; spacing: 12
+    anchors.bottomMargin: inputRow.height + 12
 
     NeonCard {
       Layout.fillWidth: true; Layout.preferredHeight: 120
@@ -16,8 +29,10 @@ Item {
       Label { text: "Parziali: " + rt.partial; color: Palette.text; wrapMode: Text.Wrap }
     }
 
-    NeonCard {
+    ListView {
+      id: chatView
       Layout.fillWidth: true; Layout.fillHeight: true
+
       color: Palette.card
       Column {
         anchors.fill: parent; anchors.margins: 0; spacing: 6
@@ -32,17 +47,29 @@ Item {
           }
         }
       }
+
+      model: conversationModel
+      delegate: ChatBubble { text: model.text; fromUser: model.fromUser }
+
+    }
+  }
+
+  Row {
+    id: inputRow
+    anchors.bottom: parent.bottom
+    anchors.right: parent.right
+    anchors.margins: 12
+    spacing: 8
+
+    TextField {
+      id: input
+      width: 240
+      placeholderText: "Scrivi un prompt testuale (facoltativo)…"
     }
 
-    RowLayout {
-      Layout.fillWidth: true
-      TextField {
-        id: input; Layout.fillWidth: true; placeholderText: "Scrivi un prompt testuale (facoltativo)…"
-      }
-      Button {
-        text: "Barge-in"
-        onClicked: rt.sendBargeIn()
-      }
+    RoundButton {
+      text: "\u{1F3A4}"
+      onClicked: rt.sendBargeIn()
     }
   }
 }

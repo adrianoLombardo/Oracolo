@@ -104,3 +104,9 @@ void RealtimeClient::sendBargeIn() {
     QJsonObject obj{{"type", "barge_in"}};
     m_ws.sendTextMessage(QString::fromUtf8(QJsonDocument(obj).toJson(QJsonDocument::Compact)));
 }
+
+void RealtimeClient::sendDocument(const QString& name) {
+    if (!m_connected) return;
+    QJsonObject obj{{"type", "document"}, {"name", name}};
+    m_ws.sendTextMessage(QString::fromUtf8(QJsonDocument(obj).toJson(QJsonDocument::Compact)));
+}

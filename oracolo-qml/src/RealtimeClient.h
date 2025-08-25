@@ -20,6 +20,7 @@ public:
     Q_INVOKABLE void connectToUrl(const QUrl& url);
     Q_INVOKABLE void disconnectFromServer();
     Q_INVOKABLE void sendBargeIn();
+    Q_INVOKABLE void sendDocument(const QString& name);
 
     bool connected() const { return m_connected; }
     QString partial() const { return m_partial; }
