@@ -2228,6 +2228,10 @@ class OracoloUI(tk.Tk):
             )
             if openai_conf["api_key"]:
                 self.chat_entry.configure(state="normal")
+            self.controller.save_settings(self._append_log)
+            self.base_settings = self.controller.base_settings
+            self.local_settings = self.controller.local_settings
+            self.settings = self.controller.settings
             win.destroy()
 
         ttk.Button(win, text="OK", command=on_ok).grid(row=len(rows), column=0, columnspan=2, pady=10)
