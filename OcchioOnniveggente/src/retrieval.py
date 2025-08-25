@@ -180,7 +180,20 @@ def _embed_texts(
 
 
 def _rewrite_query(client: Any, model: str, query: str, n: int = 2) -> List[str]:
-    """Ottiene riformulazioni della query tramite un piccolo modello LLM."""
+    """Ottiene riformulazioni della query tramite un piccolo modello LLM.
+
+    I risultati sono memorizzati in cache usando ``model``, ``query`` e ``n``
+    come parte della chiave; modificare uno di questi parametri invalida la
+    cache. Il contenuto viene mantenuto per circa un'ora.
+    """
+
+    # calcola chiave cache stabile basata sui parametri principali
+    raw_key = f"{model}:{n}:{query}".encode("utf-8")
+    cache_key = "rq:" + hashlib.sha1(raw_key).hexdigest()
+    cached = cache_get_json(cache_key)
+    if isinstance(cached, list) and all(isinstance(x, str) for x in cached):
+        return cached[:n]
+
     prompt = (
         "Fornisci {n} riformulazioni concise della seguente query in italiano o inglese, una per riga.\nQuery: {q}"
     ).format(n=n, q=query)
@@ -199,7 +212,10 @@ def _rewrite_query(client: Any, model: str, query: str, n: int = 2) -> List[str]
         except Exception:
             return []
     lines = [l.strip("- •\t") for l in txt.splitlines() if l.strip()]
-    return lines[:n]
+    lines = lines[:n]
+    if lines:
+        cache_set_json(cache_key, lines, ttl=3600)
+    return lines
 
 
 def _score_fallback(query: str, chunks: List[Chunk], top_k: int) -> List[Tuple[Chunk, float]]:
