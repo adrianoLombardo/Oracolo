@@ -8,7 +8,12 @@ dependencies when the local backend is not used. It provides a single
 returns the generated text.
 """
 
+
 from typing import Dict, List, Tuple, Literal, Iterator
+from typing import Dict, List
+from .service_container import container
+from typing import Dict, List, Tuple, Literal
+
 
 # simple in-memory cache so that the model is loaded only once
 _MODEL_CACHE: dict[Tuple[str, str, str], Tuple[object, object]] = {}
@@ -59,6 +64,7 @@ def _load_model(
     return _MODEL_CACHE[key]
 
 
+
 def generate(
     messages: List[Dict[str, str]],
     *,
@@ -80,7 +86,10 @@ def generate(
     max_new_tokens:
         Number of tokens to generate.
     """
+
+    tokenizer, model = container.load_llm(model_path, device)
     tokenizer, model = _load_model(model_path, device, precision)
+
 
     prompt = "\n".join(f"{m['role']}: {m['content']}" for m in messages)
     inputs = tokenizer(prompt, return_tensors="pt").to(model.device)

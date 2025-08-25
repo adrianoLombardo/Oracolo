@@ -31,6 +31,7 @@ class ComputeModuleConfig(BaseModel):
 
 class ComputeConfig(BaseModel):
     device: Literal["auto", "cpu", "cuda"] = "auto"
+    device_concurrency: int = 1
     stt: ComputeModuleConfig = ComputeModuleConfig()
     llm: ComputeModuleConfig = ComputeModuleConfig()
     tts: ComputeModuleConfig = ComputeModuleConfig()
