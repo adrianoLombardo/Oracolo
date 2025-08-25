@@ -172,6 +172,7 @@ class Settings(BaseModel):
 
     realtime_audio: RealtimeAudioConfig = RealtimeAudioConfig()
 
+    cache_dir: str = "data/cache"
     cache_ttl: int = 3600
 
     
