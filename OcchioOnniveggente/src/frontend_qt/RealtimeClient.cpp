@@ -63,8 +63,6 @@ void RealtimeClient::onBinaryMessageReceived(const QByteArray &message)
         format.setChannelCount(1);
         format.setSampleFormat(QAudioFormat::Int16);
         m_audioOutput = new QAudioSink(QMediaDevices::defaultAudioOutput(), format, this);
-        m_audioOutput = new QAudioOutput(QMediaDevices::defaultAudioOutput(), this);
-        m_audioOutput->setFormat(format);
         m_audioDevice = m_audioOutput->start();
     }
     if (m_audioDevice)
