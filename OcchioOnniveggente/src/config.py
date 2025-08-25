@@ -119,6 +119,8 @@ class ChatConfig(BaseModel):
     inactivity_timeout_s: int = 60
     remember_turns: int = 8
     pinned: List[str] = Field(default_factory=list)
+    summary_model: str = "gpt-4o-mini"
+    summary_max_tokens: int = 256
 
 
 class RealtimeAudioConfig(BaseModel):

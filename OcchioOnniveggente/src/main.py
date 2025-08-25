@@ -16,7 +16,7 @@ import numpy as np
 import sounddevice as sd
 import yaml
 from dotenv import load_dotenv
-from openai import OpenAI
+from openai import AsyncOpenAI
 from pydantic import ValidationError
 import logging
 
@@ -95,7 +95,7 @@ def main() -> None:
         )
         return
 
-    client = OpenAI(api_key=api_key)
+    client = AsyncOpenAI(api_key=api_key)
 
     session_profile_name, _ = get_active_profile(raw_settings)
 

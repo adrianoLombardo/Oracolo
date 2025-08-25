@@ -57,7 +57,7 @@ except ImportError:  # pragma: no cover - fallback se non installato
     def markdown(text: str, *_, **__):
         """Ritorna il testo originale se markdown2 non è disponibile."""
         return text
-from openai import OpenAI
+from openai import AsyncOpenAI
 import re
 import webbrowser
 
@@ -1037,7 +1037,7 @@ class OracoloUI(tk.Tk):
         self, text: str, api_key: str, openai_conf: dict
     ) -> None:
         try:
-            client = OpenAI(api_key=api_key)
+            client = AsyncOpenAI(api_key=api_key)
             style_prompt = (
                 self.settings.get("style_prompt", "") if self.style_var.get() else ""
             )
@@ -1185,7 +1185,7 @@ class OracoloUI(tk.Tk):
         try:
             openai_conf = self.settings.get("openai", {})
             api_key = get_openai_api_key(self.settings)
-            client = OpenAI(api_key=api_key) if api_key else OpenAI()
+            client = AsyncOpenAI(api_key=api_key) if api_key else AsyncOpenAI()
             tts_model = openai_conf.get("tts_model", "gpt-4o-mini-tts")
             tts_voice = openai_conf.get("tts_voice", "alloy")
             await synthesize_async(self.last_answer, Path(path), client, tts_model, tts_voice)
@@ -1329,7 +1329,7 @@ class OracoloUI(tk.Tk):
             try:
                 openai_conf = self.settings.get("openai", {})
                 api_key = get_openai_api_key(self.settings)
-                client = OpenAI(api_key=api_key) if api_key else OpenAI()
+                client = AsyncOpenAI(api_key=api_key) if api_key else AsyncOpenAI()
             except Exception:
                 client = None
             dom = self.settings.get("domain", {}) or {}
@@ -1443,7 +1443,7 @@ class OracoloUI(tk.Tk):
         try:
             openai_conf = self.settings.get("openai", {})
             api_key = get_openai_api_key(self.settings)
-            client = OpenAI(api_key=api_key) if api_key else OpenAI()
+            client = AsyncOpenAI(api_key=api_key) if api_key else AsyncOpenAI()
             model = self.settings.get("llm_model", "gpt-4o")
             info = client.models.retrieve(model)
             ttk.Label(win, text=f"Modello: {info.id}").pack(anchor="w", padx=8, pady=4)
