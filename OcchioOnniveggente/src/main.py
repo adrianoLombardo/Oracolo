@@ -87,7 +87,15 @@ def main() -> None:
         SET = Settings()
 
     api_key = get_openai_api_key(SET)
-    client = OpenAI(api_key=api_key) if api_key else OpenAI()
+    if not api_key:
+        print(
+            "❌ È necessaria una API key OpenAI.\n"
+            "   Imposta la variabile d'ambiente OPENAI_API_KEY"
+            " oppure aggiungi openai.api_key a settings.yaml."
+        )
+        return
+
+    client = OpenAI(api_key=api_key)
 
     session_profile_name, _ = get_active_profile(raw_settings)
 
