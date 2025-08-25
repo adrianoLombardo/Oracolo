@@ -26,6 +26,7 @@ qt_add_qml_module(OracoloUI
         src/qml/components/NeonCard.qml
         src/qml/components/VUMeter.qml
         src/qml/components/Waveform.qml
+        src/qml/components/DocumentsPanel.qml
 )
 
 target_link_libraries(OracoloUI PRIVATE

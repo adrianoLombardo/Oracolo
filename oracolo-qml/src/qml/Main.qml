@@ -49,12 +49,34 @@ ApplicationWindow {
       onTick: appendLevel(rt.level)
     }
 
+
+      // Waveform semplice (usa rt.level storico)
+      Waveform {
+        id: wf
+        width: parent.width - 4; height: 60
+        colorLine: accent
+        Component.onCompleted: start()
+        onTick: appendLevel(rt.level)
+      }
+
+      DocumentsPanel {
+        width: parent.width - 4
+        onDocumentSelected: function(name) {
+          if (rt.connected) {
+            rt.sendDocument(name)
+          } else {
+            Qt.openUrlExternally(Qt.resolvedUrl(name))
+          }
+        }
+      }
+
     Label {
       text: "Wake Word Recognized"
       color: text
       width: parent.width
       horizontalAlignment: Text.AlignHCenter
       font.pixelSize: 16
+
     }
   }
   */
