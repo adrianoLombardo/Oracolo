@@ -1,5 +1,6 @@
 import QtQuick 2.15
 import ".."
+import Theme 1.0
 
 Text {
     id: root
