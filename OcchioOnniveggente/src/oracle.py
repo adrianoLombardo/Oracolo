@@ -447,6 +447,8 @@ async def oracle_answer_async(
     mode: str = "detailed",
     stream: bool = False,
     on_token: callable | None = None,
+    llm_backend: str = "openai",
+    llm_device: str = "cpu",
 ) -> Tuple[str | None, List[Dict[str, Any]]]:
 
     payload = {
@@ -599,15 +601,31 @@ async def oracle_answer_async(
             return "".join(chunks)
 
     try:
-        ans = retry_with_backoff(do_request).strip()
-        cache_set_json(cache_key, ans, ttl=container.settings.cache_ttl)
-        return ans, context or []
+        if llm_backend == "local":
+            from . import local_llm
+
+            try:
+                ans = local_llm.generate(
+                    messages, model_path=llm_model, device=llm_device
+                )
+            except Exception as e:  # pragma: no cover - runtime dependent
+                logger.error("Errore LLM locale: %s", e, exc_info=True)
+                ans = retry_with_backoff(do_request).strip()
+        else:
+            ans = retry_with_backoff(do_request).strip()
     except (openai.OpenAIError, TimeoutError) as e:
         logger.error("Errore OpenAI: %s", e, exc_info=True)
         return None, context or []
 
 
+    cache_set_json(cache_key, ans, ttl=container.settings.cache_ttl)
+    return ans, context or []
+
+async def oracle_answer_async(
+
+
 def oracle_answer(
+
     question: str,
     lang_hint: str,
     client: Any,
@@ -619,9 +637,18 @@ def oracle_answer(
     topic: str | None = None,
     policy_prompt: str = "",
     mode: str = "detailed",
+
+    llm_backend: str = "openai",
+    llm_device: str = "cpu",
+) -> Tuple[str, List[Dict[str, Any]]]:
+    """Asynchronous wrapper around :func:`oracle_answer`."""
+    return await run_async(
+        oracle_answer,
+
 ) -> Tuple[str | None, List[Dict[str, Any]]]:
     return run(
         oracle_answer_async,
+
         question,
         lang_hint,
         client,
@@ -632,6 +659,8 @@ def oracle_answer(
         topic=topic,
         policy_prompt=policy_prompt,
         mode=mode,
+        llm_backend=llm_backend,
+        llm_device=llm_device,
     )
 
 
@@ -655,6 +684,8 @@ async def oracle_answer_stream(
     topic: str | None = None,
     policy_prompt: str = "",
     mode: str = "detailed",
+    llm_backend: str = "openai",
+    llm_device: str = "cpu",
 ):
     """Asynchronous generator yielding partial tokens and the final answer."""
 
@@ -677,8 +708,10 @@ async def oracle_answer_stream(
             topic=topic,
             policy_prompt=policy_prompt,
             mode=mode,
-            stream=True,
-            on_token=_on_token,
+            stream=llm_backend != "local",
+            on_token=_on_token if llm_backend != "local" else None,
+            llm_backend=llm_backend,
+            llm_device=llm_device,
         )
         await queue.put((ans or "", True))
 
