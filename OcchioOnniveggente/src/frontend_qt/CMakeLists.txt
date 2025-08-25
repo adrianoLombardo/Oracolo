@@ -4,7 +4,12 @@ project(oracolo_client LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-find_package(Qt6 6.2 COMPONENTS Quick WebSockets Multimedia REQUIRED)
+set(CMAKE_AUTOMOC ON)
+set(CMAKE_AUTORCC ON)
+set(CMAKE_AUTOUIC ON)
+qt_policy(SET QTP0001 NEW)
+
+find_package(Qt6 6.2 COMPONENTS Quick Qml WebSockets Multimedia REQUIRED)
 
 qt_add_executable(oracolo_client
     main.cpp
