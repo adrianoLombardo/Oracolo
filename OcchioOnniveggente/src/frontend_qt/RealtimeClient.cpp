@@ -28,6 +28,18 @@ void RealtimeClient::sendText(const QString &text)
     m_socket.sendTextMessage(QJsonDocument(obj).toJson(QJsonDocument::Compact));
 }
 
+void RealtimeClient::requestDocuments()
+{
+    QJsonObject obj{{"type", "list_docs"}};
+    m_socket.sendTextMessage(QJsonDocument(obj).toJson(QJsonDocument::Compact));
+}
+
+void RealtimeClient::applyRules(const QJsonObject &rules)
+{
+    QJsonObject obj{{"type", "apply_rules"}, {"rules", rules}};
+    m_socket.sendTextMessage(QJsonDocument(obj).toJson(QJsonDocument::Compact));
+}
+
 void RealtimeClient::onConnected()
 {
     // placeholder for post-connection logic
@@ -50,6 +62,10 @@ void RealtimeClient::onBinaryMessageReceived(const QByteArray &message)
 void RealtimeClient::onTextMessageReceived(const QString &message)
 {
     QJsonDocument doc = QJsonDocument::fromJson(message.toUtf8());
-    if (doc.isObject())
-        emit jsonMessageReceived(doc.object());
+    if (doc.isObject()) {
+        QJsonObject obj = doc.object();
+        if (obj.contains("documents") && obj.value("documents").isArray())
+            emit documentsReceived(obj.value("documents").toArray());
+        emit jsonMessageReceived(obj);
+    }
 }
