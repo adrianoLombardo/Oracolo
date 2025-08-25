@@ -6,6 +6,9 @@
 #include <QIODevice>
 #include <QJsonObject>
 #include <QJsonArray>
+
+#include <QVariantMap>
+
 #include <QUrl>
 
 class RealtimeClient : public QObject
@@ -17,12 +20,21 @@ public:
     Q_INVOKABLE void connectToServer(const QUrl &url);
     Q_INVOKABLE void sendHello(int sampleRate, int channels);
     Q_INVOKABLE void sendText(const QString &text);
+    Q_INVOKABLE void sendCommand(const QString &type, const QVariantMap &payload = {});
+
+signals:
+    void jsonMessageReceived(const QJsonObject &obj);
+    void docListReceived(const QJsonArray &docs);
+    void ruleUpdated(const QJsonObject &rule);
+    void policyStatusReceived(const QJsonObject &status);
+
     Q_INVOKABLE void requestDocuments();
     Q_INVOKABLE void applyRules(const QJsonObject &rules);
 
 signals:
     void jsonMessageReceived(const QJsonObject &obj);
     void documentsReceived(const QJsonArray &docs);
+
 
 private slots:
     void onConnected();
