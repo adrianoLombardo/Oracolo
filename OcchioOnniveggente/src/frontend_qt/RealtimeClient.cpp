@@ -1,6 +1,7 @@
 #include "RealtimeClient.h"
 #include <QJsonDocument>
 #include <QAudioFormat>
+#include <QMediaDevices>
 
 RealtimeClient::RealtimeClient(QObject *parent) : QObject(parent)
 {
@@ -59,7 +60,8 @@ void RealtimeClient::onBinaryMessageReceived(const QByteArray &message)
         format.setSampleRate(24000);
         format.setChannelCount(1);
         format.setSampleFormat(QAudioFormat::Int16);
-        m_audioOutput = new QAudioOutput(format, this);
+        m_audioOutput = new QAudioOutput(QMediaDevices::defaultAudioOutput(), this);
+        m_audioOutput->setFormat(format);
         m_audioDevice = m_audioOutput->start();
     }
     if (m_audioDevice)
@@ -69,25 +71,18 @@ void RealtimeClient::onBinaryMessageReceived(const QByteArray &message)
 void RealtimeClient::onTextMessageReceived(const QString &message)
 {
     QJsonDocument doc = QJsonDocument::fromJson(message.toUtf8());
-
     if (!doc.isObject())
         return;
 
     QJsonObject obj = doc.object();
     const QString type = obj.value("type").toString();
     if (type == "doc_list") {
-        emit docListReceived(obj.value("docs").toArray());
+        emit documentsReceived(obj.value("docs").toArray());
     } else if (type == "rule_update") {
         emit ruleUpdated(obj.value("rule").toObject());
     } else if (type == "policy_status") {
         emit policyStatusReceived(obj.value("status").toObject());
     } else {
-
-    if (doc.isObject()) {
-        QJsonObject obj = doc.object();
-        if (obj.contains("documents") && obj.value("documents").isArray())
-            emit documentsReceived(obj.value("documents").toArray());
-
         emit jsonMessageReceived(obj);
     }
 }
