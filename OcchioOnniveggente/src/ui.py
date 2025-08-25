@@ -947,7 +947,8 @@ class OracoloUI(tk.Tk):
         self.base_settings = self.controller.base_settings
         self.local_settings = self.controller.local_settings
         self.settings = self.controller.settings
-        self._append_log(f"Profilo attivo: {name}", "DOMAIN")
+        # ensure profile message is separated from subsequent log entries
+        self._append_log(f"Profilo attivo: {name}\n", "DOMAIN")
         if self.ws_client is not None:
             self.ws_client.profile_name = name
             if self.ws_client.ws is not None:

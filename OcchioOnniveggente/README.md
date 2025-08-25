@@ -96,18 +96,21 @@ configurare la luce via Art-Net/sACN o WLED.
 
 
 
-### Modulo Qt richiesto
+### Moduli Qt richiesti
 
-L'interfaccia QML utilizza `QtQuick.Effects` e l'elemento `MultiEffect` per
-gestire ombre e altri effetti.
+L'interfaccia QML utilizza ora `QtQuick.Effects` e l'elemento `MultiEffect`
+al posto di `Qt5Compat.GraphicalEffects` per gestire ombre e altri effetti.
 
 #### Installazione con pip
 
-Il modulo è incluso in `PySide6` e si installa con:
+I moduli si installano con:
 
 ```bash
-pip install PySide6 PySide6-Addons shiboken6
+pip install PySide6-Essentials PySide6-Addons shiboken6
 ```
+
+Chi utilizza PySide6 6.6 può invece installare il pacchetto monolitico
+`PySide6`.
 
 #### Pacchetti di sistema
 
