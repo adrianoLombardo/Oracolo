@@ -1,4 +1,5 @@
-"""Utility per la configurazione del logging strutturato.
+"""
+Utility per la configurazione del logging strutturato.
 
 Il modulo imposta un logging asincrono basato su ``QueueListener`` e
 ``RotatingFileHandler``. I messaggi vengono serializzati in JSON e
