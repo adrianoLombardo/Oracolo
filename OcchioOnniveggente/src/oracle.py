@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Tuple, Callable
 
 import asyncio
 import logging
+import tempfile
 import openai
 from .openai_async import run_async
 from .local_audio import tts_local, stt_local
@@ -29,29 +30,45 @@ def fast_transcribe(
     lang_hint: str | None = None,
 ) -> str | None:
     """Perform a single transcription call with optional language hint."""
-    if stt_model == "local":
-        p = Path(path_or_bytes) if isinstance(path_or_bytes, (str, Path)) else Path("temp.wav")
-        if not isinstance(path_or_bytes, (str, Path)):
-            p.write_bytes(path_or_bytes)
-        return stt_local(p, lang_hint or "it")
-    kwargs: Dict[str, Any] = {}
-    if lang_hint in ("it", "en"):
-        kwargs["language"] = lang_hint
-
+    tmp_path: Path | None = None
     try:
+        if stt_model == "local":
+            if isinstance(path_or_bytes, (str, Path)):
+                p = Path(path_or_bytes)
+            else:
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp:
+                    tmp.write(path_or_bytes)
+                    tmp_path = Path(tmp.name)
+                p = tmp_path
+            return stt_local(p, lang_hint or "it")
+
+        kwargs: Dict[str, Any] = {}
+        if lang_hint in ("it", "en"):
+            kwargs["language"] = lang_hint
+
         if isinstance(path_or_bytes, (str, Path)):
             with open(path_or_bytes, "rb") as f:
                 tx = client.audio.transcriptions.create(
                     model=stt_model, file=f, **kwargs
                 )
         else:
-            tx = client.audio.transcriptions.create(
-                model=stt_model, file=path_or_bytes, **kwargs
-            )
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp:
+                tmp.write(path_or_bytes)
+                tmp_path = Path(tmp.name)
+            with open(tmp_path, "rb") as f:
+                tx = client.audio.transcriptions.create(
+                    model=stt_model, file=f, **kwargs
+                )
+        return (getattr(tx, "text", "") or "").strip()
     except (openai.OpenAIError, OSError, TimeoutError) as e:
         logger.error("Errore trascrizione: %s", e, exc_info=True)
         return None
-    return (getattr(tx, "text", "") or "").strip()
+    finally:
+        if tmp_path:
+            try:
+                tmp_path.unlink()
+            except OSError:
+                logger.warning("Impossibile eliminare file temporaneo %s", tmp_path, exc_info=True)
 
 
 def transcribe(
@@ -69,10 +86,22 @@ def transcribe(
     """
 
     if stt_model == "local":
-        p = Path(path_or_bytes) if isinstance(path_or_bytes, (str, Path)) else Path("temp.wav")
-        if not isinstance(path_or_bytes, (str, Path)):
-            p.write_bytes(path_or_bytes)
-        return stt_local(p, lang_hint or "it"), lang_hint or ""
+        tmp_path: Path | None = None
+        try:
+            if isinstance(path_or_bytes, (str, Path)):
+                p = Path(path_or_bytes)
+            else:
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp:
+                    tmp.write(path_or_bytes)
+                    tmp_path = Path(tmp.name)
+                p = tmp_path
+            return stt_local(p, lang_hint or "it"), lang_hint or ""
+        finally:
+            if tmp_path:
+                try:
+                    tmp_path.unlink()
+                except OSError:
+                    logger.warning("Impossibile eliminare file temporaneo %s", tmp_path, exc_info=True)
 
     data_bytes: bytes
     try:
