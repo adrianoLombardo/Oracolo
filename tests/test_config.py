@@ -30,3 +30,8 @@ def test_round_trip_defaults(tmp_path: Path) -> None:
     assert loaded == original
     assert loaded.domain.profile == "museo"
     assert loaded.domain.topic == ""
+
+
+def test_device_concurrency_default() -> None:
+    settings = Settings()
+    assert settings.compute.device_concurrency == 1

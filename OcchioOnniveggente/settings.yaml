@@ -1,6 +1,7 @@
 # settings.yaml
 
 # Log di debug (mostra device audio e info VAD)
+
 debug: false
 
 
@@ -12,6 +13,24 @@ compute:
     device: auto
   llm:
     device: auto
+
+debug: false
+
+
+cache_dir: "data/cache"
+cache_ttl: 3600
+
+
+compute:
+  # Device di default per il calcolo (auto|cpu|cuda)
+  device: auto
+  stt:
+    device: auto
+  llm:
+    device: auto
+    batch_interval: 100  # ms between batch flushes
+    max_batch_size: 4    # maximum prompts per batch
+
     
   tts:
     device: auto
