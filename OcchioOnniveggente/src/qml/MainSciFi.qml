@@ -9,6 +9,8 @@ Window {
     width: 1024
     height: 640
     color: "#0a0d12"
+    property var docs: []
+    property var rules: []
 
     Rectangle {
         anchors.fill: parent
@@ -63,6 +65,46 @@ Window {
                     text: "Reload"
                     onClicked: backend.reload()
                 }
+                Button {
+                    text: "Docs"
+                    onClicked: root.docs = backend.get_documents()
+                }
+                Button {
+                    text: "Save"
+                    onClicked: backend.save_config()
+                }
+            }
+
+            RowLayout {
+                spacing: 12
+
+                TextField {
+                    id: ruleField
+                    placeholderText: "kw1, kw2"
+                    Layout.fillWidth: true
+                }
+                Button {
+                    text: "Update"
+                    onClicked: root.rules = backend.update_rules(ruleField.text)
+                }
+            }
+
+            ListView {
+                id: docList
+                model: root.docs
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                delegate: Text {
+                    text: modelData.title ? modelData.title : modelData
+                    color: "#3df5ff"
+                }
+            }
+
+            Text {
+                text: root.rules.join(", ")
+                color: "#3df5ff"
+                wrapMode: Text.Wrap
+                Layout.fillWidth: true
             }
         }
     }
