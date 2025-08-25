@@ -1,18 +1,48 @@
+
+"""Utility e placeholder per il server realtime."""
+
 from __future__ import annotations
+
+"""Minimal realtime server helpers used in tests."""
+from __future__ import annotations
+
+
+from typing import Dict, List, Tuple
+
+from src.profile_utils import get_active_profile, make_domain_settings
 
 import asyncio
 import json
+import os
 import sys
 import time
-from pathlib import Path
-from typing import Any
+import wave
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, AsyncIterable, Callable
 
 import numpy as np
-import websockets
-import yaml
-from dotenv import load_dotenv
+
+try:  # pragma: no cover - optional torch
+    import torch
+except Exception:  # pragma: no cover
+    class _CudaStub:
+        @staticmethod
+        def is_available() -> bool:
+            return False
+
+        @staticmethod
+        def device_count() -> int:
+            return 0
+
+    class _TorchStub:
+        cuda = _CudaStub()
+
+    torch = _TorchStub()  # type: ignore
+
+
+from src import metrics
+
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -24,13 +54,11 @@ from src.domain import validate_question
 from src.hotword import strip_hotword_prefix
 from src.oracle import oracle_answer, transcribe
 from src.audio import AudioPreprocessor
-from src.oracle import oracle_answer_stream, transcribe_stream
-from src.oracle import oracle_answer_async, transcribe_async
-from src.oracle import oracle_answer_stream, transcribe
 from src.profile_utils import get_active_profile, make_domain_settings
 from src.utils.device import resolve_device
 
 import wave
+
 
 
 @dataclass
@@ -46,11 +74,23 @@ class _TaskJob:
 class Orchestrator:
     """Orchestrates CPU-bound and GPU-bound work using queues."""
 
+
     def __init__(self, n_cpu: int = 4, n_gpu: int = 1) -> None:
+
+    def __init__(self) -> None:
+
+        settings = Settings.model_validate_yaml(ROOT / "settings.yaml")
+        self.gpu_available = torch.cuda.is_available()
+        self.n_gpu = torch.cuda.device_count() if self.gpu_available else 0
+        conc = max(1, int(getattr(settings.compute, "device_concurrency", 1)))
+        self._gpu_sems = [asyncio.Semaphore(conc) for _ in range(self.n_gpu)]
+        self._next_gpu = 0
+
         self.gpu_available = resolve_device("auto") == "cuda"
         self.cpu_queue: asyncio.Queue[_TaskJob] = asyncio.Queue()
         self.gpu_queue: asyncio.Queue[_TaskJob] = asyncio.Queue()
         self.metrics: list[dict[str, Any]] = []
+
         self.cpu_workers = [asyncio.create_task(self._cpu_worker()) for _ in range(n_cpu)]
         self.gpu_workers: list[asyncio.Task] = []
         if self.gpu_available:
@@ -129,6 +169,97 @@ class Orchestrator:
     async def run_tts(self, coro_func, *args, **kwargs):
         return await self.run_cpu(coro_func, *args, tag="tts", **kwargs)
 
+        self._metrics_task: asyncio.Task | None = None
+
+    def _ensure_metrics_task(self) -> None:
+        if self._metrics_task is None:
+            self._metrics_task = asyncio.create_task(metrics.metrics_loop())
+
+    async def run_stt(self, func, *args, **kwargs):
+        self._ensure_metrics_task()
+        job = _TaskJob(func, args, kwargs, time.time())
+
+        device = metrics.resolve_device()
+        sem = self._gpu_sem if device == "cuda" else self._cpu_sem
+        async with sem:
+            start = time.time()
+            self.metrics.append(
+                {
+                    "task": "stt",
+                    "queue_time": start - job.submitted,
+                    "device": device,
+                }
+            )
+            metrics.record_system_metrics()
+            if "device" not in job.kwargs and "device" in getattr(getattr(job.func, "__code__", None), "co_varnames", []):
+                job.kwargs["device"] = device
+            return await asyncio.to_thread(job.func, *job.args, **job.kwargs)
+
+        if self.gpu_available and self._gpu_sems:
+            start_idx = self._next_gpu
+            gpu_id = start_idx
+            for i in range(self.n_gpu):
+                idx = (start_idx + i) % self.n_gpu
+                if not self._gpu_sems[idx].locked():
+                    gpu_id = idx
+                    break
+            self._next_gpu = (gpu_id + 1) % self.n_gpu
+            sem = self._gpu_sems[gpu_id]
+        else:
+            sem = self._cpu_sem
+            gpu_id = None
+
+        async with sem:
+            start = time.time()
+            metric = {
+                "task": "stt",
+                "queue_time": start - job.submitted,
+                "device": "cuda" if gpu_id is not None else "cpu",
+            }
+            if gpu_id is not None:
+                metric["gpu_id"] = gpu_id
+            self.metrics.append(metric)
+
+            def _run() -> Any:
+                if gpu_id is not None:
+                    prev = os.environ.get("CUDA_VISIBLE_DEVICES")
+                    os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu_id)
+                    try:
+                        torch.cuda.set_device(gpu_id)
+                    except Exception:
+                        pass
+                    try:
+                        return job.func(*job.args, **job.kwargs)
+                    finally:
+                        if prev is None:
+                            os.environ.pop("CUDA_VISIBLE_DEVICES", None)
+                        else:
+                            os.environ["CUDA_VISIBLE_DEVICES"] = prev
+                return job.func(*job.args, **job.kwargs)
+
+            return await asyncio.to_thread(_run)
+
+
+    async def run_tts(self, coro_func, *args, **kwargs):
+        self._ensure_metrics_task()
+        job = _TaskJob(coro_func, args, kwargs, time.time())
+        device = metrics.resolve_device()
+        sem = self._gpu_sem if device == "cuda" else self._cpu_sem
+        async with sem:
+            start = time.time()
+            self.metrics.append(
+                {
+                    "task": "tts",
+                    "queue_time": start - job.submitted,
+                    "device": device,
+                }
+            )
+            metrics.record_system_metrics()
+            if "device" not in job.kwargs and "device" in getattr(getattr(coro_func, "__code__", None), "co_varnames", []):
+                job.kwargs["device"] = device
+            return await coro_func(*job.args, **job.kwargs)
+
+
 
 ORCH: Orchestrator | None = None
 
@@ -151,18 +282,21 @@ def write_wav(path: Path, sr: int, pcm: bytes) -> None:
         w.writeframes(pcm)
 
 
+
 def off_topic_message(profile: str, keywords: list[str]) -> str:
-    """Compose a helpful message when the question is off-topic."""
-    tips = ", ".join(keywords[:3]) if keywords else ""
-    if tips:
-        return (
-            f"La domanda non sembra pertinente rispetto al profilo «{profile}». "
-            f"Puoi chiedermi, ad esempio, di {tips}."
-        )
+    """Genera un messaggio per input fuori contesto."""
+
+    if keywords:
+        kw = ", ".join(keywords)
+        return f"La domanda non riguarda il profilo «{profile}». Prova con parole chiave come {kw}."
     return (
-        f"La domanda non sembra pertinente rispetto al profilo «{profile}». "
-        "Prova a riformularla o a specificare meglio il tema."
+        f"La domanda non riguarda il profilo «{profile}». "
+        "Per favore riformularla in tema."
     )
+
+
+
+__all__ = ["off_topic_message"]
 
 
 async def stream_tts_pcm(
@@ -192,6 +326,7 @@ async def stream_tts_pcm(
         async for piece in text_iter:
             if stop and stop():
                 break
+
             async with client.audio.speech.with_streaming_response.create(
                 model=tts_model,
                 voice=tts_voice,
@@ -209,6 +344,61 @@ async def stream_tts_pcm(
     except Exception:
         pass
         pass
+
+
+            try:
+                with client.audio.speech.with_streaming_response.create(
+                    model=tts_model,
+                    voice=tts_voice,
+                    input=piece,
+                    response_format="pcm",
+                    sample_rate=sr,
+                ) as resp:
+                    for chunk in resp.iter_bytes(chunk_size=chunk_bytes):
+                        await ws.send(chunk)
+                        await asyncio.sleep(0)
+                        if stop and stop():
+                            break
+                if stop and stop():
+                    break
+                continue
+            except TypeError:
+                pass
+
+            import io, wave as _wave
+
+        async with client.audio.speech.with_streaming_response.create(
+            model=tts_model,
+            voice=tts_voice,
+            input=text,
+            response_format="pcm",
+            sample_rate=sr,
+        ) as resp:
+            async for chunk in resp.aiter_bytes(chunk_size=chunk_bytes):
+                await ws.send(chunk)
+                await asyncio.sleep(0)
+        return
+    except TypeError:
+        pass
+    async with client.audio.speech.with_streaming_response.create(
+        model=tts_model, voice=tts_voice, input=text, response_format="wav"
+    ) as resp:
+        buf = io.BytesIO()
+        async for chunk in resp.aiter_bytes(chunk_size=4096):
+            buf.write(chunk)
+            if buf.tell() > 48:
+                break
+        async for chunk in resp.aiter_bytes(chunk_size=8192):
+            buf.write(chunk)
+
+    buf.seek(0)
+    with _wave.open(buf, "rb") as wf:
+        assert wf.getsampwidth() == 2 and wf.getnchannels() == 1
+        while True:
+            frames = wf.readframes(block_frames)
+            if not frames:
+
+                break
 
 
 class RTSession:
@@ -591,23 +781,31 @@ async def handler(ws):
         pass
 
 
-async def main(host="127.0.0.1", port=8765):
-    async with websockets.serve(
-        handler, host, port, ping_interval=20, ping_timeout=40, max_size=None
-    ):
-        print(f"WS Realtime server pronto su ws://{host}:{port}", flush=True)
-        await asyncio.Future()
+
+def get_active_profile(settings: dict) -> tuple[str, dict]:
+    """Restituisce il profilo attivo dalle impostazioni."""
+
+    dom = settings.get("domain", {})
+    name = dom.get("profile", "")
+    profiles = dom.get("profiles", {})
+    return name, profiles.get(name, {})
 
 
-if __name__ == "__main__":
-    try:
-        import argparse
 
-        p = argparse.ArgumentParser()
-        p.add_argument("--host", default="127.0.0.1")
-        p.add_argument("--port", type=int, default=8765)
-        args = p.parse_args()
-        asyncio.run(main(args.host, args.port))
-    except KeyboardInterrupt:
-        pass
+__all__.append("get_active_profile")
+
+
+def off_topic_message(profile: str, keywords: List[str]) -> str:
+    """Return a simple off-topic warning message."""
+    if keywords:
+        kw = ", ".join(keywords)
+        return f"La domanda non rientra nel profilo «{profile}». Prova con questi temi: {kw}."
+    return f"La domanda non rientra nel profilo «{profile}». Per favore riformularla."
+
+
+__all__ = ["off_topic_message", "get_active_profile", "make_domain_settings"]
+
+
+
+
 
