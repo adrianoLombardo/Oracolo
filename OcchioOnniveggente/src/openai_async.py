@@ -2,22 +2,19 @@ from __future__ import annotations
 
 """Utilities to offload expensive OpenAI calls to a thread pool."""
 
-from concurrent.futures import ThreadPoolExecutor, Future
+from concurrent.futures import Future
 from typing import Callable, TypeVar, Any
 import asyncio
 
-T = TypeVar("T")
+from .service_container import container
 
-# A small global executor used across the application.  The size is kept
-# conservative so that we do not spawn an excessive amount of threads even if
-# many modules import this helper.
-_EXECUTOR = ThreadPoolExecutor(max_workers=4)
+T = TypeVar("T")
 
 
 def submit(func: Callable[..., T], *args: Any, **kwargs: Any) -> Future:
     """Submit ``func`` to the shared executor and return a :class:`Future`."""
 
-    return _EXECUTOR.submit(func, *args, **kwargs)
+    return container.executor().submit(func, *args, **kwargs)
 
 
 def run(func: Callable[..., T], *args: Any, **kwargs: Any) -> T:
@@ -30,4 +27,4 @@ def run_async(func: Callable[..., T], *args: Any, **kwargs: Any) -> asyncio.Futu
     """Awaitable version of :func:`run` using ``asyncio`` integration."""
 
     loop = asyncio.get_running_loop()
-    return loop.run_in_executor(_EXECUTOR, lambda: func(*args, **kwargs))
+    return loop.run_in_executor(container.executor(), lambda: func(*args, **kwargs))

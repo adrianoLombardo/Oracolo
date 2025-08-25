@@ -21,6 +21,7 @@ class OpenAIConfig(BaseModel):
     tts_model: str = "gpt-4o-mini-tts"
     tts_voice: str = "alloy"
     embed_model: str = "text-embedding-3-large"
+    max_workers: int = 4
 
 
 class AudioConfig(BaseModel):
