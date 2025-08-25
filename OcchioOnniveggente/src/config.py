@@ -32,6 +32,8 @@ class AudioConfig(BaseModel):
     input_device: Optional[str | int] = None
     output_device: Optional[str | int] = None
     barge_rms_threshold: float = 0.25
+    denoise: bool = False
+    echo_cancel: bool = False
 
 
 class RecordingConfig(BaseModel):
@@ -135,6 +137,7 @@ class RealtimeConfig(BaseModel):
 
 class Settings(BaseModel):
     debug: bool = False
+    stt_backend: Literal["openai", "whisper"] = "openai"
     wakeword: Optional[str] = None
     openai: OpenAIConfig = OpenAIConfig()
     audio: AudioConfig = AudioConfig()
