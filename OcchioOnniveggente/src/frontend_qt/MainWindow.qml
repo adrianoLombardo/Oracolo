@@ -23,13 +23,23 @@ ApplicationWindow {
         }
     }
 
-    TabView {
-        id: tabs
+    ColumnLayout {
         anchors.fill: parent
         anchors.margins: 24
 
-        Tab {
-            title: "Chat"
+        TabBar {
+            id: tabs
+            Layout.fillWidth: true
+            TabButton { text: "Chat" }
+            TabButton { text: "Documenti" }
+            TabButton { text: "Impostazioni" }
+        }
+
+        StackLayout {
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            currentIndex: tabs.currentIndex
+
             ColumnLayout {
                 anchors.fill: parent
                 spacing: 12
@@ -60,10 +70,7 @@ ApplicationWindow {
                     }
                 }
             }
-        }
 
-        Tab {
-            title: "Documenti"
             ColumnLayout {
                 anchors.fill: parent
                 spacing: 8
@@ -102,20 +109,17 @@ ApplicationWindow {
                     Layout.preferredHeight: 120
                     text: "Seleziona un documento"
                 }
-            }
 
-            Component.onCompleted: realtimeClient.requestDocuments()
+                Component.onCompleted: realtimeClient.requestDocuments()
 
-            Connections {
-                target: realtimeClient
-                function onDocumentsReceived(docs) {
-                    docTable.documents = docs
+                Connections {
+                    target: realtimeClient
+                    function onDocumentsReceived(docs) {
+                        docTable.documents = docs
+                    }
                 }
             }
-        }
 
-        Tab {
-            title: "Impostazioni"
             Column {
                 anchors.margins: 12
                 anchors.fill: parent
