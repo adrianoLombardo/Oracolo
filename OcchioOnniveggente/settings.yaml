@@ -15,6 +15,8 @@ compute:
     device: auto
   llm:
     device: auto
+    batch_interval: 100  # ms between batch flushes
+    max_batch_size: 4    # maximum prompts per batch
     
   tts:
     device: auto

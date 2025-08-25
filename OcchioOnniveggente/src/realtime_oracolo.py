@@ -191,8 +191,13 @@ async def _receiver(ws, audio_q: "queue.Queue[bytes]", conv: ConversationManager
             elif kind == "answer":
                 conv.transition(DialogState.SPEAKING)
                 text = data.get("text", "")
-                conv.push_assistant(text)
+                conv.chat.stream_assistant(iter([text]))
                 _emit("answer", f"🔮 {text}")
+            elif kind == "answer_token":
+                conv.transition(DialogState.SPEAKING)
+                token = data.get("text", "")
+                conv.chat.stream_assistant(iter([token]))
+                _emit("answer", token)
     except (websockets.ConnectionClosed, asyncio.CancelledError):
         return
 

@@ -27,10 +27,13 @@ class OpenAIConfig(BaseModel):
 class ComputeModuleConfig(BaseModel):
     device: Literal["auto", "cpu", "cuda"] = "auto"
     precision: Literal["fp32", "fp16", "bf16", "int4"] = "fp16"
+    batch_interval: int = 100  # ms between batch flushes
+    max_batch_size: int = 4     # maximum prompts per batch
 
 
 class ComputeConfig(BaseModel):
     device: Literal["auto", "cpu", "cuda"] = "auto"
+    device_concurrency: int = 1
     stt: ComputeModuleConfig = ComputeModuleConfig()
     llm: ComputeModuleConfig = ComputeModuleConfig()
     tts: ComputeModuleConfig = ComputeModuleConfig()
