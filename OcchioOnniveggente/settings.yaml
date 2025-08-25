@@ -7,6 +7,7 @@ debug: false
 compute:
   # Device di default per il calcolo (auto|cpu|cuda)
   device: auto
+  use_onnx: false
   stt:
     device: auto
   llm:
