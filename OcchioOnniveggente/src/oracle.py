@@ -7,12 +7,17 @@ import uuid
 import csv
 import hashlib
 from pathlib import Path
-from typing import Any, Dict, List, Tuple, Callable
+from typing import Any, Dict, List, Tuple, Callable, AsyncGenerator
 
 import asyncio
 import logging
 import tempfile
+import base64
+import json as _json
+
 import openai
+import websockets
+
 from .openai_async import run_async
 from .local_audio import tts_local, stt_local
 from .utils import retry_with_backoff
@@ -157,6 +162,95 @@ def transcribe(
         ttl=container.settings.cache_ttl,
     )
     return text, lang_code
+
+
+async def transcribe_stream(
+    path_or_bytes: str | Path | bytes,
+    client,
+    stt_model: str,
+    *,
+    lang_hint: str | None = None,
+    chunk_ms: int = 50,
+) -> AsyncGenerator[Tuple[str, bool], None]:
+    """Trascrive in streaming producendo partials.
+
+    Invia i dati audio a un endpoint Realtime via WebSocket e restituisce un
+    generatore asincrono di tuple ``(testo, done)`` dove ``testo`` contiene
+    l'attuale trascrizione accumulata e ``done`` indica il completamento.
+    """
+
+    if stt_model == "local":
+        text = fast_transcribe(path_or_bytes, client, stt_model, lang_hint)
+        yield text or "", True
+        return
+
+    if isinstance(path_or_bytes, (str, Path)):
+        data_bytes = Path(path_or_bytes).read_bytes()
+    else:
+        data_bytes = path_or_bytes
+
+    # Suddivide in piccoli chunk da ~chunk_ms assumendo 16khz mono s16le
+    chunk_size = int(16000 * 2 * chunk_ms / 1000)
+    url = f"wss://api.openai.com/v1/realtime?model={stt_model}"
+    headers = {
+        "Authorization": f"Bearer {getattr(client, 'api_key', '')}",
+        "OpenAI-Beta": "realtime=v1",
+    }
+
+    try:
+        async with websockets.connect(url, extra_headers=headers) as ws:
+            if lang_hint in ("it", "en"):
+                await ws.send(
+                    _json.dumps(
+                        {
+                            "type": "session.update",
+                            "session": {"language": lang_hint},
+                        }
+                    )
+                )
+
+            for i in range(0, len(data_bytes), chunk_size):
+                chunk = data_bytes[i : i + chunk_size]
+                b64 = base64.b64encode(chunk).decode("ascii")
+                await ws.send(
+                    _json.dumps(
+                        {
+                            "type": "input_audio_buffer.append",
+                            "audio": b64,
+                        }
+                    )
+                )
+            await ws.send(
+                _json.dumps(
+                    {"type": "input_audio_buffer.commit"}
+                )
+            )
+            await ws.send(
+                _json.dumps(
+                    {
+                        "type": "response.create",
+                        "response": {"modalities": ["text"], "instructions": ""},
+                    }
+                )
+            )
+
+            partial = ""
+            async for msg in ws:
+                try:
+                    data = _json.loads(msg)
+                except Exception:
+                    continue
+                typ = data.get("type")
+                if typ == "response.output_text.delta":
+                    delta = data.get("delta", "")
+                    partial += delta
+                    yield partial, False
+                elif typ == "response.completed":
+                    yield partial, True
+                    break
+    except Exception as e:
+        logger.error("Errore streaming trascrizione: %s", e, exc_info=True)
+        yield "", True
 
 
 def oracle_answer(
