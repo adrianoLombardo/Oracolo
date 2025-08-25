@@ -3,7 +3,7 @@
 Starter per Realtime API via WebSocket (ASR+TTS low-latency).
 Non è integrato nel main loop; usalo per prove e poi lo innestiamo.
 """
-import asyncio, json, os, sys, wave
+import asyncio, json, os, sys
 import websockets
 
 from src.config import get_openai_api_key

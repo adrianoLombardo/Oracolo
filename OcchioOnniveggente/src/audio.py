@@ -64,6 +64,9 @@ def apply_limiter(y: np.ndarray, threshold: float = 0.95) -> np.ndarray:
 
 def record_wav(path: Path, seconds: int, sr: int) -> None:
     """Record audio for a fixed amount of seconds."""
+    if sd is None:  # pragma: no cover - runtime check
+        raise RuntimeError("sounddevice is required for recording; install sounddevice")
+
     path.parent.mkdir(parents=True, exist_ok=True)
     print(f"\n🎤 Registra (max {seconds}s)…")
     audio = sd.rec(int(seconds * sr), samplerate=sr, channels=1, dtype="float32")

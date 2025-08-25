@@ -44,136 +44,12 @@ from src.profile_utils import get_active_profile, make_domain_settings
 
 
 
-# --------------------------- console helpers --------------------------- #
-def _ensure_utf8_stdout() -> None:
-    try:
-        sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-defined]
-    except Exception:
-        pass
-
-
-def say(msg: str) -> None:
-    """Print a message intended for the user conversation."""
-    print(msg, flush=True)
-
-
-# --------------------------- audio device pick ------------------------- #
-def pick_device(spec: Any, kind: str) -> Any:
-    devices = sd.query_devices()
-
-    def _valid(info: dict) -> bool:
-        ch_key = "max_input_channels" if kind == "input" else "max_output_channels"
-        return info.get(ch_key, 0) > 0
-
-    if spec in (None, ""):
-        try:
-            idx = sd.default.device[0 if kind == "input" else 1]
-            if idx is not None and _valid(sd.query_devices(idx)):
-                return None  # usa default di sistema
-        except Exception:
-            pass
-    else:
-        if isinstance(spec, int) or (isinstance(spec, str) and spec.isdigit()):
-            idx = int(spec)
-            if 0 <= idx < len(devices) and _valid(devices[idx]):
-                return idx
-        spec_str = str(spec).lower()
-        for i, info in enumerate(devices):
-            if spec_str in info.get("name", "").lower() and _valid(info):
-                return i
-
-    for i, info in enumerate(devices):
-        if _valid(info):
-            return i
-    return None
-
-
-def debug_print_devices() -> None:
-    try:
-        devices = sd.query_devices()
-    except Exception as e:
-        print(f"⚠️ Unable to query audio devices: {e}")
-        return
-    header = f"{'Idx':>3}  {'Device Name':<40}  {'In/Out'}"
-    print(header)
-    print("-" * len(header))
-    for idx, info in enumerate(devices):
-        name = info.get("name", "")
-        in_ch = info.get("max_input_channels", 0)
-        out_ch = info.get("max_output_channels", 0)
-        print(f"{idx:>3}  {name:<40}  {in_ch}/{out_ch}")
-
-
-
-
-def oracle_greeting(lang: str) -> str:
-    if (lang or "").lower().startswith("en"):
-        return "Hello, I am the Oracle. Ask your question."
-    return "Ciao, sono l'Oracolo. Fai pure la tua domanda?"
-
-
-def get_active_profile(SETTINGS, forced_name: str | None = None):
-    """Return the active profile name and configuration."""
-    if isinstance(SETTINGS, dict):
-        dom = SETTINGS.get("domain", {}) or {}
-        prof_name = forced_name or dom.get("profile", "museo")
-        profiles = dom.get("profiles", {}) or {}
-    else:
-        dom = getattr(SETTINGS, "domain", None)
-        prof_name = forced_name or (
-            getattr(dom, "profile", "museo") if dom else "museo"
-        )
-        profiles = getattr(dom, "profiles", {}) if dom else {}
-    prof = profiles.get(prof_name, {})
-    return prof_name, prof
-
-
-def make_domain_settings(base_settings, prof_name: str, prof):
-    """Return ``base_settings`` with domain info replaced by ``prof``."""
-    if isinstance(base_settings, dict):
-        new_s = dict(base_settings)
-        dom = dict(new_s.get("domain", {}))
-        dom.update(
-            {
-                "enabled": True,
-                "profile": prof_name,
-                "topic": prof.get("topic", ""),
-                "keywords": prof.get("keywords", []),
-            }
-        )
-        if prof.get("weights"):
-            dom["weights"] = prof["weights"]
-        if prof.get("accept_threshold") is not None:
-            dom["accept_threshold"] = prof["accept_threshold"]
-        if prof.get("clarify_margin") is not None:
-            dom["clarify_margin"] = prof["clarify_margin"]
-        new_s["domain"] = dom
-        return new_s
-    else:
-        try:
-            base_settings.domain.enabled = True
-            base_settings.domain.profile = prof_name
-            base_settings.domain.topic = prof.get("topic", "")
-            base_settings.domain.keywords = prof.get("keywords", [])
-            if prof.get("weights"):
-                base_settings.domain.weights = prof["weights"]
-            if prof.get("accept_threshold") is not None:
-                base_settings.domain.accept_threshold = prof["accept_threshold"]
-            if prof.get("clarify_margin") is not None:
-                base_settings.domain.clarify_margin = prof["clarify_margin"]
-        except Exception:
-            pass
-        return base_settings
-
-
-
 # --------------------------- main ------------------------------------- #
 def main() -> None:
     _ensure_utf8_stdout()
 
 
     session_id = uuid.uuid4().hex
-    listener = setup_logging(Path("data/logs/oracolo.log"), session_id=session_id)
 
     parser = argparse.ArgumentParser(description="Occhio Onniveggente · Oracolo")
     parser.add_argument("--autostart", action="store_true", help="Avvia direttamente senza prompt input()")
@@ -184,7 +60,11 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    listener = setup_logging(Path("data/logs/oracolo.log"), console=not args.quiet)
+    listener = setup_logging(
+        Path("data/logs/oracolo.log"),
+        session_id=session_id,
+        console=not args.quiet,
+    )
 
     say("Occhio Onniveggente · Oracolo ✨")
 

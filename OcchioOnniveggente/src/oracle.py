@@ -19,19 +19,23 @@ logger = logging.getLogger(__name__)
 
 def fast_transcribe(path_or_bytes, client, stt_model: str, lang_hint: str | None = None) -> str:
     """Perform a single transcription call with optional language hint."""
-    kwargs = {}
+    kwargs: Dict[str, Any] = {}
     if lang_hint in ("it", "en"):
         kwargs["language"] = lang_hint
 
-    if isinstance(path_or_bytes, (str, Path)):
-        with open(path_or_bytes, "rb") as f:
+    try:
+        if isinstance(path_or_bytes, (str, Path)):
+            with open(path_or_bytes, "rb") as f:
+                tx = client.audio.transcriptions.create(
+                    model=stt_model, file=f, **kwargs
+                )
+        else:
             tx = client.audio.transcriptions.create(
-                model=stt_model, file=f, **kwargs
+                model=stt_model, file=path_or_bytes, **kwargs
             )
-    else:
-        tx = client.audio.transcriptions.create(
-            model=stt_model, file=path_or_bytes, **kwargs
-        )
+    except (openai.OpenAIError, OSError) as e:
+        logger.error("Errore trascrizione: %s", e)
+        return ""
     return (getattr(tx, "text", "") or "").strip()
 
 
