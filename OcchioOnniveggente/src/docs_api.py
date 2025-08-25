@@ -122,9 +122,9 @@ def ingest_async(path: str, tasks: BackgroundTasks) -> dict[str, str]:
 
 @app.post("/api/embeddings")
 def embeddings_async(texts: list[str], model: str, tasks: BackgroundTasks) -> dict[str, str]:
-    from openai import OpenAI  # type: ignore
+    from openai import AsyncOpenAI  # type: ignore
     from .retrieval import _embed_texts
-    client = OpenAI()
+    client = AsyncOpenAI()
     tasks.add_task(_embed_texts, client, model, texts)
     return {"status": "queued"}
 
