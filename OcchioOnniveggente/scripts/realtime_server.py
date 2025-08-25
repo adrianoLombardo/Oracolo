@@ -20,6 +20,8 @@ from src.chat import ChatState
 from src.config import Settings, get_openai_api_key
 from src.domain import validate_question
 from src.hotword import strip_hotword_prefix
+from src.oracle import oracle_answer, transcribe
+from src.audio import AudioPreprocessor
 from src.oracle import oracle_answer_stream, transcribe_stream
 from src.oracle import oracle_answer_async, transcribe_async
 from src.oracle import oracle_answer_stream, transcribe
@@ -119,6 +121,11 @@ class RTSession:
         self.SET = setts
         self.raw = raw
         self.client_sr = setts.audio.sample_rate
+        self.preproc = AudioPreprocessor(
+            self.client_sr,
+            denoise=getattr(setts.audio, "denoise", False),
+            echo_cancel=getattr(setts.audio, "echo_cancel", False),
+        )
         self.buf = bytearray()
         self.state = "idle"
         self.ms_in_state = 0
@@ -280,6 +287,10 @@ class RTSession:
         if not self.buf:
             return
         audio_bytes = bytes(self.buf)
+        if self.preproc is not None:
+            arr = np.frombuffer(audio_bytes, dtype=np.int16).astype(np.float32) / 32768.0
+            arr = self.preproc.process(arr)
+            audio_bytes = (np.clip(arr, -1, 1) * 32767).astype(np.int16).tobytes()
         # Convert the raw PCM buffer to a temporary WAV file so that
         # OpenAI's transcription API receives a supported format.
         write_wav(self.in_wav, self.client_sr, audio_bytes)

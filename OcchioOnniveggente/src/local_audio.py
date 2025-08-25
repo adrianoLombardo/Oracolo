@@ -5,6 +5,11 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Generator
 
+import numpy as np
+
+from .audio import AudioPreprocessor, load_audio_as_float
+from .config import Settings
+
 
 def stream_file(path: Path, chunk_size: int = 4096) -> Generator[bytes, None, None]:
     """Yield audio chunks from ``path`` for streaming playback."""
@@ -48,19 +53,23 @@ def tts_local(text: str, out_path: Path, lang: str = "it") -> None:
 
 
 def stt_local(audio_path: Path, lang: str = "it") -> str:
-    """Attempt a local transcription of ``audio_path``.
-
-    The function uses `speech_recognition` with the PocketSphinx backend when
-    available.  It is intentionally simple and meant only as a latency saving
-    fallback.
-    """
+    """Attempt a local transcription of ``audio_path`` using a cleaned signal."""
 
     try:
         import speech_recognition as sr  # type: ignore
 
+        setts = Settings.model_validate_yaml(Path("settings.yaml"))
+        sr_cfg = setts.audio.sample_rate
+        pre = AudioPreprocessor(
+            sr_cfg,
+            denoise=getattr(setts.audio, "denoise", False),
+            echo_cancel=getattr(setts.audio, "echo_cancel", False),
+        )
+        y, sr_in = load_audio_as_float(audio_path, sr_cfg)
+        y = pre.process(y)
+        pcm = (np.clip(y, -1, 1) * 32767).astype(np.int16).tobytes()
+        audio = sr.AudioData(pcm, sr_in, 2)
         r = sr.Recognizer()
-        with sr.AudioFile(str(audio_path)) as source:
-            audio = r.record(source)
         try:
             return r.recognize_sphinx(audio, language=lang)
         except Exception:
