@@ -1,18 +1,31 @@
 from __future__ import annotations
+
+import json
+import os
+import sys
+import time
+from http.server import HTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
 from typing import Any
+from urllib.parse import parse_qs, urlparse
 
 import yaml
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi.security import APIKeyHeader
 from pydantic import BaseModel, Field
 
-from .ui_state import UIState
+from .service_container import container
 
-STATE = UIState()
+STATE = container.ui_state
 ROOT = Path(__file__).resolve().parents[1]
 SETTINGS_PATH = ROOT / "settings.yaml"
 
 app = FastAPI()
+
+API_KEY_HEADER = APIKeyHeader(name="X-API-Key", auto_error=False)
+RATE_LIMIT = int(os.getenv("API_RATE_LIMIT", "5"))
+RATE_WINDOW = int(os.getenv("API_RATE_WINDOW", "60"))
+_REQUEST_LOG: dict[str, list[float]] = {}
 
 
 class DocsOptions(BaseModel):
@@ -39,30 +52,59 @@ def _save_settings(data: dict[str, Any]) -> None:
     )
 
 
+def _sanitize(data: dict[str, Any]) -> dict[str, Any]:
+    """Return a sanitized copy of ``data`` suitable for logging/storage."""
+
+    clean: dict[str, Any] = {}
+    for key, value in data.items():
+        if isinstance(value, str):
+            clean[key] = value.replace("\n", " ").strip()
+        else:
+            clean[key] = value
+    return clean
+
+
+def _rate_limiter(key: str) -> None:
+    now = time.time()
+    bucket = _REQUEST_LOG.setdefault(key, [])
+    bucket = [t for t in bucket if now - t < RATE_WINDOW]
+    if len(bucket) >= RATE_LIMIT:
+        raise HTTPException(status_code=429, detail="Rate limit exceeded")
+    bucket.append(now)
+    _REQUEST_LOG[key] = bucket
+
+
+def get_api_key(api_key_header: str | None = Depends(API_KEY_HEADER)) -> str:
+    expected = os.getenv("DOCS_API_KEY")
+    if not expected or api_key_header != expected:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or missing API key",
+        )
+    _rate_limiter(api_key_header)
+    return api_key_header
+
+
 @app.post("/api/docs/options")
-def update_docs_options(opts: DocsOptions) -> dict[str, Any]:
+def update_docs_options(
+    opts: DocsOptions, api_key: str = Depends(get_api_key)
+) -> dict[str, Any]:
     """Update documentation-related options in memory and on disk."""
 
     data = _load_settings()
-    payload = {k: v for k, v in opts.model_dump(exclude_none=True).items()}
+    payload = _sanitize({k: v for k, v in opts.model_dump(exclude_none=True).items()})
     if payload:
         STATE.settings.update(payload)
         data.update(payload)
         _save_settings(data)
     return {"status": "ok", "settings": STATE.settings}
 
-import json
-import sys
-from http.server import SimpleHTTPRequestHandler, HTTPServer
-from pathlib import Path
-from urllib.parse import urlparse, parse_qs
 
 # Ensure project root on path to import scripts.ingest_docs
-ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts import ingest_docs  # type: ignore
+from scripts import ingest_docs  # type: ignore  # noqa: E402
 
 DOCSTORE_PATH = ROOT / "DataBase" / "index.json"
 
@@ -125,10 +167,13 @@ class DocsHandler(SimpleHTTPRequestHandler):
         return super().do_GET()
 
 
+def _make_handler(*args, **kwargs) -> DocsHandler:
+    return DocsHandler(*args, directory=str(ROOT), **kwargs)
+
+
 def run(host: str = "127.0.0.1", port: int = 8000) -> None:
     """Run a minimal HTTP server serving docs.html and /api/docs."""
-    handler = lambda *args, **kwargs: DocsHandler(*args, directory=str(ROOT), **kwargs)  # type: ignore[arg-type]
-    HTTPServer((host, port), handler).serve_forever()
+    HTTPServer((host, port), _make_handler).serve_forever()
 
 
 if __name__ == "__main__":  # pragma: no cover - manual execution
@@ -136,4 +181,3 @@ if __name__ == "__main__":  # pragma: no cover - manual execution
         run()
     except KeyboardInterrupt:
         pass
-
