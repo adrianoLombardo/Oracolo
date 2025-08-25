@@ -5,18 +5,16 @@ import json
 import os
 import sys
 import time
-from pathlib import Path
-from typing import Any
+import wave
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, AsyncIterable, Callable
 
 import numpy as np
-import websockets
-import yaml
-from dotenv import load_dotenv
-try:
+
+try:  # pragma: no cover - optional torch
     import torch
-except Exception:  # pragma: no cover - fallback when torch isn't installed
+except Exception:  # pragma: no cover
     class _CudaStub:
         @staticmethod
         def is_available() -> bool:
@@ -30,6 +28,9 @@ except Exception:  # pragma: no cover - fallback when torch isn't installed
         cuda = _CudaStub()
 
     torch = _TorchStub()  # type: ignore
+
+
+from src import metrics
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -46,6 +47,7 @@ from src.profile_utils import get_active_profile, make_domain_settings
 from src.utils.device import resolve_device
 
 import wave
+
 
 
 @dataclass
@@ -71,9 +73,32 @@ class Orchestrator:
         self._gpu_sem = asyncio.Semaphore(1 if self.gpu_available else 0)
         self._cpu_sem = asyncio.Semaphore(4)
         self.metrics: list[dict[str, Any]] = []
+        self._metrics_task: asyncio.Task | None = None
+
+    def _ensure_metrics_task(self) -> None:
+        if self._metrics_task is None:
+            self._metrics_task = asyncio.create_task(metrics.metrics_loop())
 
     async def run_stt(self, func, *args, **kwargs):
+        self._ensure_metrics_task()
         job = _TaskJob(func, args, kwargs, time.time())
+
+        device = metrics.resolve_device()
+        sem = self._gpu_sem if device == "cuda" else self._cpu_sem
+        async with sem:
+            start = time.time()
+            self.metrics.append(
+                {
+                    "task": "stt",
+                    "queue_time": start - job.submitted,
+                    "device": device,
+                }
+            )
+            metrics.record_system_metrics()
+            if "device" not in job.kwargs and "device" in getattr(getattr(job.func, "__code__", None), "co_varnames", []):
+                job.kwargs["device"] = device
+            return await asyncio.to_thread(job.func, *job.args, **job.kwargs)
+
         if self.gpu_available and self._gpu_sems:
             start_idx = self._next_gpu
             gpu_id = start_idx
@@ -118,18 +143,25 @@ class Orchestrator:
 
             return await asyncio.to_thread(_run)
 
+
     async def run_tts(self, coro_func, *args, **kwargs):
+        self._ensure_metrics_task()
         job = _TaskJob(coro_func, args, kwargs, time.time())
-        async with self._cpu_sem:
+        device = metrics.resolve_device()
+        sem = self._gpu_sem if device == "cuda" else self._cpu_sem
+        async with sem:
             start = time.time()
             self.metrics.append(
                 {
                     "task": "tts",
                     "queue_time": start - job.submitted,
-                    "device": "cpu",
+                    "device": device,
                 }
             )
-            return await job.func(*job.args, **job.kwargs)
+            metrics.record_system_metrics()
+            if "device" not in job.kwargs and "device" in getattr(getattr(coro_func, "__code__", None), "co_varnames", []):
+                job.kwargs["device"] = device
+            return await coro_func(*job.args, **job.kwargs)
 
 
 ORCH = Orchestrator()
@@ -165,6 +197,7 @@ def off_topic_message(profile: str, keywords: list[str]) -> str:
         f"La domanda non sembra pertinente rispetto al profilo «{profile}». "
         "Prova a riformularla o a specificare meglio il tema."
     )
+
 
 
 async def stream_tts_pcm(
@@ -632,5 +665,6 @@ if __name__ == "__main__":
         asyncio.run(main(args.host, args.port))
     except KeyboardInterrupt:
         pass
+
 
 

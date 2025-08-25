@@ -13,6 +13,9 @@ import numpy as np
 
 from .audio import AudioPreprocessor, load_audio_as_float
 from .config import Settings
+
+from . import metrics
+
 from .service_container import container
 from .utils.device import resolve_device
 
@@ -44,6 +47,7 @@ def _get_whisper(model_name: str, device: str, compute_type: str) -> "WhisperMod
 
 
 
+
 def stream_file(path: Path, chunk_size: int = 4096) -> Generator[bytes, None, None]:
     """Yield audio chunks from ``path`` for streaming playback."""
 
@@ -64,6 +68,7 @@ def tts_local(
 ) -> None:
     """Synthesize ``text`` using a cached local backend when available."""
 
+    metrics.record_system_metrics()
     out_path.parent.mkdir(parents=True, exist_ok=True)
     backend, engine = container.load_tts_model()
     try:
@@ -80,6 +85,10 @@ def tts_local(
     # Fallback: create an empty placeholder so callers don't explode
     out_path.write_bytes(b"")
 
+
+
+
+def stt_local(audio_path: Path, lang: str = "it") -> str:
 
 
 
@@ -109,13 +118,18 @@ def stt_local(
         import torch  # type: ignore
 
 
+
         actual_device = (
             "cuda" if device == "auto" and torch.cuda.is_available() else device
         )
     except Exception:
         actual_device = "cpu" if device == "auto" else device
 
+
+    metrics.record_system_metrics()
+
     compute_type = "int8_float16" if actual_device == "cuda" else "int8"
+
 
     try:
         model = _get_whisper("base", actual_device, compute_type)
@@ -123,7 +137,13 @@ def stt_local(
             audio_path.as_posix(), language=lang, task="transcribe"
         )
 
+
+            device = metrics.resolve_device("auto")
+        except Exception:
+            device = "cpu"
+
         device = resolve_device("auto")
+
         compute_type = "int8_float16" if device == "cuda" else "int8"
         model = WhisperModel("base", device=device, compute_type=compute_type)
         segments, _ = model.transcribe(audio_path.as_posix(), language=lang, task="transcribe")
@@ -173,6 +193,8 @@ def stt_local_faster(
     string is returned.
     """
 
+    device = metrics.resolve_device(device)
+    metrics.record_system_metrics()
     try:
         model = _get_whisper("base", device, compute_type)
     except Exception:
