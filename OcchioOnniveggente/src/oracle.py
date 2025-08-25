@@ -47,6 +47,12 @@ async def fast_transcribe_async(
 ) -> str | None:
     """Perform a single transcription call with optional language hint."""
 
+
+
+    if container.settings.stt_backend != "openai":
+        pass
+
+
     if stt_model == "local":
         container.load_stt_model()
         p = Path(path_or_bytes) if isinstance(path_or_bytes, (str, Path)) else Path("temp.wav")
@@ -600,7 +606,10 @@ async def oracle_answer_async(
 
             try:
                 ans = local_llm.generate(
-                    messages, model_path=llm_model, device=llm_device
+                    messages,
+                    model_path=llm_model,
+                    device=llm_device,
+                    precision=container.settings.compute.llm.precision,
                 )
             except Exception as e:  # pragma: no cover - runtime dependent
                 logger.error("Errore LLM locale: %s", e, exc_info=True)

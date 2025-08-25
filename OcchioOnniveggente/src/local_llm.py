@@ -8,9 +8,59 @@ dependencies when the local backend is not used. It provides a single
 returns the generated text.
 """
 
-from typing import Dict, List
 
+from typing import Dict, List
 from .service_container import container
+from typing import Dict, List, Tuple, Literal
+
+# simple in-memory cache so that the model is loaded only once
+_MODEL_CACHE: dict[Tuple[str, str, str], Tuple[object, object]] = {}
+
+
+def _load_model(
+    model_path: str,
+    device: str,
+    precision: Literal["fp32", "fp16", "bf16", "int4"],
+) -> Tuple[object, object]:
+    """Load the model/tokenizer pair for the given path, device and precision."""
+    try:
+        from transformers import AutoModelForCausalLM, AutoTokenizer
+        import torch
+    except Exception as exc:  # pragma: no cover - import error handled at runtime
+        raise RuntimeError(
+            "transformers and torch are required for the local LLM backend"
+        ) from exc
+
+    key = (model_path, device, precision)
+    if key not in _MODEL_CACHE:
+        tokenizer = AutoTokenizer.from_pretrained(model_path)
+        if precision == "int4":
+            try:
+                AutoModelArgs = {
+                    "load_in_4bit": True,
+                    "device_map": "auto" if device != "cpu" else {"": "cpu"},
+                }
+                model = AutoModelForCausalLM.from_pretrained(
+                    model_path, **AutoModelArgs
+                )
+            except Exception as exc:  # pragma: no cover - bitsandbytes runtime
+                raise RuntimeError(
+                    "bitsandbytes is required for int4 precision"
+                ) from exc
+        else:
+            dtype = {
+                "fp32": torch.float32,
+                "fp16": torch.float16,
+                "bf16": torch.bfloat16,
+            }[precision]
+            model = AutoModelForCausalLM.from_pretrained(
+                model_path, torch_dtype=dtype
+            )
+            model.to(device)
+        model.eval()
+        _MODEL_CACHE[key] = (tokenizer, model)
+    return _MODEL_CACHE[key]
+
 
 
 def generate(
@@ -19,6 +69,7 @@ def generate(
     model_path: str,
     device: str = "cpu",
     max_new_tokens: int = 256,
+    precision: Literal["fp32", "fp16", "bf16", "int4"] = "fp32",
 ) -> str:
     """Generate a response using a local model.
 
@@ -33,7 +84,10 @@ def generate(
     max_new_tokens:
         Number of tokens to generate.
     """
+
     tokenizer, model = container.load_llm(model_path, device)
+    tokenizer, model = _load_model(model_path, device, precision)
+
 
     prompt = "\n".join(f"{m['role']}: {m['content']}" for m in messages)
     inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
