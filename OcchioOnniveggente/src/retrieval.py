@@ -15,6 +15,7 @@ except Exception:  # pragma: no cover - optional
 
 
 from .cache import cache_get_json, cache_set_json
+from .openai_async import run
 
 
 # Prova librerie migliori, ma non sono obbligatorie
@@ -163,8 +164,10 @@ def _embed_texts(
             to_compute.append((idx, txt, cache_key, None))
 
     if to_compute:
-        resp = client.embeddings.create(  # type: ignore[attr-defined]
-            model=model, input=[t for _, t, _, _ in to_compute]
+        resp = run(
+            client.embeddings.create,  # type: ignore[attr-defined]
+            model=model,
+            input=[t for _, t, _, _ in to_compute],
         )
         for (idx, _txt, cache_key, fp), item in zip(to_compute, resp.data):
             vec = np.array(getattr(item, "embedding", []), dtype=np.float32)
@@ -180,26 +183,48 @@ def _embed_texts(
 
 
 def _rewrite_query(client: Any, model: str, query: str, n: int = 2) -> List[str]:
-    """Ottiene riformulazioni della query tramite un piccolo modello LLM."""
+    """Ottiene riformulazioni della query tramite un piccolo modello LLM.
+
+    I risultati sono memorizzati in cache usando ``model``, ``query`` e ``n``
+    come parte della chiave; modificare uno di questi parametri invalida la
+    cache. Il contenuto viene mantenuto per circa un'ora.
+    """
+
+    # calcola chiave cache stabile basata sui parametri principali
+    raw_key = f"{model}:{n}:{query}".encode("utf-8")
+    cache_key = "rq:" + hashlib.sha1(raw_key).hexdigest()
+    cached = cache_get_json(cache_key)
+    if isinstance(cached, list) and all(isinstance(x, str) for x in cached):
+        return cached[:n]
+
     prompt = (
         "Fornisci {n} riformulazioni concise della seguente query in italiano o inglese, una per riga.\nQuery: {q}"
     ).format(n=n, q=query)
     txt = ""
     try:
         # API 'responses' (OpenAI>=2024)
-        resp = client.responses.create(model=model, input=prompt)  # type: ignore[attr-defined]
+        resp = run(
+            client.responses.create,  # type: ignore[attr-defined]
+            model=model,
+            input=prompt,
+        )
         txt = getattr(resp, "output_text", "")
     except Exception:
         try:
             # compatibilità con chat.completions
-            resp = client.chat.completions.create(  # type: ignore[attr-defined]
-                model=model, messages=[{"role": "user", "content": prompt}]
+            resp = run(
+                client.chat.completions.create,  # type: ignore[attr-defined]
+                model=model,
+                messages=[{"role": "user", "content": prompt}],
             )
             txt = resp.choices[0].message.content  # type: ignore[index]
         except Exception:
             return []
     lines = [l.strip("- •\t") for l in txt.splitlines() if l.strip()]
-    return lines[:n]
+    lines = lines[:n]
+    if lines:
+        cache_set_json(cache_key, lines, ttl=3600)
+    return lines
 
 
 def _score_fallback(query: str, chunks: List[Chunk], top_k: int) -> List[Tuple[Chunk, float]]:
