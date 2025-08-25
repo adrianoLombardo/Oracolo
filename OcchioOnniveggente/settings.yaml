@@ -3,9 +3,29 @@
 # Log di debug (mostra device audio e info VAD)
 debug: false
 
+
+compute:
+  # Device di default per il calcolo (auto|cpu|cuda)
+  device: auto
+  stt:
+    device: auto
+  llm:
+    device: auto
+    
+  tts:
+    device: auto
+
 openai:
   # Modello per trascrizione audio (puoi usare anche "whisper-1")
   stt_model: gpt-4o-mini-transcribe
+
+# Backend STT: "openai" per l'API, "whisper" per modelli locali (faster-whisper, richiede ~4GB VRAM)
+stt_backend: openai
+
+openai:
+  # Modello per trascrizione audio (puoi usare anche "whisper-1")
+  stt_model: gpt-4o-mini-transcribe
+
   # Modello per il testo "oracolare"
   llm_model: gpt-5-mini
   # Modello TTS per la voce
@@ -28,6 +48,8 @@ audio:
   input_wav: "data/temp/input.wav"
   output_wav: "data/temp/answer.wav"
   barge_rms_threshold: 0.25   # soglia RMS per barge-in (0..1)
+  denoise: true          # soppressione rumore/AGC
+  echo_cancel: false     # cancellazione eco
 
   # Selezione dispositivi audio
   # Metti l'indice numerico (es. 1) oppure una parte del nome (es. "USB Microphone").
