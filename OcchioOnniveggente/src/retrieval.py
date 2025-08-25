@@ -169,7 +169,7 @@ def _embed_texts(
         for (idx, _txt, cache_key, fp), item in zip(to_compute, resp.data):
             vec = np.array(getattr(item, "embedding", []), dtype=np.float32)
             results[idx] = vec
-            cache_set_json(cache_key, vec.tolist(), ex=86400)
+            cache_set_json(cache_key, vec.tolist(), ttl=86400)
             if fp is not None:
                 try:
                     np.save(fp, vec)

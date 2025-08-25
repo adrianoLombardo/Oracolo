@@ -21,6 +21,7 @@ class OpenAIConfig(BaseModel):
     tts_model: str = "gpt-4o-mini-tts"
     tts_voice: str = "alloy"
     embed_model: str = "text-embedding-3-large"
+    max_workers: int = 4
 
 
 class AudioConfig(BaseModel):
@@ -150,7 +151,11 @@ class Settings(BaseModel):
     retrieval: RetrievalConfig = RetrievalConfig()
     chat: ChatConfig = ChatConfig()
     realtime: RealtimeConfig = RealtimeConfig()
+
     realtime_audio: RealtimeAudioConfig = RealtimeAudioConfig()
+
+    cache_ttl: int = 3600
+
     
     @classmethod
     def model_validate_yaml(cls, path: Path) -> "Settings":
