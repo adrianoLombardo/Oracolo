@@ -5,14 +5,25 @@ from typing import Any
 import yaml
 from fastapi import FastAPI, BackgroundTasks
 from pydantic import BaseModel, Field
+from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 
-from .ui_state import UIState
+from .metrics import metrics_endpoint, metrics_middleware
+
+try:
+    from .ui_state import UIState
+except Exception:  # pragma: no cover - fallback for minimal environments
+    class UIState:  # type: ignore[no-redef]
+        def __init__(self) -> None:  # pragma: no cover - simple stub
+            self.settings: dict[str, Any] = {}
 
 STATE = UIState()
 ROOT = Path(__file__).resolve().parents[1]
 SETTINGS_PATH = ROOT / "settings.yaml"
 
 app = FastAPI()
+FastAPIInstrumentor.instrument_app(app)
+app.middleware("http")(metrics_middleware)
+app.get("/metrics")(metrics_endpoint)
 
 
 class DocsOptions(BaseModel):
