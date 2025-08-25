@@ -6,11 +6,24 @@ import sys
 import time
 from pathlib import Path
 from typing import Any
+from dataclasses import dataclass
 
 import numpy as np
 import websockets
 import yaml
 from dotenv import load_dotenv
+try:
+    import torch
+except Exception:  # pragma: no cover - fallback when torch isn't installed
+    class _CudaStub:
+        @staticmethod
+        def is_available() -> bool:
+            return False
+
+    class _TorchStub:
+        cuda = _CudaStub()
+
+    torch = _TorchStub()  # type: ignore
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -26,6 +39,52 @@ from src.profile_utils import get_active_profile, make_domain_settings
 import wave
 
 
+@dataclass
+class _TaskJob:
+    func: Any
+    args: tuple
+    kwargs: dict
+    submitted: float
+
+
+class Orchestrator:
+    """Simple orchestrator to balance STT (GPU) and TTS (CPU) tasks."""
+
+    def __init__(self) -> None:
+        self.gpu_available = torch.cuda.is_available()
+        self._gpu_sem = asyncio.Semaphore(1 if self.gpu_available else 0)
+        self._cpu_sem = asyncio.Semaphore(4)
+        self.metrics: list[dict[str, Any]] = []
+
+    async def run_stt(self, func, *args, **kwargs):
+        job = _TaskJob(func, args, kwargs, time.time())
+        sem = self._gpu_sem if self.gpu_available else self._cpu_sem
+        async with sem:
+            start = time.time()
+            self.metrics.append(
+                {
+                    "task": "stt",
+                    "queue_time": start - job.submitted,
+                    "device": "cuda" if self.gpu_available else "cpu",
+                }
+            )
+            return await asyncio.to_thread(job.func, *job.args, **job.kwargs)
+
+    async def run_tts(self, coro_func, *args, **kwargs):
+        job = _TaskJob(coro_func, args, kwargs, time.time())
+        async with self._cpu_sem:
+            start = time.time()
+            self.metrics.append(
+                {
+                    "task": "tts",
+                    "queue_time": start - job.submitted,
+                    "device": "cpu",
+                }
+            )
+            return await job.func(*job.args, **job.kwargs)
+
+
+ORCH = Orchestrator()
 
 
 def rms_level(pcm_bytes: bytes) -> float:
@@ -288,8 +347,12 @@ class RTSession:
         api_key = get_openai_api_key(self.SET)
         client = OpenAI(api_key=api_key) if api_key else OpenAI()
 
-        text, lang = transcribe(
-            self.in_wav, client, self.SET.openai.stt_model, debug=self.SET.debug
+        text, lang = await ORCH.run_stt(
+            transcribe,
+            self.in_wav,
+            client,
+            self.SET.openai.stt_model,
+            debug=self.SET.debug,
         )
         if not text.strip():
             await self.send_partial("…silenzio…")
@@ -339,7 +402,7 @@ class RTSession:
             else:
                 ans = off_topic_message(self.profile, self.domain_keywords)
             await self.send_answer(ans)
-            await self.stream_sentences(ans, client)
+            await ORCH.run_tts(self.stream_sentences, ans, client)
             return
 
         context_texts = [
@@ -370,7 +433,7 @@ class RTSession:
             self.chat.push_user(text)
             self.chat.push_assistant(final)
         await self.send_answer(final)
-        await self.stream_sentences(final, client)
+        await ORCH.run_tts(self.stream_sentences, final, client)
 
 
 async def handler(ws):

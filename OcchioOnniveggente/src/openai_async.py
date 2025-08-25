@@ -1,24 +1,40 @@
 from __future__ import annotations
 
-"""Utilities to offload expensive OpenAI calls to a thread pool."""
+"""Async helpers for potentially blocking OpenAI calls.
 
-from concurrent.futures import Future, ThreadPoolExecutor
+This module avoids using a dedicated ``ThreadPoolExecutor``. When a GPU is
+available we fall back to a ``ProcessPoolExecutor`` with a single worker to
+allow exclusive access to the device. Otherwise ``asyncio.to_thread`` is used
+to offload blocking work without creating additional management overhead.
+"""
+
+from concurrent.futures import Future, ProcessPoolExecutor
 from typing import Callable, TypeVar, Any
 import asyncio
 import os
 import atexit
+try:
+    import torch
+except Exception:  # pragma: no cover
+    class _CudaStub:
+        @staticmethod
+        def is_available() -> bool:
+            return False
+
+    class _TorchStub:
+        cuda = _CudaStub()
+
+    torch = _TorchStub()  # type: ignore
 
 from .config import Settings
 
 
 T = TypeVar("T")
 
-# Shared executor instance
-_executor: ThreadPoolExecutor | None = None
+_executor: ProcessPoolExecutor | None = None
 
 
 def _get_max_workers() -> int:
-    """Return desired worker count from env or settings."""
     env_value = os.getenv("ORACOLO_MAX_WORKERS")
     if env_value:
         try:
@@ -28,33 +44,37 @@ def _get_max_workers() -> int:
     return Settings().openai.max_workers
 
 
-def _get_executor() -> ThreadPoolExecutor:
-    """Lazily create the shared executor."""
+def _get_executor() -> ProcessPoolExecutor | None:
+    """Create a process pool when a GPU is present."""
     global _executor
-    if _executor is None:
-        _executor = ThreadPoolExecutor(max_workers=_get_max_workers())
+    if _executor is None and torch.cuda.is_available():
+        workers = max(1, _get_max_workers())
+        _executor = ProcessPoolExecutor(max_workers=workers)
         atexit.register(_executor.shutdown)
     return _executor
 
 
 def submit(func: Callable[..., T], *args: Any, **kwargs: Any) -> Future:
-    """Submit ``func`` to the shared executor and return a Future."""
-    return _get_executor().submit(func, *args, **kwargs)
+    exec_ = _get_executor()
+    if exec_ is not None:
+        return exec_.submit(func, *args, **kwargs)
+    loop = asyncio.get_event_loop()
+    return loop.run_in_executor(None, lambda: func(*args, **kwargs))
 
 
 def run(func: Callable[..., T], *args: Any, **kwargs: Any) -> T:
-    """Run ``func`` synchronously in the executor and wait for the result."""
     return submit(func, *args, **kwargs).result()
 
 
 def run_async(func: Callable[..., T], *args: Any, **kwargs: Any) -> asyncio.Future:
-    """Awaitable version of :func:`run` using ``asyncio`` integration."""
     loop = asyncio.get_running_loop()
-    return loop.run_in_executor(_get_executor(), lambda: func(*args, **kwargs))
+    exec_ = _get_executor()
+    if exec_ is not None:
+        return loop.run_in_executor(exec_, lambda: func(*args, **kwargs))
+    return asyncio.to_thread(func, *args, **kwargs)
 
 
 def shutdown() -> None:
-    """Shutdown the shared executor."""
     global _executor
     if _executor is not None:
         _executor.shutdown(wait=True)
@@ -62,3 +82,4 @@ def shutdown() -> None:
 
 
 atexit.register(shutdown)
+
