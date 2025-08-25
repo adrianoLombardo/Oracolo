@@ -5,8 +5,12 @@ from typing import Any, Dict, Tuple
 import numpy as np
 import sacn
 from requests import exceptions as req_exc
+import logging
 
 from .wled_client import WLED
+
+
+logger = logging.getLogger(__name__)
 
 
 class SacnLight:
@@ -55,7 +59,7 @@ class WledLight:
         try:
             self.w.set_color(*self.base_rgb, brightness=40)
         except req_exc.RequestException as e:
-            print(f"⚠️ WLED non raggiungibile: {e}")
+            logger.warning("WLED non raggiungibile: %s", e)
 
     def set_base_rgb(self, rgb: Tuple[int, int, int]) -> None:
         self.base_rgb = tuple(int(x) for x in rgb)
@@ -69,14 +73,14 @@ class WledLight:
     def idle(self) -> None:
         try:
             self.w.set_color(*self.base_rgb, brightness=30)
-        except req_exc.RequestException:
-            print("⚠️ WLED non raggiungibile (idle)")
+        except req_exc.RequestException as e:
+            logger.warning("WLED non raggiungibile (idle): %s", e)
 
     def blackout(self) -> None:
         try:
             self.w.set_color(0, 0, 0, brightness=0)
-        except req_exc.RequestException:
-            print("⚠️ WLED non raggiungibile (blackout)")
+        except req_exc.RequestException as e:
+            logger.warning("WLED non raggiungibile (blackout): %s", e)
 
     def stop(self) -> None:
         pass

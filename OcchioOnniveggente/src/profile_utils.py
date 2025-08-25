@@ -37,6 +37,7 @@ def make_domain_settings(base_settings: Any, prof_name: str, prof: Dict) -> Any:
         dom.update({
             "enabled": True,
             "profile": prof_name,
+            "topic": prof.get("topic", ""),
             "keywords": prof.get("keywords", []),
         })
         if prof.get("weights"):
@@ -51,6 +52,7 @@ def make_domain_settings(base_settings: Any, prof_name: str, prof: Dict) -> Any:
         try:
             base_settings.domain.enabled = True
             base_settings.domain.profile = prof_name
+            base_settings.domain.topic = prof.get("topic", "")
             base_settings.domain.keywords = prof.get("keywords", [])
             if prof.get("weights"):
                 base_settings.domain.weights = prof["weights"]
