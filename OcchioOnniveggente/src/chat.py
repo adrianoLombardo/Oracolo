@@ -4,6 +4,55 @@ from pathlib import Path
 from typing import List, Dict, Optional, Any
 import time, json
 import numpy as np
+from openai import OpenAI
+from .config import Settings, get_openai_api_key
+
+
+def summarize_history(prev_summary: str, msgs: List[Dict[str, str]]) -> str:
+    """Summarize *msgs* with a lightweight LLM.
+
+    Falls back to simple concatenation if the API call fails or no key is
+    configured. ``prev_summary`` is included so the model can produce an
+    updated cumulative summary.
+    """
+
+    if not msgs:
+        return prev_summary
+
+    settings = Settings()
+    model = settings.chat.summary_model
+    max_tokens = settings.chat.summary_max_tokens
+    lines = [f"{m.get('role', '')}: {m.get('content', '')}" for m in msgs]
+    prompt = (
+        "Aggiorna il seguente riassunto della conversazione con i nuovi messaggi.\n"
+        f"Riassunto precedente:\n{prev_summary}\n\nMessaggi:\n" + "\n".join(lines)
+    )
+
+    try:
+        api_key = get_openai_api_key(settings)
+        client = OpenAI(api_key=api_key)
+        try:
+            resp = client.responses.create(
+                model=model, input=prompt, max_output_tokens=max_tokens
+            )
+            txt = getattr(resp, "output_text", "").strip()
+        except Exception:
+            resp = client.chat.completions.create(
+                model=model,
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=max_tokens,
+            )
+            txt = resp.choices[0].message.content.strip()  # type: ignore[index]
+        if txt:
+            return txt
+    except Exception:
+        pass
+
+    # Fallback: append raw text
+    snippet = " ".join(lines)
+    if prev_summary:
+        return (prev_summary + " " + snippet).strip()
+    return snippet
 
 
 @dataclass
@@ -17,6 +66,7 @@ class ChatState:
     topic_locked: bool = False
     pinned: List[str] = field(default_factory=list)
     summary: str = ""
+    language: Optional[str] = None
     pinned_limit: int = 5
 
     def reset(self) -> None:
@@ -57,21 +107,11 @@ class ChatState:
         if self.max_turns > 0:
             excess = len(self.history) - (2 * self.max_turns)
             if excess > 0:
-                self._append_summary(self.history[:excess])
+                self.summary = summarize_history(self.summary, self.history[:excess])
                 self.history = self.history[excess:]
 
-    def _append_summary(self, msgs: List[Dict[str, str]]) -> None:
-        if not msgs:
-            return
-        lines = [f"{m.get('role', '')}: {m.get('content', '')}" for m in msgs]
-        snippet = " ".join(lines)
-        if self.summary:
-            self.summary += " " + snippet
-        else:
-            self.summary = snippet
-
     def soft_reset(self) -> None:
-        self._append_summary(self.history)
+        self.summary = summarize_history(self.summary, self.history)
         self.history.clear()
         self.topic_emb = None
         self.topic_text = None

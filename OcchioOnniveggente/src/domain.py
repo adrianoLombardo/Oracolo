@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Iterable, Tuple
 
 import numpy as np
+from .openai_async import run
 
 # Usa il tuo retriever se disponibile
 try:
@@ -87,7 +88,11 @@ def _embed_texts(client: Any, model: str, texts: list[str]) -> list[np.ndarray]:
     if not texts:
         return []
     # OpenAI embeddings API style
-    resp = client.embeddings.create(model=model, input=texts)  # type: ignore[attr-defined]
+    resp = run(
+        client.embeddings.create,  # type: ignore[attr-defined]
+        model=model,
+        input=texts,
+    )
     vecs: list[np.ndarray] = []
     for item in resp.data:
         emb = np.array(getattr(item, "embedding", []), dtype=np.float32)

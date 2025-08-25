@@ -28,6 +28,8 @@ audio:
   input_wav: "data/temp/input.wav"
   output_wav: "data/temp/answer.wav"
   barge_rms_threshold: 0.25   # soglia RMS per barge-in (0..1)
+  denoise: true          # soppressione rumore/AGC
+  echo_cancel: false     # cancellazione eco
 
   # Selezione dispositivi audio
   # Metti l'indice numerico (es. 1) oppure una parte del nome (es. "USB Microphone").
@@ -259,6 +261,8 @@ chat:
   inactivity_timeout_s: 60
   remember_turns: 8
   pinned: []
+  summary_model: gpt-4o-mini
+  summary_max_tokens: 256
 
 # RAG: dove sono i documenti indicizzati e quanti frammenti prendere
 docstore_path: DataBase/index.json
