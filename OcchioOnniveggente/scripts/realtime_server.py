@@ -20,6 +20,7 @@ from src.chat import ChatState
 from src.config import Settings, get_openai_api_key
 from src.domain import validate_question
 from src.hotword import strip_hotword_prefix
+from src.oracle import oracle_answer_async, transcribe_async
 from src.oracle import oracle_answer_stream, transcribe
 from src.profile_utils import get_active_profile, make_domain_settings
 
@@ -73,14 +74,14 @@ async def stream_tts_pcm(
     chunk_bytes = int(sr * 2 * chunk_ms / 1000)
     block_frames = int(sr * chunk_ms / 1000)
     try:
-        with client.audio.speech.with_streaming_response.create(
+        async with client.audio.speech.with_streaming_response.create(
             model=tts_model,
             voice=tts_voice,
             input=text,
             response_format="pcm",
             sample_rate=sr,
         ) as resp:
-            for chunk in resp.iter_bytes(chunk_size=chunk_bytes):
+            async for chunk in resp.aiter_bytes(chunk_size=chunk_bytes):
                 await ws.send(chunk)
                 await asyncio.sleep(0)
         return
@@ -89,15 +90,15 @@ async def stream_tts_pcm(
 
     import io, wave as _wave
 
-    with client.audio.speech.with_streaming_response.create(
+    async with client.audio.speech.with_streaming_response.create(
         model=tts_model, voice=tts_voice, input=text, response_format="wav"
     ) as resp:
         buf = io.BytesIO()
-        for chunk in resp.iter_bytes(chunk_size=4096):
+        async for chunk in resp.aiter_bytes(chunk_size=4096):
             buf.write(chunk)
             if buf.tell() > 48:
                 break
-        for chunk in resp.iter_bytes(chunk_size=8192):
+        async for chunk in resp.aiter_bytes(chunk_size=8192):
             buf.write(chunk)
 
     buf.seek(0)
@@ -202,14 +203,14 @@ class RTSession:
                 * self.SET.realtime_audio.chunk_ms
                 / 1000
             )
-            with client.audio.speech.with_streaming_response.create(
+            async with client.audio.speech.with_streaming_response.create(
                 model=self.SET.openai.tts_model,
                 voice=self.SET.openai.tts_voice,
                 input=text,
                 response_format="pcm",
                 sample_rate=self.client_sr,
             ) as resp:
-                for chunk in resp.iter_bytes(chunk_size=chunk_bytes):
+                async for chunk in resp.aiter_bytes(chunk_size=chunk_bytes):
                     await self.ws.send(chunk)
                     await asyncio.sleep(0)
                     if self.barge:
@@ -282,13 +283,13 @@ class RTSession:
         # OpenAI's transcription API receives a supported format.
         write_wav(self.in_wav, self.client_sr, audio_bytes)
 
-        from openai import OpenAI
+        from openai import AsyncOpenAI
 
         load_dotenv()
         api_key = get_openai_api_key(self.SET)
-        client = OpenAI(api_key=api_key) if api_key else OpenAI()
+        client = AsyncOpenAI(api_key=api_key) if api_key else AsyncOpenAI()
 
-        text, lang = transcribe(
+        text, lang = await transcribe_async(
             self.in_wav, client, self.SET.openai.stt_model, debug=self.SET.debug
         )
         if not text.strip():
@@ -351,8 +352,12 @@ class RTSession:
             effective_system = f"{base_system}\n\n[Profilo: {self.profile}]\n{profile_hint}"
         else:
             effective_system = base_system
+
+        ans, _ = await oracle_answer_async(
+
         final = ""
         async for chunk, done in oracle_answer_stream(
+
             text,
             lang,
             client,

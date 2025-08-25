@@ -52,7 +52,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 import yaml
-from openai import OpenAI
+from openai import AsyncOpenAI
 
 from src.chat import ChatState
 from src.conversation import ConversationManager
@@ -182,7 +182,7 @@ class UiController:
         self.conv.push_user(text)
         openai_conf = self.settings.get("openai", {})
         api_key = get_openai_api_key(self.settings)
-        client = OpenAI(api_key=api_key) if api_key else OpenAI()
+        client = AsyncOpenAI(api_key=api_key) if api_key else AsyncOpenAI()
         style_prompt = self.settings.get("style_prompt", "") if style_enabled else ""
         docstore_path = self.settings.get("docstore_path")
         top_k = int(self.settings.get("retrieval_top_k", 3))
