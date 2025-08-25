@@ -259,6 +259,8 @@ chat:
   inactivity_timeout_s: 60
   remember_turns: 8
   pinned: []
+  summary_model: gpt-4o-mini
+  summary_max_tokens: 256
 
 # RAG: dove sono i documenti indicizzati e quanti frammenti prendere
 docstore_path: DataBase/index.json
