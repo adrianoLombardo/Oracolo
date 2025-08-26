@@ -15,9 +15,14 @@ class ConversationManager:
     track of dialogue state and processing turns.
     """
 
+
     idle_timeout: float = 50.0
     max_history: int = 10
     chat: ChatState = field(default_factory=lambda: ChatState(max_turns=0))
+
+    idle_timeout: float = 60.0
+    chat: ChatState = field(default_factory=ChatState)
+
     dlg: DialogueManager = field(init=False)
     is_processing: bool = False
     turn_id: int = 0

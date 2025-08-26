@@ -144,7 +144,7 @@ definire più **profili** preconfigurati. Ad esempio:
 wake:
   enabled: true
   single_turn: false
-  idle_timeout: 50
+  idle_timeout: 60
   it_phrases: ["ciao oracolo"]
 
 profiles:
