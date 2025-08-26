@@ -22,4 +22,4 @@ def oracle_greeting(lang: str) -> str:
     """Return a greeting string based on ``lang``."""
     if (lang or "").lower().startswith("en"):
         return "Hello, I am the Oracle. Ask your question."
-    return "Ciao, sono l'Oracolo. Fai pure la tua domanda?"
+    return "Ciao, sono l'Oracolo. Fai pure la tua domanda."
