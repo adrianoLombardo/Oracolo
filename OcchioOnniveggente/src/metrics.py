@@ -65,6 +65,9 @@ QUEUE_LENGTH = Gauge(
     "task_queue_length", "Number of pending tasks", ["job"], registry=REGISTRY
 )
 
+# Heartbeat gauge updated by ``metrics_loop``
+HEARTBEAT = Gauge("heartbeat_timestamp", "Last heartbeat timestamp", registry=REGISTRY)
+
 
 async def metrics_middleware(request: Request, call_next):  # type: ignore[no-untyped-def]
     """Middleware capturing request count, errors and latency for each call."""
@@ -93,6 +96,11 @@ async def metrics_middleware(request: Request, call_next):  # type: ignore[no-un
 def metrics_endpoint() -> Response:
     """Expose collected metrics in Prometheus text format."""
     return Response(generate_latest(REGISTRY), media_type=CONTENT_TYPE_LATEST)
+
+
+def health_endpoint() -> Response:
+    """Basic health check endpoint returning HTTP 200."""
+    return Response("ok", media_type="text/plain")
 
 
 def start_metrics_server(port: int = 8000) -> None:
@@ -152,6 +160,7 @@ async def metrics_loop(interval: float = 5.0) -> None:
     while True:  # pragma: no cover - simple loop
         record_system_metrics()
         record_queue_metrics()
+        HEARTBEAT.set(time.time())
         await asyncio.sleep(interval)
 
 

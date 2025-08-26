@@ -8,6 +8,7 @@ from flask import Flask, render_template, request, jsonify
 
 from .service_container import container
 from .oracle import oracle_answer, transcribe
+from .metrics import metrics_endpoint, health_endpoint
 
 app = Flask(__name__, template_folder='templates', static_folder='static')
 
@@ -49,6 +50,16 @@ def voice_endpoint() -> 'flask.Response':
 @app.get('/logs')
 def logs_endpoint() -> 'flask.Response':
     return jsonify(conv.messages_for_llm() if conv else [])
+
+
+@app.get('/metrics')
+def metrics() -> 'flask.Response':
+    return metrics_endpoint()
+
+
+@app.get('/healthz')
+def health() -> 'flask.Response':
+    return health_endpoint()
 
 
 if __name__ == '__main__':  # pragma: no cover - manual invocation helper

@@ -8,4 +8,5 @@ faster-whisper>=1.0.0
 pyttsx3>=2.90
 webrtcvad>=2.0.10
 langdetect>=1.0.9
+tenacity>=8.0.0
 
