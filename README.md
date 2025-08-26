@@ -10,6 +10,16 @@ OcchioOnniveggente/
 ├── DataBase/         # archivio documenti indicizzati
 └── tests/            # test automatici (pytest)
 ```
+
+## Domande fuori tema
+
+Il file `data/domande_oracolo.json` contiene anche quesiti marcati con
+`"type": "off_topic"`.  Ogni voce include una `categoria` (poetica, didattica,
+evocativa o orientamento) che identifica il motivo del rifiuto.  Quando una
+di queste domande viene selezionata, è possibile passare la categoria a
+`oracle_answer(off_topic_category="poetica")` per ottenere una risposta di
+cortese rifiuto adeguata al contesto.
+
 ## Aggiornamenti backend
 
 - **MetadataStore**: nuovo archivio dei metadati basato su SQLite FTS o PostgreSQL, con supporto opzionale al vector store FAISS.

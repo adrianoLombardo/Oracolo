@@ -28,6 +28,16 @@ from .retrieval import load_questions
 GOOD_QUESTIONS, OFF_TOPIC_QUESTIONS, FOLLOW_UPS = load_questions()
 
 
+# Risposte predefinite per domande fuori tema
+OFF_TOPIC_RESPONSES: dict[str, str] = {
+    "poetica": "Preferirei non avventurarmi in slanci poetici.",
+    "didattica": "Al momento non posso fornire spiegazioni didattiche.",
+    "evocativa": "Queste domande evocative sfuggono al mio scopo.",
+    "orientamento": "Non sono in grado di offrire indicazioni stradali.",
+    "default": "Mi dispiace, non posso aiutarti con questa richiesta.",
+}
+
+
 # ---------------------------------------------------------------------------
 # Formatting helpers
 # ---------------------------------------------------------------------------
@@ -154,6 +164,7 @@ def oracle_answer(
     topic: str | None = None,
     stream: bool = False,
     on_token: Callable[[str], None] | None = None,
+    off_topic_category: str | None = None,
 ) -> Tuple[str, List[dict[str, Any]]]:
     """Return an answer from ``client`` and the context used.
 
@@ -167,6 +178,12 @@ def oracle_answer(
     # project.  In this lightweight implementation it is currently unused but
     # allowing it avoids unexpected ``TypeError`` exceptions when higher level
     # components pass the parameter.
+    if off_topic_category:
+        msg = OFF_TOPIC_RESPONSES.get(
+            off_topic_category, OFF_TOPIC_RESPONSES["default"]
+        )
+        return msg, []
+
     instructions = _build_instructions(lang_hint, context, mode, tone)
     messages = _build_messages(question, context, history)
 
@@ -205,8 +222,15 @@ async def oracle_answer_async(
     topic: str | None = None,
     stream: bool = False,
     on_token: Callable[[str], None] | None = None,
+    off_topic_category: str | None = None,
 ) -> Tuple[str, List[dict[str, Any]]]:
     """Async variant of :func:`oracle_answer` supporting ``AsyncOpenAI``."""
+
+    if off_topic_category:
+        msg = OFF_TOPIC_RESPONSES.get(
+            off_topic_category, OFF_TOPIC_RESPONSES["default"]
+        )
+        return msg, []
 
     instructions = _build_instructions(lang_hint, context, mode, tone)
     messages = _build_messages(question, context, history)
