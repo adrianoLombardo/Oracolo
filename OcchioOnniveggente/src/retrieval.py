@@ -54,6 +54,13 @@ class Question:
     domanda: str
     type: str
     follow_up: str | None = None
+    opera: str | None = None
+    artista: str | None = None
+    location: str | None = None
+    tag: List[str] | None = None
+
+    def __getitem__(self, key: str) -> Any:
+        return getattr(self, key)
 
 
 def _simple_sentences(txt: str) -> List[str]:
@@ -162,9 +169,34 @@ def load_questions(path: str | Path | None = None) -> Dict[str, List[Question]]:
             follow_up = item.get("follow_up")
             if follow_up is not None and not isinstance(follow_up, str):
                 follow_up = str(follow_up)
+            opera = item.get("opera")
+            if opera is not None and not isinstance(opera, str):
+                opera = str(opera)
+            artista = item.get("artista")
+            if artista is not None and not isinstance(artista, str):
+                artista = str(artista)
+            location = item.get("location")
+            if location is not None and not isinstance(location, str):
+                location = str(location)
+            tag_field = item.get("tag")
+            tags: List[str] | None
+            if tag_field is None:
+                tags = None
+            elif isinstance(tag_field, list):
+                tags = [str(t) for t in tag_field if isinstance(t, (str, int, float))]
+            else:
+                tags = [str(tag_field)]
             cat = qtype.lower()
             categories.setdefault(cat, []).append(
-                Question(domanda=domanda, type=cat, follow_up=follow_up)
+                Question(
+                    domanda=domanda,
+                    type=cat,
+                    follow_up=follow_up,
+                    opera=opera,
+                    artista=artista,
+                    location=location,
+                    tag=tags,
+                )
             )
 
     return categories

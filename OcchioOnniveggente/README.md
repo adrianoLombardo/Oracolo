@@ -71,20 +71,34 @@ numero, Pydantic segnalerà `Input should be a valid integer` e userà `24000`.
 
 Le domande che l'Oracolo può proporre sono raccolte nel file
 `data/domande_oracolo.json`.  Ogni elemento del file è una struttura con i
-campi `domanda`, `type` e un eventuale `follow_up`:
+campi `domanda`, `type` e un eventuale `follow_up`.  È inoltre possibile
+aggiungere metadati opzionali `opera`, `artista`, `location` e `tag`:
 
 ```json
 {
-  "domanda": "Quale metafora descrive il tuo percorso di vita?",
+  "domanda": "Quale messaggio ti trasmette l'opera CryptoMadonne?",
   "type": "poetica",
-  "follow_up": "Ti va di approfondire questa immagine?"
+  "follow_up": "In che modo ti ispira?",
+  "opera": "CryptoMadonne",
+  "artista": "Artista Sconosciuto",
+  "location": "museo",
+  "tag": ["CryptoMadonne"]
 }
 ```
 
 Le tipologie disponibili sono `poetica`, `didattica`, `evocativa` e
 `orientamento`.  La funzione `load_questions()` in `src/retrieval.py` carica il
 dataset restituendo un dizionario che mappa ogni categoria alla relativa lista
-di domande.
+di domande. I metadati sono accessibili come attributi dell'oggetto
+`Question` e possono essere usati per ricerche mirate. Esempio di filtro per
+tag:
+
+```python
+from OcchioOnniveggente.src.retrieval import load_questions
+
+qs = load_questions()
+crypto = [q.domanda for qq in qs.values() for q in qq if q.tag and "CryptoMadonne" in q.tag]
+```
 
 Nel modulo `src/oracle.py` è possibile ottenere una domanda casuale tramite
 `random_question("poetica")` e generare una risposta con
