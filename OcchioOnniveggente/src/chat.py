@@ -91,6 +91,14 @@ class ChatState:
     def push_assistant(self, text: str) -> None:
         self.push_message("assistant", text)
 
+    def summarize_history(self) -> None:
+        """Summarize the current conversation into ``summary`` and clear history."""
+
+        if not self.history:
+            return
+        self.summary = summarize_history(self.summary, self.history)
+        self.history.clear()
+
     def stream_assistant(self, tokens: "Iterator[str]") -> str:
         """Consume ``tokens`` updating the last assistant message incrementally.
 
@@ -180,6 +188,15 @@ class ChatState:
             else:
                 lines.append(f"{role}: {content}")
         path.write_text("\n".join(lines), encoding="utf-8")
+
+    def messages_for_llm(self) -> List[Dict[str, str]]:
+        """Return the history preceded by the cumulative summary if present."""
+
+        msgs: List[Dict[str, str]] = []
+        if self.summary:
+            msgs.append({"role": "system", "content": self.summary})
+        msgs.extend(self.history)
+        return msgs
 
     # ----------------- topic tracking -----------------
     def update_topic(

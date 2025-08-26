@@ -99,5 +99,15 @@ class ConversationManager:
         msgs.extend(self.chat.history)
         return msgs
 
+    def summarize_history(self) -> None:
+        """Summarize and compact the managed chat history."""
+
+        self.chat.summarize_history()
+
+    def messages_for_llm(self) -> list[dict[str, str]]:
+        """Return recent messages including any accumulated summary."""
+
+        return self.chat.messages_for_llm()
+
 
 __all__ = ["ConversationManager", "DialogState"]
