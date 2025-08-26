@@ -4,7 +4,7 @@ import json, math, re, hashlib
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Dict, Tuple, Iterable, Optional, Any
+from typing import List, Dict, Iterable, Optional, Any
 import numpy as np
 
 
@@ -77,98 +77,19 @@ def _load_index(path: str | Path) -> List[Dict]:
 
 
 
-def load_questions(path: str | Path) -> Dict[str, List[Dict[str, Any]]]:
-    """Load oracle questions and categorize off-topic entries.
-
-    The JSON file is expected to contain a list of question objects.  Entries
-    marked with ``"type": "off_topic"`` are grouped by their ``categoria``
-    field (e.g. ``poetica`` or ``didattica``).  All other entries are returned
-    under the ``"good"`` key.
-
-
-def load_questions(path: str | Path) -> Dict[str, Any]:
-    """Load oracle questions from ``path`` grouping off-topic ones by category.
-
-    The JSON file is expected to contain a list of objects.  Entries without
-    ``type`` or where ``type`` is different from ``off_topic`` are considered
-    regular questions and returned in the ``good`` list.  Entries tagged with
-    ``off_topic`` must also provide a ``categoria`` field; these are grouped
-    under ``off_topic`` using the category as key.
-
-def load_questions(
-    path: str | Path | None = None,
-) -> Tuple[List[Dict[str, str]], List[Dict[str, str]], List[str]]:
-    """Read oracle questions and follow ups from ``path``.
-
+def load_questions(path: str | Path | None = None) -> Dict[str, List[Dict[str, Any]]]:
+    """Read the entire questions dataset and group entries by category.
 
     Parameters
     ----------
     path:
-
-        Location of ``domande_oracolo.json``.
+        Optional location of ``domande_oracolo.json``. When ``None`` the file
+        is searched relative to the project root.
 
     Returns
     -------
     dict
-        ``{"good": [...], "off_topic": {"cat": [...]}}``
-
-    """
-
-    p = Path(path)
-    if not p.exists():
-
-        logger.warning("Questions file not found: %s", p)
-
-        return {"good": [], "off_topic": {}}
-
-    try:
-        data = json.loads(p.read_text(encoding="utf-8"))
-    except Exception:
-
-
-        logger.exception("Invalid JSON in questions file: %s", p)
-
-        return {"good": [], "off_topic": {}}
-
-    good: List[Dict[str, Any]] = []
-    off_topic: Dict[str, List[Dict[str, Any]]] = {}
-
-
-    if isinstance(data, list):
-        for item in data:
-            if not isinstance(item, dict):
-                continue
-            qtype = str(item.get("type", "")).lower()
-            if qtype == "off_topic":
-                cat = str(item.get("categoria", "")).lower()
-                off_topic.setdefault(cat, []).append(item)
-            else:
-                good.append(item)
-
-    return {"good": good, "off_topic": off_topic}
-
-
-    for item in data if isinstance(data, list) else []:
-        if item.get("type") == "off_topic":
-            cat = str(item.get("categoria", "")) or "unknown"
-            off_topic.setdefault(cat, []).append(item)
-        else:
-            good.append(item)
-
-    return {"good": good, "off_topic": off_topic}
-
-        Optional custom location of the JSON file.  When ``None`` the
-        function looks for ``data/domande_oracolo.json`` relative to the
-        project root.
-
-    Returns
-    -------
-    tuple
-        ``(good, off_topic, follow_ups)`` where ``good`` and ``off_topic`` are
-        lists of dictionaries containing at least ``question`` and
-        ``response_type``.  ``follow_ups`` is a list with all the
-        ``follow_up`` strings present in the file.  Empty lists are returned
-        when the file cannot be read.
+        Mapping each question ``type`` to the list of question objects.
     """
 
     p = (
@@ -178,16 +99,22 @@ def load_questions(
     )
     if not p.exists():
         logger.warning("Questions file not found: %s", p)
-        return [], [], []
+        return {}
     try:
         data = json.loads(p.read_text(encoding="utf-8"))
     except Exception:
-        logger.exception("Failed to read questions file: %s", p)
-        return [], [], []
-    good = data.get("good", []) if isinstance(data, dict) else []
-    off_topic = data.get("off_topic", []) if isinstance(data, dict) else []
-    follow_ups = [q.get("follow_up", "") for q in good + off_topic if q.get("follow_up")]
-    return good, off_topic, follow_ups
+        logger.exception("Invalid JSON in questions file: %s", p)
+        return {}
+
+    categories: Dict[str, List[Dict[str, Any]]] = {}
+    if isinstance(data, list):
+        for item in data:
+            if not isinstance(item, dict):
+                continue
+            cat = str(item.get("type", "")).lower()
+            categories.setdefault(cat, []).append(item)
+
+    return categories
 
 
 
