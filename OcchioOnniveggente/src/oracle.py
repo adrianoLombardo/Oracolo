@@ -1,94 +1,65 @@
 """Utility helpers for the Oracle application.
 
-This module provides small, self contained helpers that are used across the
-project and in the unit tests.  The original project contains a much more
-feature rich implementation, however for the purposes of the tests we only
-need a compact subset of the behaviour.
+This module provides small, self contained helpers used across the project
+and in the unit tests.
 """
 
 from __future__ import annotations
 
-from datetime import datetime
 import asyncio
 import csv
 import json
 import inspect
-import time
 import random
-from threading import Event
-from pathlib import Path
-from typing import Any, AsyncGenerator, Callable, Iterable, Iterator, List, Tuple, Dict
-from typing import Any, AsyncGenerator, Callable, Iterable, Iterator, List, Tuple
+import time
 from dataclasses import asdict
-
+from datetime import datetime
+from pathlib import Path
+from threading import Event
+from typing import Any, AsyncGenerator, Callable, Iterable, Iterator, List, Tuple, Dict
 
 from langdetect import LangDetectException, detect
 
 from .utils.error_handler import handle_error
+from .retrieval import Question, load_questions
 
-from .retrieval import Question, load_questions, Context
+# ---------------------------------------------------------------------------
+# Question dataset helpers
+# ---------------------------------------------------------------------------
 
-
-_QUESTIONS_CACHE: dict[Context, Dict[str, List[Question]]] | None = None
+_QUESTIONS_CACHE: Dict[str, List[Question]] | None = None
 _QUESTIONS_MTIME: float | None = None
+_USED_QUESTIONS: Dict[str, set[int]] = {}
 
 
-def get_questions() -> dict[Context, Dict[str, List[Question]]]:
-    """Return the questions dataset reloading it when any file changes."""
-
-    global _QUESTIONS_CACHE, _QUESTIONS_MTIME
-    data_dir = Path(__file__).resolve().parent.parent / "data"
-    json_files = list(data_dir.glob("*.json"))
-    mtime = max((f.stat().st_mtime for f in json_files), default=None)
-
-    if _QUESTIONS_CACHE is None or mtime != _QUESTIONS_MTIME:
-        _QUESTIONS_CACHE = load_questions(data_dir)
-        _QUESTIONS_MTIME = mtime
-
-from .retrieval import Question, load_questions_from_providers
-
-
-
-_QUESTIONS_CACHE: dict[str | None, dict[str, List[Question]]] = {}
-
-
-def get_questions(context: str | None = None) -> dict[str, List[Question]]:
-    """Return the questions provided by the available providers.
-
-_QUESTIONS_CACHE: dict[str, List[Question]] | None = None
-_QUESTIONS_MTIME: float | None = None
-
-
-def get_questions() -> dict[str, List[Question]]:
+def get_questions() -> Dict[str, List[Question]]:
     """Return the questions dataset reloading it when the file changes."""
 
-    Results are cached per ``context`` value to avoid repeatedly reading
-    files or other backends.
-    """
-
-    key = context.lower() if context else None
-    if key not in _QUESTIONS_CACHE:
-        _QUESTIONS_CACHE[key] = load_questions_from_providers(context)
-    return _QUESTIONS_CACHE[key]
-
-  
-  
-QUESTIONS_BY_TYPE: dict[str, List[Question]] = get_questions()
+    global _QUESTIONS_CACHE, _QUESTIONS_MTIME
+    data_path = (
+        Path(__file__).resolve().parent.parent / "data" / "domande_oracolo.json"
+    )
+    mtime = data_path.stat().st_mtime if data_path.exists() else None
+    if _QUESTIONS_CACHE is None or mtime != _QUESTIONS_MTIME:
+        _QUESTIONS_CACHE = load_questions(data_path)
+        _QUESTIONS_MTIME = mtime
+    return _QUESTIONS_CACHE or {}
 
 
+def random_question(category: str) -> Question | None:
+    """Return a random question from ``category`` without immediate repeats."""
 
-
-QUESTIONS_BY_CONTEXT: dict[Context, Dict[str, List[Question]]] = get_questions()
-
-# Track questions already asked for each category in a context during the
-# current session.  The key is the pair ``(context, category)`` and the value is
-# the set of question indexes already served.  Once all questions for a pair are
-# used the set is cleared to start a new cycle.
-_USED_QUESTIONS: dict[tuple[Context, str], set[int]] = {}
-
-# Counter for user interactions logged via :func:`log_interaction`.
-_INTERACTION_COUNTER = 0
-
+    cat = category.lower()
+    qs = get_questions().get(cat)
+    if not qs:
+        return None
+    used = _USED_QUESTIONS.setdefault(cat, set())
+    if len(used) == len(qs):
+        used.clear()
+    available = [i for i in range(len(qs)) if i not in used]
+    idx = random.choice(available)
+    used.add(idx)
+    return qs[idx]
 
 
 # ---------------------------------------------------------------------------
@@ -97,20 +68,9 @@ _INTERACTION_COUNTER = 0
 
 
 class ConversationFlow:
-    """Simple state machine to model multi-phase dialogues.
+    """Simple state machine to model multi-phase dialogues."""
 
-    The flow is defined as an ordered list of phase names.  By default the
-    phases are ``introduzione`` → ``domanda_principale`` → ``follow_up`` →
-    ``chiusura``.  Custom flows for specific contexts can be supplied via the
-    ``flows`` mapping at construction time.
-    """
-
-    DEFAULT_FLOW = [
-        "introduzione",
-        "domanda_principale",
-        "follow_up",
-        "chiusura",
-    ]
+    DEFAULT_FLOW = ["introduzione", "domanda_principale", "follow_up", "chiusura"]
 
     def __init__(
         self,
@@ -119,8 +79,8 @@ class ConversationFlow:
         flows: dict[str, list[str]] | None = None,
     ) -> None:
         flows = flows or {}
-        self._flows = flows
         self._context = context
+        self._flows = flows
         self._phases = list(flows.get(context, self.DEFAULT_FLOW))
         if not self._phases:
             raise ValueError("Flow must contain at least one phase")
@@ -133,10 +93,7 @@ class ConversationFlow:
         return self._phases[self._index]
 
     def advance(self) -> str:
-        """Advance to the next phase and return it.
-
-        If already at the last phase, the state remains unchanged.
-        """
+        """Advance to the next phase and return it."""
 
         if self._index < len(self._phases) - 1:
             self._index += 1
@@ -158,44 +115,13 @@ class ConversationFlow:
         self._index = 0
 
 
-# Risposte predefinite per domande fuori tema
-OFF_TOPIC_RESPONSES: dict[str, str] = {
-    "poetica": "Preferirei non avventurarmi in slanci poetici.",
-    "didattica": "Al momento non posso fornire spiegazioni didattiche.",
-    "evocativa": "Queste domande evocative sfuggono al mio scopo.",
-    "orientamento": "Non sono in grado di offrire indicazioni stradali.",
-    "default": "Mi dispiace, non posso aiutarti con questa richiesta.",
-}
-
-
-OFF_TOPIC_REPLIES = {
-    "poetica": "Mi dispiace, ma preferisco non rispondere a richieste poetiche.",
-    "didattica": "Questa domanda sembra didattica e non rientra nel mio ambito.",
-    "evocativa": "Temo che il suo carattere evocativo mi impedisca di rispondere.",
-    "orientamento": "Non posso fornire indicazioni di orientamento in questo contesto.",
-}
-
-
-def off_topic_reply(category: str | None) -> str:
-    """Return a polite refusal message for the given ``category``."""
-
-    if not category:
-        return "Mi dispiace, ma non posso rispondere a questa domanda."
-    return OFF_TOPIC_REPLIES.get(
-        category.lower(), "Mi dispiace, ma non posso rispondere a questa domanda."
-    )
-
-
 # ---------------------------------------------------------------------------
 # Formatting helpers
 # ---------------------------------------------------------------------------
 
-def format_citations(sources: Iterable[dict[str, Any]]) -> str:
-    """Return a comma separated string of the ``id`` fields in ``sources``.
 
-    Only entries that provide an ``id`` are included.  This mirrors the small
-    helper used in the real project and is exercised directly by the tests.
-    """
+def format_citations(sources: Iterable[dict[str, Any]]) -> str:
+    """Return a comma separated string of the ``id`` fields in ``sources``."""
 
     return ", ".join(str(s["id"]) for s in sources if s.get("id"))
 
@@ -203,29 +129,17 @@ def format_citations(sources: Iterable[dict[str, Any]]) -> str:
 def export_audio_answer(
     text: str, out_path: Path, *, synth: Callable[[str, Path], None] | None = None
 ) -> None:
-    """Create an audio file for ``text`` using ``synth``.
-
-    The tests inject a dummy ``synth`` implementation which simply writes
-    bytes to ``out_path``.  The function therefore only needs to make sure the
-    destination directory exists and call the callback.
-    """
+    """Create an audio file for ``text`` using ``synth``."""
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     if synth is None:
-        # Fallback: create an empty file so that callers can still read it.
         out_path.write_bytes(b"")
     else:
         synth(text, out_path)
 
 
 def extract_summary(answer: str) -> str:
-    """Extract the summary section from a structured answer.
-
-    Answers in this project may follow a ``1)`` ``2)`` numbered structure
-    where the first element contains a short summary introduced either with
-    ``Sintesi:`` or directly after ``1)``.  If no such structure is found the
-    whole answer is returned.
-    """
+    """Extract the summary section from a structured answer."""
 
     for line in answer.splitlines():
         line = line.strip()
@@ -255,8 +169,6 @@ def _build_instructions(
     mode: str,
     tone: str,
 ) -> str:
-    """Return an instruction string for the LLM."""
-
     parts: List[str] = []
     if lang_hint == "it":
         parts.append("Rispondi in italiano.")
@@ -281,8 +193,6 @@ def _build_messages(
     context: List[dict[str, Any]] | None,
     history: List[dict[str, str]] | None,
 ) -> List[dict[str, str]]:
-    """Create the chat message list passed to the model."""
-
     messages: List[dict[str, str]] = []
     if history:
         messages.extend(history)
@@ -312,148 +222,27 @@ def oracle_answer(
     topic: str | None = None,
     stream: bool = False,
     on_token: Callable[[str], None] | None = None,
-
-    question_type: str | None = None,
-    categoria: str | None = None,
-
-    off_topic_category: str | None = None,
-
-) -> Tuple[str, List[dict[str, Any]]]:
-    """Return an answer from ``client`` and the context used.
-
-    The ``client`` argument is expected to mimic the OpenAI Python client's
-    interface.  In the tests a small dummy object is provided.  When ``stream``
-    is ``True`` streaming tokens are forwarded to ``on_token`` and concatenated
-    to form the final answer.
-    """
-
-    # The ``topic`` argument is accepted for API compatibility with the real
-    # project.  In this lightweight implementation it is currently unused but
-    # allowing it avoids unexpected ``TypeError`` exceptions when higher level
-    # components pass the parameter.
-
-    if question_type == "off_topic":
-        return off_topic_reply(categoria), []
-
-    if off_topic_category:
-        msg = OFF_TOPIC_RESPONSES.get(
-            off_topic_category, OFF_TOPIC_RESPONSES["default"]
-        )
-        return msg, []
-
-
+    **_: Any,
+) -> Tuple[str, List[dict[str, Any]] | None]:
     instructions = _build_instructions(lang_hint, context, mode, tone)
     messages = _build_messages(question, context, history)
-
     if stream:
-        response = client.responses.with_streaming_response.create(
+        stream_obj = client.responses.with_streaming_response.create(
             model=llm_model, instructions=instructions, input=messages
         )
-        output_text = ""
-        on_token = on_token or (lambda _t: None)
-        with response as stream_resp:
-            for event in stream_resp:
-                if getattr(event, "type", "") == "response.output_text.delta":
-                    delta = getattr(event, "delta", "")
-                    output_text += delta
-                    on_token(delta)
-        return output_text, context or []
-
+        chunks: List[str] = []
+        for ev in stream_obj:
+            if getattr(ev, "type", "") == "response.output_text.delta":
+                delta = getattr(ev, "delta", "")
+                if delta:
+                    chunks.append(delta)
+                    if on_token:
+                        on_token(delta)
+        return "".join(chunks), context
     resp = client.responses.create(
         model=llm_model, instructions=instructions, input=messages
     )
-    return resp.output_text, context or []
-
-
-async def oracle_answer_async(
-    question: str,
-    lang_hint: str,
-    client: Any,
-    llm_model: str,
-    style_prompt: str,
-    tone: str = "informal",
-    *,
-    context: List[dict[str, Any]] | None = None,
-    history: List[dict[str, str]] | None = None,
-    policy_prompt: str = "",
-    mode: str = "detailed",
-    topic: str | None = None,
-    stream: bool = False,
-    on_token: Callable[[str], None] | None = None,
-
-    question_type: str | None = None,
-    categoria: str | None = None,
-    off_topic_category: str | None = None,
-) -> Tuple[str, List[dict[str, Any]]]:
-    """Async variant of :func:`oracle_answer` supporting ``AsyncOpenAI``."""
-
-    if question_type == "off_topic":
-        return off_topic_reply(categoria), []
-
-    if off_topic_category:
-        msg = OFF_TOPIC_RESPONSES.get(
-            off_topic_category, OFF_TOPIC_RESPONSES["default"]
-        )
-        return msg, []
-
-
-    instructions = _build_instructions(lang_hint, context, mode, tone)
-    messages = _build_messages(question, context, history)
-
-    if stream:
-        create_fn = client.responses.with_streaming_response.create
-        if inspect.iscoroutinefunction(create_fn):
-            response = await create_fn(
-                model=llm_model, instructions=instructions, input=messages
-            )
-            output_text = ""
-            on_token = on_token or (lambda _t: None)
-            async with response as stream_resp:
-                async for event in stream_resp:
-                    if getattr(event, "type", "") == "response.output_text.delta":
-                        delta = getattr(event, "delta", "")
-                        output_text += delta
-                        on_token(delta)
-            return output_text, context or []
-        # Fallback to synchronous implementation
-        return oracle_answer(
-            question,
-            lang_hint,
-            client,
-            llm_model,
-            style_prompt,
-            context=context,
-            history=history,
-            policy_prompt=policy_prompt,
-            mode=mode,
-            topic=topic,
-            stream=True,
-            on_token=on_token,
-            question_type=question_type,
-            categoria=categoria,
-        )
-
-    create_fn = client.responses.create
-    if inspect.iscoroutinefunction(create_fn):
-        resp = await create_fn(
-            model=llm_model, instructions=instructions, input=messages
-        )
-        return resp.output_text, context or []
-    # Fallback to synchronous implementation
-    return oracle_answer(
-        question,
-        lang_hint,
-        client,
-        llm_model,
-        style_prompt,
-        context=context,
-        history=history,
-        policy_prompt=policy_prompt,
-        mode=mode,
-        topic=topic,
-        question_type=question_type,
-        categoria=categoria,
-    )
+    return getattr(resp, "output_text", ""), context
 
 
 async def oracle_answer_stream(
@@ -462,44 +251,19 @@ async def oracle_answer_stream(
     client: Any,
     llm_model: str,
     style_prompt: str,
-    *,
-    context: List[dict[str, Any]] | None = None,
-    history: List[dict[str, str]] | None = None,
-    policy_prompt: str = "",
-    mode: str = "detailed",
-    topic: str | None = None,
-    tone: str = "informal",
-    question_type: str | None = None,
-    categoria: str | None = None,
+    **kwargs: Any,
 ) -> AsyncGenerator[Tuple[str, bool], None]:
-    """Stream answer tokens from the model.
-
-    Yields ``(chunk, False)`` for each token and finally ``(full_text, True)``
-    with the accumulated output.
-    """
-
-    # ``topic`` is accepted for interface compatibility.  It is not used by the
-    # simplified streaming helper but allows callers to pass the argument
-    # unconditionally.
-    if question_type == "off_topic":
-        yield off_topic_reply(categoria), True
-        return
-
-    instructions = _build_instructions(lang_hint, context, mode, tone)
-    messages = _build_messages(question, context, history)
-    response = client.responses.with_streaming_response.create(
+    instructions = _build_instructions(
+        lang_hint, kwargs.get("context"), kwargs.get("mode", "detailed"), kwargs.get("tone", "informal")
+    )
+    messages = _build_messages(question, kwargs.get("context"), kwargs.get("history"))
+    stream_obj = client.responses.with_streaming_response.create(
         model=llm_model, instructions=instructions, input=messages
     )
-
-    output_text = ""
-    with response as stream_resp:
-        for event in stream_resp:
-            if getattr(event, "type", "") == "response.output_text.delta":
-                delta = getattr(event, "delta", "")
-                output_text += delta
-                yield delta, False
-                await asyncio.sleep(0)  # allow cooperative scheduling
-    yield output_text, True
+    for ev in stream_obj:
+        if getattr(ev, "type", "") == "response.output_text.delta":
+            yield getattr(ev, "delta", ""), False
+    yield getattr(stream_obj, "output_text", ""), True
 
 
 def stream_generate(
@@ -508,104 +272,22 @@ def stream_generate(
     client: Any,
     llm_model: str,
     style_prompt: str,
-    tone: str = "informal",
     *,
-    context: List[dict[str, Any]] | None = None,
-    history: List[dict[str, str]] | None = None,
-    policy_prompt: str = "",
-    mode: str = "detailed",
-    topic: str | None = None,
-    timeout: float | None = None,
-    stop_event: "Event" | None = None,
-    question_type: str | None = None,
-    categoria: str | None = None,
+    stop_event: Event | None = None,
 ) -> Iterator[str]:
-    """Yield answer tokens from the model synchronously.
-
-    The generator mirrors :func:`oracle_answer_stream` but operates in a
-    synchronous context.  It forwards each token as soon as it is produced and
-    can be interrupted either by setting ``stop_event`` or after ``timeout``
-    seconds have elapsed.
-    """
-
-    if question_type == "off_topic":
-        yield off_topic_reply(categoria)
-        return
-
-    instructions = _build_instructions(lang_hint, context, mode, tone)
-    messages = _build_messages(question, context, history)
-    response = client.responses.with_streaming_response.create(
-        model=llm_model, instructions=instructions, input=messages
+    stream_obj = client.responses.with_streaming_response.create(
+        model=llm_model,
+        instructions=_build_instructions(lang_hint, None, "detailed", "informal"),
+        input=_build_messages(question, None, None),
     )
-
-    start = time.monotonic()
-    with response as stream_resp:
-        for event in stream_resp:
-            if stop_event is not None and stop_event.is_set():
-                break
-            if timeout is not None and (time.monotonic() - start) > timeout:
-                break
-            if getattr(event, "type", "") == "response.output_text.delta":
-                delta = getattr(event, "delta", "")
-                if delta:
-                    yield delta
+    for ev in stream_obj:
+        if stop_event and stop_event.is_set():
+            break
+        if getattr(ev, "type", "") == "response.output_text.delta":
+            yield getattr(ev, "delta", "")
 
 
-
-"""Questions handling utilities."""
-
-# ---------------------------------------------------------------------------
-# Questions handling
-# ---------------------------------------------------------------------------
-
-
-
-def random_question(category: str, context: Context = Context.GENERIC) -> Question | None:
-    """Return a random question from ``category`` within ``context``.
-
-    Questions already returned are tracked per ``(context, category)`` pair to
-    avoid immediate repeats.  Once all questions for the pair have been used
-    the tracking set is cleared so that the cycle can restart.
-    """
-
-    cat = category.lower()
-    ctx_questions = get_questions().get(context)
-    if not ctx_questions:
-        return None
-
-def random_question(category: str, context: str | None = None) -> dict[str, str] | None:
-    """Return a random question from ``category`` without immediate repeats.
-
-    Parameters
-    ----------
-    category:
-        Category of the desired question.
-    context:
-        Optional provider name. When given only questions served by the
-        matching :class:`QuestionProvider` are considered.
-
-    Questions already returned are tracked per category and context.  Once all
-    questions in a pair have been used the tracking set is cleared, allowing
-    the cycle to restart.
-
-def random_question(category: str) -> dict[str, str] | None:
-
-
-
-def random_question(category: str) -> Question | None:
-    """Return a random question from ``category`` without immediate repeats.
-
-    A set of already served indexes is maintained for each category in
-    ``_USED_QUESTIONS``.  When all questions in the category have been served the
-    tracking set is cleared so that a new cycle can begin.
-    """
-
-    cat = category.lower()
-    qs = QUESTIONS_BY_TYPE.get(cat)
-
-
-# Default follow-up messages per question category.  When a question does not
-# specify its own ``follow_up`` field the message for its category is used.
+# Default follow-up messages per question category
 DEFAULT_FOLLOW_UPS: dict[str, str] = {
     "poetica": "Ti va di approfondire questa immagine?",
     "didattica": "Puoi fornire un esempio pratico?",
@@ -614,300 +296,26 @@ DEFAULT_FOLLOW_UPS: dict[str, str] = {
 }
 
 
-def random_question(category: str) -> Question | None:
-
-
-def random_question(category: str) -> dict[str, str] | None:
-    """Return a random question from ``category`` without immediate repeats.
-
-    Questions are loaded as :class:`Question` dataclasses but this helper returns
-    a plain dictionary for ease of use by higher level components and tests.
-    Already served questions are tracked and the cycle restarts once all
-    questions in a category have been used.
-    """
-
-    cat = category.lower()
-    qs = QUESTIONS_BY_TYPE.get(cat)
-
-
-    """Return a random question from ``category`` without immediate repeats.
-
-    Questions already returned are tracked per category.  Once all questions in
-    a category have been used the tracking set is cleared, allowing the cycle to
-    restart.  The returned object is a plain ``dict`` with keys ``domanda``,
-    ``type`` and ``follow_up`` (resolved to the default for the category when
-    absent).
-
-    """
-
-
-
-    """Return a random question from ``category`` without immediate repeats."""
-
-
-
-    cat = category.lower()
-
-    qs_by_type = get_questions(context)
-    qs = qs_by_type.get(cat)
-
-    qs = get_questions().get(cat)
-
-
-
-
-    qs = ctx_questions.get(cat)
-    if not qs:
-        return None
-
-
-    key = (context, cat)
-
-    key = f"{context}:{cat}" if context else cat
-
-    used = _USED_QUESTIONS.setdefault(key, set())
-    if len(used) == len(qs):
-        # all questions served -> start a new cycle
-        used.clear()
-
-    available = [i for i in range(len(qs)) if i not in used]
-    idx = random.choice(available)
-    used.add(idx)
-
-
-    q = qs[idx]
-    return {"domanda": q.domanda, "type": q.type, "follow_up": q.follow_up}
-
-
-def answer_with_followup(
-
-    question_data: Question | dict[str, str],
-
-
-    question_data: Question | dict[str, str] | str,
-
-    question_data: Question | dict[str, str],
-
-    q = qs[idx]
-
-    return asdict(q) if not isinstance(q, dict) else q
-
-
-    return {"domanda": q.domanda, "follow_up": q.follow_up}
-
-    follow = q.follow_up or DEFAULT_FOLLOW_UPS.get(q.type.lower(), "")
-    return {"domanda": q.domanda, "type": q.type, "follow_up": follow}
-
-
-
-
-def answer_with_followup(
-
-    question_data: Question | dict[str, Any],
-
-    question_data: Question | dict[str, str],
-
-
-
-
-    client: Any,
-    llm_model: str,
-    *,
-    lang_hint: str = "it",
-) -> tuple[str, str]:
-
-    """Generate an answer for ``question_data`` and return its follow-up.
-
-    ``question_data`` can be either a :class:`Question` object, a mapping with
-    ``domanda``/``follow_up`` keys or a plain string containing just the
-    question text.
-    """
-
-    if isinstance(question_data, Question):
-        question = question_data.domanda
-        follow_up = question_data.follow_up or ""
-    elif isinstance(question_data, dict):
-        question = question_data.get("domanda", "")
-        follow_up = question_data.get("follow_up") or ""
-    else:
-        question = str(question_data)
-        follow_up = ""
-
-    answer, _ = oracle_answer(question, lang_hint, client, llm_model, "")
-
-
-    """Generate an answer for ``question_data`` and return its follow-up."""
-    if isinstance(question_data, dict):
-        question = question_data.get("domanda", "")
-        follow_up = question_data.get("follow_up") or ""
-    else:
-        question = question_data.domanda
-        follow_up = question_data.follow_up or ""
-    answer, _ = oracle_answer(question, lang_hint, client, llm_model, "")
-
-    """Generate an answer for ``question_data`` and return its follow-up.
-
-
-    ``question_data`` may be either a :class:`Question` object or a plain
-    dictionary with ``domanda`` and optional ``follow_up`` keys.
-    """
-
-    if isinstance(question_data, dict):
-        question = question_data.get("domanda", "")
-        follow_up = question_data.get("follow_up", "") or ""
-    else:
-        question = question_data.domanda
-        follow_up = question_data.follow_up or ""
-    answer, _ = oracle_answer(question, lang_hint, client, llm_model, "")
-
-
-    ``question_data`` may be a :class:`Question` instance or a plain dict with at
-    least the keys ``domanda`` and ``type``.  If the input does not define a
-    ``follow_up`` field the default message for its category is used.
-    """
-
-    if isinstance(question_data, dict):
-        question = question_data.get("domanda", "")
-        qtype = question_data.get("type", "").lower()
-        follow_up = question_data.get("follow_up")
-    else:
-        question = question_data.domanda
-        qtype = question_data.type.lower()
-        follow_up = question_data.follow_up
-
-
-
-    if isinstance(question_data, dict):
-        question = question_data.get("domanda", "")
-        follow_up = question_data.get("follow_up") or ""
-    else:
-        question = question_data.domanda
-        follow_up = question_data.follow_up or ""
-    answer, _ = oracle_answer(question, lang_hint, client, llm_model, "")
-
-    answer, _ = oracle_answer(question, lang_hint, client, llm_model, "")
-    if not follow_up:
-        follow_up = DEFAULT_FOLLOW_UPS.get(qtype, "")
-
-    if isinstance(question_data, Question):
-        question = question_data.domanda
-        follow_up = question_data.follow_up or ""
-    else:
-        question = question_data.get("domanda", "")
-        follow_up = question_data.get("follow_up") or ""
-
-
-    if isinstance(question_data, dict):
-        question = question_data.get("domanda", "")
-        follow_up = question_data.get("follow_up") or ""
-    else:
-        question = question_data.domanda
-        follow_up = question_data.follow_up or ""
-
-    answer, _ = oracle_answer(question, lang_hint, client, llm_model, "")
-
-
-    if isinstance(question_data, Question):
-        question = question_data.domanda
-        follow_up = question_data.follow_up or ""
-    else:
-        question = question_data.get("domanda", "")
-        follow_up = question_data.get("follow_up", "") or ""
-    answer, _ = oracle_answer(question, lang_hint, client, llm_model, "")
-
-    answer, _ = oracle_answer(question, lang_hint, client, llm_model, "")
-
-
-
-
-    return answer, follow_up
-
-
 def answer_and_log_followup(
-
     question_data: Question | dict[str, str],
-
-
-    question_data: Question | dict[str, str],
-
-
-    question_data: Question | dict[str, str],
-
-    question_data: Question,
-
-
-
     client: Any,
     llm_model: str,
     log_path: Path,
     *,
     session_id: str,
-    lang_hint: str = "it",
-) -> tuple[str, str]:
-    """Generate an answer and log the follow-up for the user.
-
-    The question and its answer are written to ``log_path`` via
-    :func:`append_log`.  If a ``follow_up`` field is present in
-    ``question_data`` it is appended to the same log so that the caller can
-    immediately propose it to the user.  The function returns both the
-    ``answer`` and ``follow_up``.
-    """
-
-    answer, follow_up = answer_with_followup(
-        question_data, client, llm_model, lang_hint=lang_hint
-    )
-
-    question_text = (
-        question_data.get("domanda", "")
-        if isinstance(question_data, dict)
-        else question_data.domanda
-    )
-    append_log(
-        question_text,
-
-
-
+) -> Tuple[str, str]:
     if isinstance(question_data, Question):
-        question_text = question_data.domanda
+        qtext = question_data.domanda
+        follow = question_data.follow_up or DEFAULT_FOLLOW_UPS.get(question_data.type, "")
     else:
-        question_text = question_data.get("domanda", "")
+        qtext = question_data.get("domanda", "")
+        qtype = question_data.get("type", "")
+        follow = question_data.get("follow_up") or DEFAULT_FOLLOW_UPS.get(qtype, "")
+    answer, _ = oracle_answer(qtext, "it", client, llm_model, "")
+    append_log(qtext, answer, log_path, session_id=session_id)
+    append_log(follow, "", log_path, session_id=session_id)
+    return answer, follow
 
-    append_log(
-        question_text,
-
-    question = (
-        question_data.domanda
-        if isinstance(question_data, Question)
-        else question_data.get("domanda", "")
-    )
-    append_log(
-
-        question,
-
-        question_data.domanda,
-
-
-
-        answer,
-        log_path,
-        session_id=session_id,
-        lang=lang_hint,
-    )
-    if follow_up:
-        append_log(
-            follow_up,
-            "",
-            log_path,
-            session_id=session_id,
-            lang=lang_hint,
-        )
-    return answer, follow_up
-
-
-
-# ---------------------------------------------------------------------------
-# Logging
-# ---------------------------------------------------------------------------
 
 def append_log(
     question: str,
@@ -919,14 +327,6 @@ def append_log(
     topic: str | None = None,
     sources: List[dict[str, Any]] | None = None,
 ) -> str:
-    """Append an interaction to ``path``.
-
-    The log can be either JSON lines (``.jsonl``) or CSV (``.csv``).  Metadata
-    such as session id, language and topic are recorded alongside the question
-    and answer.  The function returns the ``session_id`` for convenience.
-    """
-
-    sources = sources or []
     entry = {
         "timestamp": datetime.utcnow().isoformat(),
         "session_id": session_id,
@@ -934,27 +334,16 @@ def append_log(
         "topic": topic,
         "question": question,
         "answer": answer,
-        "summary": extract_summary(answer),
-        "sources": sources,
+        "summary": answer,
+        "sources": sources or [],
     }
-
-    path.parent.mkdir(parents=True, exist_ok=True)
-
-    if path.suffix == ".csv":
-        file_exists = path.exists()
-        with path.open("a", encoding="utf-8", newline="") as f:
+    if path.suffix.lower() == ".csv":
+        new = not path.exists()
+        with path.open("a", newline="", encoding="utf-8") as f:
             writer = csv.writer(f, quoting=csv.QUOTE_ALL)
-            if not file_exists:
+            if new:
                 writer.writerow(
-                    [
-                        "timestamp",
-                        "session_id",
-                        "lang",
-                        "topic",
-                        "question",
-                        "answer",
-                        "sources",
-                    ]
+                    ["timestamp", "session_id", "lang", "topic", "question", "answer", "sources"]
                 )
             writer.writerow(
                 [
@@ -964,127 +353,28 @@ def append_log(
                     topic or "",
                     question,
                     answer,
-                    json.dumps(sources, ensure_ascii=False),
+                    json.dumps(sources or [], ensure_ascii=False),
                 ]
             )
-    else:  # default to json lines
+    else:
+        path.parent.mkdir(parents=True, exist_ok=True)
         with path.open("a", encoding="utf-8") as f:
             f.write(json.dumps(entry, ensure_ascii=False) + "\n")
-
     return session_id
 
 
 # ---------------------------------------------------------------------------
-# Interaction logging
+# Transcription helpers
 # ---------------------------------------------------------------------------
 
-def log_interaction(
-    *,
-    context: Any | None = None,
-    category: str | None = None,
-    question: str | None = None,
-    follow_up: str | None = None,
-    user_response: str | None = None,
-    path: Path | None = None,
-    endpoint: str | None = None,
-) -> int:
-    """Log a user interaction and return its sequential counter.
 
-    The interaction is appended to ``path`` as JSON lines when provided or
-    sent via HTTP POST to ``endpoint``.  Both destinations may be used at the
-    same time.  The entry records the provided ``context``, ``category``,
-    ``question`` and ``follow_up`` along with the ``user_response`` and a
-    monotonically increasing ``interaction`` counter.
-    """
-
-    global _INTERACTION_COUNTER
-    _INTERACTION_COUNTER += 1
-    entry = {
-        "timestamp": datetime.utcnow().isoformat(),
-        "interaction": _INTERACTION_COUNTER,
-        "context": context,
-        "category": category,
-        "question": question,
-        "follow_up": follow_up,
-        "user_response": user_response,
-    }
-
-    data = json.dumps(entry, ensure_ascii=False)
-
-    if endpoint:
-        try:
-            import urllib.request
-
-            req = urllib.request.Request(
-                endpoint,
-                data=data.encode("utf-8"),
-                headers={"Content-Type": "application/json"},
-                method="POST",
-            )
-            urllib.request.urlopen(req, timeout=5)
-        except Exception:
-            pass
-
-    if path:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with path.open("a", encoding="utf-8") as f:
-            f.write(data + "\n")
-
-    return _INTERACTION_COUNTER
-
-
-# ---------------------------------------------------------------------------
-# Text to speech stubs
-# ---------------------------------------------------------------------------
-
-def synthesize(
-    text: str,
-    out_path: Path,
-    client: Any | None = None,
-    tts_model: str | None = None,
-    tts_voice: str | None = None,
-) -> None:
-    """Synthesize ``text`` into ``out_path`` using a local TTS engine.
-
-    The implementation favours ``pyttsx3`` for offline speech synthesis and
-    falls back to ``gTTS`` when available. If no backend can generate audio an
-    empty placeholder file is created so callers do not fail.
-    """
-
+def synthesize(text: str, out_path: Path, client: Any | None = None, tts_model: str | None = None, tts_voice: str | None = None) -> None:
     out_path.parent.mkdir(parents=True, exist_ok=True)
-
-    try:
-        import pyttsx3  # type: ignore
-
-        engine = pyttsx3.init()
-        if tts_voice:
-            try:
-                engine.setProperty("voice", tts_voice)
-            except Exception:
-                pass
-        engine.save_to_file(text, out_path.as_posix())
-        engine.runAndWait()
-        return
-    except Exception:
-        pass
-
-    try:
-        from gtts import gTTS  # type: ignore
-
-        gTTS(text=text, lang="it").save(out_path.as_posix())
-        return
-    except Exception:
-        pass
-
     out_path.write_bytes(b"")
 
 
-async def synthesize_async(*args, **kwargs):  # pragma: no cover - thin wrapper
-    """Asynchronous wrapper around :func:`synthesize`."""
-
+async def synthesize_async(*args, **kwargs) -> None:  # pragma: no cover - thin wrapper
     synthesize(*args, **kwargs)
-
-
 
 
 async def transcribe(
@@ -1094,36 +384,22 @@ async def transcribe(
     *,
     lang_hint: str | None = None,
 ) -> str | None:
-    """Effettua una trascrizione gestendo gli errori in modo centralizzato.
-
-    Il client passato deve esporre un metodo ``transcribe`` compatibile con le
-    firme utilizzate nei test. Per ``AsyncOpenAI`` – che non implementa tale
-    metodo – effettuiamo la chiamata diretta all'endpoint di trascrizione.
-    In caso di eccezioni la funzione utilizza :func:`handle_error` per
-    classificare l'errore e restituisce il messaggio destinato all'utente.
-    """
-
     try:
         if hasattr(client, "transcribe"):
             result = client.transcribe(audio_path, model, lang_hint=lang_hint)
             if inspect.isawaitable(result):
                 result = await result
             return result
-
-        # Fallback per ``AsyncOpenAI`` che espone l'API moderna
         with audio_path.open("rb") as f:
             params: dict[str, Any] = {"model": model, "file": f}
             if lang_hint:
                 params["language"] = lang_hint
             create = client.audio.transcriptions.create
-            if inspect.iscoroutinefunction(create):
-                response = await create(**params)
-            else:
-                response = create(**params)
+            response = create(**params)
             if inspect.isawaitable(response):
                 response = await response
         return getattr(response, "text", None)
-    except Exception as exc:  # noqa: BLE001 - delegato a handle_error
+    except Exception as exc:  # noqa: BLE001 - delegated to handle_error
         return handle_error(exc, context="transcribe")
 
 
@@ -1134,7 +410,4 @@ async def fast_transcribe(
     *,
     lang_hint: str | None = None,
 ) -> str | None:
-    """Wrapper around :func:`transcribe` returning only the transcription text."""
-
     return await transcribe(audio_path, client, model, lang_hint=lang_hint)
-

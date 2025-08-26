@@ -19,8 +19,10 @@ def test_domande_oracolo_structure_and_counts():
     for entry in data:
         assert "domanda" in entry
         assert "type" in entry
+        assert "id" in entry
         assert isinstance(entry["domanda"], str)
         assert isinstance(entry["type"], str)
+        assert isinstance(entry["id"], int)
         if "follow_up" in entry:
             assert isinstance(entry["follow_up"], str)
         counts[entry["type"]] += 1
