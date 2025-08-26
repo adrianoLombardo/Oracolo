@@ -2,6 +2,7 @@
 from __future__ import annotations
 import json, math, re, hashlib
 import logging
+import yaml
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Dict, Iterable, Optional, Any
@@ -58,11 +59,43 @@ def _tokenize(s: str) -> List[str]:
     return [t for t in re.findall(r"[A-Za-zÀ-ÖØ-öø-ÿ0-9]+", s.lower()) if t]
 
 
+def _configured_docstore_path() -> Path | None:
+    """Return the docstore path from settings files, if any."""
+    root = Path(__file__).resolve().parent.parent
+    for name in ("settings.local.yaml", "settings.yaml"):
+        cfg = root / name
+        if not cfg.exists():
+            continue
+        try:
+            data = yaml.safe_load(cfg.read_text(encoding="utf-8")) or {}
+        except Exception:
+            continue
+        path = data.get("docstore_path")
+        if path:
+            candidate = (cfg.parent / path).resolve()
+            if candidate.exists():
+                return candidate
+    return None
+
+
 def _load_index(path: str | Path) -> List[Dict]:
     p = Path(path)
     if not p.exists():
-        logger.warning("Index file not found: %s", p)
-        return []
+        cfg_path = _configured_docstore_path()
+        if cfg_path is not None:
+            p = cfg_path
+        if not p.exists():
+            logger.warning(
+                "Index file not found at %s. Run `scripts/ingest_docs.py` to populate it or set "
+                "`docstore_path` in settings.yaml.",
+                p,
+            )
+            try:
+                p.parent.mkdir(parents=True, exist_ok=True)
+                p.write_text("[]", encoding="utf-8")
+            except Exception:
+                pass
+            return []
     data = json.loads(p.read_text(encoding="utf-8"))
     # attesi: [{"id": "...", "text": "..."}]
     if isinstance(data, list):

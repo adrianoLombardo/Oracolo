@@ -327,6 +327,16 @@ risponde con un cortese rifiuto generato dall'Oracolo e non propone follow‑up.
 ## 5. Gestione documenti (RAG)
 
 Gli archivi consultati dall'Oracolo risiedono in `DataBase/`.
+Per popolare l'indice predefinito `DataBase/index.json` inserisci i tuoi
+documenti (ad esempio file di testo) nella cartella e genera l'indice con:
+
+```bash
+python scripts/ingest_docs.py --add DataBase
+```
+
+Il percorso dell'indice può essere personalizzato tramite `docstore_path` in
+`settings.yaml`.
+
 Script di ingestione/rimozione:
 
 ```bash
@@ -344,7 +354,6 @@ python scripts/ingest_docs.py --clear
 ```
 
 Lo script `scripts/ingest_docs.py` ora rileva automaticamente un percorso con estensione `.db` o un DSN (`sqlite:///` o `postgresql://`) e utilizza il nuovo `MetadataStore` con indice FTS.
-Il percorso dell'indice è configurabile con `docstore_path` in `settings.yaml`.
 Prima di `--remove`, `--clear` o `--reindex` lo script crea un backup
 `index.json.bak`. Per ripristinare l'indice basta copiare il file di backup
 al nome originale:
