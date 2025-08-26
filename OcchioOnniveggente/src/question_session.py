@@ -30,6 +30,50 @@ class QuestionSession:
         self._index = 0
         self._used: Dict[str, set[int]] = {cat: set() for cat in self._categories}
 
+    def add_question(self, category: str, question: Question) -> None:
+        """Add ``question`` to ``category``, creating it if needed."""
+
+        cat = category.lower()
+        if cat not in self.questions:
+            self.questions[cat] = []
+            self._categories.append(cat)
+            self._used[cat] = set()
+        self.questions[cat].append(question)
+
+    def remove_question(self, category: str, question_id: int) -> None:
+        """Remove question by index from ``category``.
+
+        If the category becomes empty it is removed as well.
+        """
+
+        cat = category.lower()
+        qs = self.questions.get(cat)
+        if qs is None:
+            return
+        if 0 <= question_id < len(qs):
+            qs.pop(question_id)
+            used = self._used.get(cat, set())
+            self._used[cat] = {
+                i - 1 if i > question_id else i
+                for i in used
+                if i != question_id
+            }
+            if not qs:
+                del self.questions[cat]
+                self._categories.remove(cat)
+                self._used.pop(cat, None)
+                if self._categories:
+                    self._index %= len(self._categories)
+                else:
+                    self._index = 0
+
+    def reset_category(self, category: str) -> None:
+        """Clear used-question state for ``category``."""
+
+        cat = category.lower()
+        if cat in self._used:
+            self._used[cat].clear()
+
     def next_question(self, category: str | None = None) -> Question | None:
         """Return a question, cycling categories and avoiding repeats."""
 
