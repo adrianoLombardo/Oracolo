@@ -404,6 +404,13 @@ I test includono:
 - `tests/data/filters/*.txt` fornisce dizionari di esempio per i test.
 - Alcuni script richiedono librerie opzionali (`pypdf`, `python-docx`, `rank-bm25`, `rapidfuzz`); installarle se necessarie per l'uso esteso.
 
+## 10. Domande fuori tema
+
+Il file `OcchioOnniveggente/data/domande_oracolo.json` include voci con
+`"type": "off_topic"` e una `categoria` (poetica, didattica, evocativa,
+orientamento). La funzione `load_questions` le carica e il modulo `oracle`
+risponde con un rifiuto cortese specifico per categoria.
+
 ---
 
 Con questo README hai una panoramica completa del progetto, delle sue funzionalità e dei comandi per avviare l'Oracolo, eseguire i test e gestire l'indice dei documenti. Buon divertimento!

@@ -23,6 +23,24 @@ from langdetect import LangDetectException, detect
 from .utils.error_handler import handle_error
 
 
+OFF_TOPIC_REPLIES = {
+    "poetica": "Mi dispiace, ma preferisco non rispondere a richieste poetiche.",
+    "didattica": "Questa domanda sembra didattica e non rientra nel mio ambito.",
+    "evocativa": "Temo che il suo carattere evocativo mi impedisca di rispondere.",
+    "orientamento": "Non posso fornire indicazioni di orientamento in questo contesto.",
+}
+
+
+def off_topic_reply(category: str | None) -> str:
+    """Return a polite refusal message for the given ``category``."""
+
+    if not category:
+        return "Mi dispiace, ma non posso rispondere a questa domanda."
+    return OFF_TOPIC_REPLIES.get(
+        category.lower(), "Mi dispiace, ma non posso rispondere a questa domanda."
+    )
+
+
 # ---------------------------------------------------------------------------
 # Formatting helpers
 # ---------------------------------------------------------------------------
@@ -149,6 +167,8 @@ def oracle_answer(
     topic: str | None = None,
     stream: bool = False,
     on_token: Callable[[str], None] | None = None,
+    question_type: str | None = None,
+    categoria: str | None = None,
 ) -> Tuple[str, List[dict[str, Any]]]:
     """Return an answer from ``client`` and the context used.
 
@@ -162,6 +182,9 @@ def oracle_answer(
     # project.  In this lightweight implementation it is currently unused but
     # allowing it avoids unexpected ``TypeError`` exceptions when higher level
     # components pass the parameter.
+    if question_type == "off_topic":
+        return off_topic_reply(categoria), []
+
     instructions = _build_instructions(lang_hint, context, mode, tone)
     messages = _build_messages(question, context, history)
 
@@ -200,8 +223,13 @@ async def oracle_answer_async(
     topic: str | None = None,
     stream: bool = False,
     on_token: Callable[[str], None] | None = None,
+    question_type: str | None = None,
+    categoria: str | None = None,
 ) -> Tuple[str, List[dict[str, Any]]]:
     """Async variant of :func:`oracle_answer` supporting ``AsyncOpenAI``."""
+
+    if question_type == "off_topic":
+        return off_topic_reply(categoria), []
 
     instructions = _build_instructions(lang_hint, context, mode, tone)
     messages = _build_messages(question, context, history)
@@ -235,6 +263,8 @@ async def oracle_answer_async(
             topic=topic,
             stream=True,
             on_token=on_token,
+            question_type=question_type,
+            categoria=categoria,
         )
 
     create_fn = client.responses.create
@@ -255,6 +285,8 @@ async def oracle_answer_async(
         policy_prompt=policy_prompt,
         mode=mode,
         topic=topic,
+        question_type=question_type,
+        categoria=categoria,
     )
 
 
@@ -271,6 +303,8 @@ async def oracle_answer_stream(
     mode: str = "detailed",
     topic: str | None = None,
     tone: str = "informal",
+    question_type: str | None = None,
+    categoria: str | None = None,
 ) -> AsyncGenerator[Tuple[str, bool], None]:
     """Stream answer tokens from the model.
 
@@ -281,6 +315,10 @@ async def oracle_answer_stream(
     # ``topic`` is accepted for interface compatibility.  It is not used by the
     # simplified streaming helper but allows callers to pass the argument
     # unconditionally.
+    if question_type == "off_topic":
+        yield off_topic_reply(categoria), True
+        return
+
     instructions = _build_instructions(lang_hint, context, mode, tone)
     messages = _build_messages(question, context, history)
     response = client.responses.with_streaming_response.create(
@@ -313,6 +351,8 @@ def stream_generate(
     topic: str | None = None,
     timeout: float | None = None,
     stop_event: "Event" | None = None,
+    question_type: str | None = None,
+    categoria: str | None = None,
 ) -> Iterator[str]:
     """Yield answer tokens from the model synchronously.
 
@@ -321,6 +361,10 @@ def stream_generate(
     can be interrupted either by setting ``stop_event`` or after ``timeout``
     seconds have elapsed.
     """
+
+    if question_type == "off_topic":
+        yield off_topic_reply(categoria)
+        return
 
     instructions = _build_instructions(lang_hint, context, mode, tone)
     messages = _build_messages(question, context, history)

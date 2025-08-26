@@ -76,6 +76,41 @@ def _load_index(path: str | Path) -> List[Dict]:
     return documents
 
 
+def load_questions(path: str | Path) -> Dict[str, List[Dict[str, Any]]]:
+    """Load oracle questions and categorize off-topic entries.
+
+    The JSON file is expected to contain a list of question objects.  Entries
+    marked with ``"type": "off_topic"`` are grouped by their ``categoria``
+    field (e.g. ``poetica`` or ``didattica``).  All other entries are returned
+    under the ``"good"`` key.
+    """
+
+    p = Path(path)
+    if not p.exists():
+        return {"good": [], "off_topic": {}}
+
+    try:
+        data = json.loads(p.read_text(encoding="utf-8"))
+    except Exception:
+        return {"good": [], "off_topic": {}}
+
+    good: List[Dict[str, Any]] = []
+    off_topic: Dict[str, List[Dict[str, Any]]] = {}
+
+    if isinstance(data, list):
+        for item in data:
+            if not isinstance(item, dict):
+                continue
+            qtype = str(item.get("type", "")).lower()
+            if qtype == "off_topic":
+                cat = str(item.get("categoria", "")).lower()
+                off_topic.setdefault(cat, []).append(item)
+            else:
+                good.append(item)
+
+    return {"good": good, "off_topic": off_topic}
+
+
 def _make_chunks(text: str, max_chars: int = 800, overlap_ratio: float = 0.1) -> List[str]:
     """Split text into semantically coherent chunks.
 
