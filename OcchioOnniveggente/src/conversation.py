@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Optional, List, Dict
 
-from .chat import ChatState
+from .chat import ChatState, summarize_history
 from .dialogue import DialogueManager, DialogState
 
 
@@ -16,7 +16,8 @@ class ConversationManager:
     """
 
     idle_timeout: float = 50.0
-    chat: ChatState = field(default_factory=ChatState)
+    max_history: int = 10
+    chat: ChatState = field(default_factory=lambda: ChatState(max_turns=0))
     dlg: DialogueManager = field(init=False)
     is_processing: bool = False
     turn_id: int = 0
@@ -65,9 +66,33 @@ class ConversationManager:
     # --------------------------- chat helpers ---------------------------
     def push_user(self, text: str) -> None:
         self.chat.push_user(text)
+        self._trim_history()
 
     def push_assistant(self, text: str) -> None:
         self.chat.push_assistant(text)
+        self._trim_history()
+
+    def _trim_history(self) -> None:
+        excess = len(self.chat.history) - self.max_history
+        if excess > 0:
+            self.chat.summary = summarize_history(
+                self.chat.summary, self.chat.history[:excess]
+            )
+            self.chat.history = self.chat.history[excess:]
+
+    def summarize_history(self) -> None:
+        """Force summarization of the entire conversation history."""
+        if self.chat.history:
+            self.chat.summary = summarize_history(self.chat.summary, self.chat.history)
+            self.chat.history.clear()
+
+    @property
+    def messages(self) -> List[Dict[str, str]]:
+        msgs: List[Dict[str, str]] = []
+        if self.chat.summary:
+            msgs.append({"role": "system", "content": self.chat.summary})
+        msgs.extend(self.chat.history)
+        return msgs
 
 
 __all__ = ["ConversationManager", "DialogState"]
