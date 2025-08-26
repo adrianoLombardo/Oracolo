@@ -2491,18 +2491,28 @@ class OracoloUI(tk.Tk):
                     break
                 time.sleep(0.05)
                 continue
-            text = line.rstrip("\n")
+            raw = line.rstrip("\n")
             try:
-                data = json.loads(text)
+                data = json.loads(raw)
+                typ = data.get("type")
                 text = str(data.get("text", ""))
+                if typ == "chat":
+                    role = str(data.get("role", "assistant"))
+                    self.after(0, lambda r=role, t=text: self._append_chat(r, t))
+                else:
+                    self.after(
+                        0,
+                        lambda t=text: self._append_log(
+                            t + ("\n" if not t.endswith("\n") else ""), "LLM"
+                        ),
+                    )
             except Exception:
-                pass
-            self.after(
-                0,
-                lambda t=text: self._append_log(
-                    t + ("\n" if not t.endswith("\n") else ""), "LLM"
-                ),
-            )
+                self.after(
+                    0,
+                    lambda t=raw: self._append_log(
+                        t + ("\n" if not t.endswith("\n") else ""), "LLM"
+                    ),
+                )
             if text.startswith("…"):
                 msg = text.lstrip("…").strip()
                 self.conv.push_user(msg)

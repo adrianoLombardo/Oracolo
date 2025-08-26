@@ -161,6 +161,20 @@ Lo streaming può essere interrotto impostando un `threading.Event`, passando
 un parametro `timeout` oppure premendo `CTRL+C` nella CLI.
 
 
+## Protocollo di comunicazione con la UI
+
+Il processo principale comunica con l'interfaccia inviando su **stdout** linee
+JSON strutturate. I messaggi di chat hanno la forma:
+
+```json
+{"type": "chat", "role": "assistant", "text": "..."}
+```
+
+Ogni altra linea è interpretata come log e mostrata nel pannello di debug.
+Script e test che leggono l'output devono quindi decodificare le linee JSON per
+estrarre il testo della conversazione.
+
+
 ---
 
 ## 1. Installazione
