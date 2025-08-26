@@ -9,7 +9,11 @@ import logging
 import hashlib
 import shutil
 import tempfile
+
+import threading
+
 import asyncio
+
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +45,7 @@ from .cache import get_tts_cache, set_tts_cache, get_stt_cache, set_stt_cache
 # modello e consente di riutilizzare la stessa istanza tra più chiamate
 # senza ricaricarlo in VRAM.
 _WHISPER_CACHE: dict[tuple[str, str, bool], object] = {}
+_WHISPER_LOCK = threading.Lock()
 
 
 def _get_whisper(
@@ -59,20 +64,22 @@ def _get_whisper(
         except Exception as exc:  # pragma: no cover - runtime dep
             raise RuntimeError("onnxruntime è richiesto per modelli ONNX") from exc
         key = (model_name, device, True)
-        model = _WHISPER_CACHE.get(key)
-        if model is None:
-            model = ort.InferenceSession(model_name)
-            _WHISPER_CACHE[key] = model
-        return model
+        with _WHISPER_LOCK:
+            model = _WHISPER_CACHE.get(key)
+            if model is None:
+                model = ort.InferenceSession(model_name)
+                _WHISPER_CACHE[key] = model
+            return model
 
     from faster_whisper import WhisperModel  # type: ignore
 
     key = (model_name, device, False)
-    model = _WHISPER_CACHE.get(key)
-    if model is None:
-        model = WhisperModel(model_name, device=device, compute_type=compute_type)
-        _WHISPER_CACHE[key] = model
-    return model
+    with _WHISPER_LOCK:
+        model = _WHISPER_CACHE.get(key)
+        if model is None:
+            model = WhisperModel(model_name, device=device, compute_type=compute_type)
+            _WHISPER_CACHE[key] = model
+        return model
 
 
 
@@ -164,6 +171,11 @@ def tts_speak(text: str, *, lang: str = "it") -> None:
 
 
 
+def stt_local(audio_path: Path, lang: str = "it") -> str:
+    """Attempt a local transcription of ``audio_path`` using cached models."""
+
+
+
 async def async_tts_speak(text: str, *, lang: str = "it") -> None:
     """Asynchronous version of :func:`tts_speak`."""
     tmp = Path(tempfile.gettempdir()) / "tts_tmp.wav"
@@ -177,6 +189,18 @@ async def async_tts_speak(text: str, *, lang: str = "it") -> None:
         logger.warning("async_tts_speak failed", exc_info=True)
 
 
+    if backend == "faster_whisper":
+        try:
+            segments, _ = model.transcribe(
+                audio_path.as_posix(), language=lang, task="transcribe"
+            )
+            return "".join(seg.text for seg in segments).strip()
+        except Exception:
+            return ""
+    return ""
+
+
+
 def stt_local(
     audio_path: Path,
     *,
@@ -185,6 +209,26 @@ def stt_local(
 ) -> str:
     """Transcribe ``audio_path`` using a local backend if available.
 
+
+
+        actual_device = (
+            "cuda" if device == "auto" and torch.cuda.is_available() else device
+        )
+    except Exception:
+        actual_device = "cpu" if device == "auto" else device
+
+    metrics.record_system_metrics()
+
+    compute_type = "int8_float16" if actual_device == "cuda" else "int8"
+
+    try:
+        model = _get_whisper("base", actual_device, compute_type)
+        segments, _ = model.transcribe(
+            audio_path.as_posix(), language=lang, task="transcribe"
+        )
+        return "".join(seg.text for seg in segments).strip()
+    except Exception:
+        return ""
 
 def stt_local(audio_path: Path, lang: str = "it") -> str:
     """Placeholder local transcription returning an empty string."""
@@ -238,6 +282,7 @@ def stt_local(audio_path: Path, lang: str = "it") -> str:
 
     return ""
 
+
 def stt_local_faster(
     audio_path: Path,
     lang: str = "it",
@@ -247,12 +292,24 @@ def stt_local_faster(
     model_path: str = "base",
     use_onnx: bool = False,
 ) -> str:
+
+    """Transcribe ``audio_path`` using a cached ``faster-whisper`` model."""
+
+
+    backend, model = container.load_stt_model()
+    if backend != "faster_whisper":
+        return ""
+    # ``device`` can be ``"cpu"`` or ``"cuda"``; ``compute_type`` controls the
+    # precision used by the model. On failure or missing dependencies an empty
+    # string is returned.
+
     """Transcribe ``audio_path`` using a cached ``faster-whisper`` model.
 
     ``device`` can be ``"cpu"`` or ``"cuda"``; ``compute_type`` controls the
     precision used by the model.  On failure or missing dependencies an empty
     string is returned.
     """
+
 
     setts = container.settings
     pre = AudioPreprocessor(
