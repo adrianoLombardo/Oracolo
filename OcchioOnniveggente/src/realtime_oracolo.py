@@ -48,13 +48,11 @@ def _emit(kind: str, text: str) -> None:
 
 async def _tts_say(text: str, state: dict[str, Any]) -> None:
     """Speak ``text`` using the local TTS while avoiding overlap."""
-
-    loop = asyncio.get_running_loop()
     while state.get("tts_playing"):
         await asyncio.sleep(0.1)
     try:
         state["tts_playing"] = True
-        await loop.run_in_executor(None, local_audio.tts_speak, text)
+        await local_audio.async_tts_speak(text)
     except Exception:  # pragma: no cover - best effort playback
         logger.warning("tts playback failed", exc_info=True)
     finally:
