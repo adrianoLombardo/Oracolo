@@ -111,3 +111,25 @@ def setup_logging(
     listener = QueueListener(queue, *handlers)
     listener.start()
     return listener
+
+
+def get_backend_logger(level: int | None = None) -> logging.Logger:
+    """Return the logger dedicated to UI/backend operations.
+
+    Parameters
+    ----------
+    level: int | None, optional
+        If provided, the logger's level is set accordingly.
+
+    Notes
+    -----
+    The logger propagates to the root logger configured by
+    :func:`setup_logging`, so backend messages are still processed by the
+    same handlers while remaining isolated from other loggers when
+    desired.
+    """
+
+    logger = logging.getLogger("backend")
+    if level is not None:
+        logger.setLevel(level)
+    return logger
