@@ -20,6 +20,34 @@ di queste domande viene selezionata, è possibile passare la categoria a
 `oracle_answer(off_topic_category="poetica")` per ottenere una risposta di
 cortese rifiuto adeguata al contesto.
 
+## Sequenza delle categorie di domande
+
+Il modulo `oracle` offre la classe `QuestionSession` per gestire la scelta delle
+categorie quando non ne viene specificata una esplicitamente.  Di default le
+categorie vengono proposte in rotazione **round‑robin**, evitando ripetizioni
+immediate.  È possibile modificare le probabilità di estrazione definendo delle
+"pesature" in `settings.yaml` oppure passando un dizionario `weights` al
+costruttore:
+
+```python
+from OcchioOnniveggente.src.oracle import QuestionSession
+
+session = QuestionSession(weights={"poetica": 0.7, "didattica": 0.2, "orientamento": 0.1})
+next_q = session.next_question()  # sceglie la categoria in base alle pesature
+```
+
+Esempio di configurazione nel file di impostazioni:
+
+```yaml
+question_weights:
+  poetica: 0.5
+  evocativa: 0.3
+  didattica: 0.2
+```
+
+Quando le pesature non sono specificate, `QuestionSession` ruota le categorie
+in ordine deterministico.
+
 ## Aggiornamenti backend
 
 - **MetadataStore**: nuovo archivio dei metadati basato su SQLite FTS o PostgreSQL, con supporto opzionale al vector store FAISS.
