@@ -33,6 +33,7 @@ from .cache import cache_get_json, cache_set_json
 from .rate_limiter import rate_limiter
 from .exceptions import RateLimitExceeded, ExternalServiceError
 from .utils import retry_with_backoff
+from .metrics import pipeline_timer
 
 try:  # pragma: no cover - optional dependency
     from tenacity import retry, stop_after_attempt, wait_exponential
@@ -253,6 +254,7 @@ def _build_instructions(
     return "\n".join(parts)
 
 
+@pipeline_timer("oracle_answer")
 def oracle_answer(
     question: str,
     lang_hint: str,
@@ -372,6 +374,7 @@ def oracle_answer(
     return ans, context or []
 
 
+@pipeline_timer("oracle_answer_async")
 async def oracle_answer_async(
     question: str,
     lang_hint: str,
@@ -412,6 +415,7 @@ async def oracle_answer_async(
     )
 
 
+@pipeline_timer("oracle_answer_stream")
 async def oracle_answer_stream(
     question: str,
     lang_hint: str,

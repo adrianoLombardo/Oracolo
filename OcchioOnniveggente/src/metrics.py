@@ -71,6 +71,41 @@ QUEUE_LENGTH = Gauge(
 # Heartbeat gauge updated by ``metrics_loop``
 HEARTBEAT = Gauge("heartbeat_timestamp", "Last heartbeat timestamp", registry=REGISTRY)
 
+# Pipeline profiling
+PIPELINE_LATENCY = Histogram(
+    "pipeline_latency_seconds",
+    "End-to-end pipeline latency",
+    ["stage"],
+    registry=REGISTRY,
+)
+
+
+def pipeline_timer(stage: str):
+    """Decorator recording execution time of ``stage``."""
+
+    def decorator(func):  # type: ignore[no-untyped-def]
+        if asyncio.iscoroutinefunction(func):
+
+            async def wrapper(*args, **kwargs):  # type: ignore[no-untyped-def]
+                start = time.perf_counter()
+                try:
+                    return await func(*args, **kwargs)
+                finally:
+                    PIPELINE_LATENCY.labels(stage).observe(time.perf_counter() - start)
+
+            return wrapper
+
+        def wrapper(*args, **kwargs):  # type: ignore[no-untyped-def]
+            start = time.perf_counter()
+            try:
+                return func(*args, **kwargs)
+            finally:
+                PIPELINE_LATENCY.labels(stage).observe(time.perf_counter() - start)
+
+        return wrapper
+
+    return decorator
+
 
 async def metrics_middleware(request: Request, call_next):  # type: ignore[no-untyped-def]
     """Middleware capturing request count, errors and latency for each call."""
