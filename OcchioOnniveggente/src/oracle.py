@@ -25,6 +25,7 @@ from .conversation import ConversationManager
 from .retrieval import Question, load_questions, Context
 from .event_bus import event_bus
 from .service_container import container
+from .task_queue import task_queue
 
 
 logger = logging.getLogger(__name__)
@@ -290,8 +291,6 @@ def oracle_answer(
                 if on_token:
                     on_token(delta)
 
-        if chat:
-            chat.push_assistant(text)
         event_bus.publish("response_ready", text)
 
         if conv:
@@ -302,8 +301,6 @@ def oracle_answer(
     resp = client.responses.create(model=llm_model, instructions=instr, input=msgs)
     ans = getattr(resp, "output_text", "")
 
-    if chat:
-        chat.push_assistant(ans)
     event_bus.publish("response_ready", ans)
 
     if conv:
@@ -383,8 +380,6 @@ async def oracle_answer_stream(
             text += delta
             yield delta, False
 
-    if chat:
-        chat.push_assistant(text)
     event_bus.publish("response_ready", text)
 
     if conv:
@@ -426,8 +421,6 @@ def stream_generate(
                 text += delta
                 yield delta
 
-        if chat:
-            chat.push_assistant(text)
         event_bus.publish("response_ready", text)
 
         if conv:
@@ -527,32 +520,26 @@ async def synthesize_async(
 # ---------------------------------------------------------------------------
 
 async def transcribe(
-
     audio_path: Path,
     client: Any | None = None,
     model: str | None = None,
     *,
-    chat: ChatState | None = None,
-
-    audio_path: Path, client: Any, model: str, *, conv: ConversationManager | None = None
-
+    conv: ConversationManager | None = None,
 ) -> str:
     """Best effort transcription with coarse error handling."""
-
 
     if client is None:
         stt = container.speech_to_text()
         text = await asyncio.to_thread(stt.transcribe, audio_path)
-        if chat:
-            chat.push_user(text)
+        if conv:
+            conv.push_user(text)
         return text
 
-    ``AsyncOpenAI`` removed the ``client.transcribe`` shortcut in favour of the
-    ``audio.transcriptions.create`` endpoint.  The helper now supports both
-    calling conventions for compatibility with older clients used in the tests.
-    When ``conv`` is provided the transcribed text is appended to it as a user
-    message.
-    """
+    # ``AsyncOpenAI`` removed the ``client.transcribe`` shortcut in favour of the
+    # ``audio.transcriptions.create`` endpoint.  The helper now supports both
+    # calling conventions for compatibility with older clients used in the tests.
+    # When ``conv`` is provided the transcribed text is appended to it as a user
+    # message.
 
 
     try:
@@ -601,19 +588,108 @@ async def transcribe(
 
 
 async def fast_transcribe(
-
     audio_path: Path,
     client: Any | None = None,
     model: str | None = None,
     *,
-    chat: ChatState | None = None,
-
-    audio_path: Path, client: Any, model: str, *, conv: ConversationManager | None = None
-
+    conv: ConversationManager | None = None,
 ) -> str:
     """Alias of :func:`transcribe` maintained for backwards compatibility."""
 
     return await transcribe(audio_path, client, model, conv=conv)
+
+
+# ---------------------------------------------------------------------------
+# Task queue helpers
+# ---------------------------------------------------------------------------
+
+def enqueue_transcription(
+    audio_path: Path,
+    *,
+    client: Any | None = None,
+    model: str | None = None,
+    conv: ConversationManager | None = None,
+) -> None:
+    """Publish a transcription job to the background queue."""
+
+    task_queue.publish(
+        "transcribe",
+        audio_path=audio_path,
+        client=client,
+        model=model,
+        conv=conv,
+    )
+
+
+def enqueue_generate_reply(
+    question: str,
+    lang_hint: str | None,
+    client: Any | None,
+    model: str,
+    *,
+    conv: ConversationManager | None = None,
+) -> None:
+    """Publish a reply generation job to the queue."""
+
+    task_queue.publish(
+        "generate_reply",
+        question=question,
+        lang_hint=lang_hint,
+        client=client,
+        model=model,
+        conv=conv,
+    )
+
+
+def enqueue_synthesize_voice(text: str) -> None:
+    """Publish a voice synthesis job to the queue."""
+
+    task_queue.publish("synthesize_voice", text=text)
+
+
+async def transcribe_worker() -> None:
+    """Background worker processing transcription jobs."""
+
+    async def _handle(
+        *,
+        audio_path: Path,
+        client: Any | None = None,
+        model: str | None = None,
+        conv: ConversationManager | None = None,
+    ) -> None:
+        text = await transcribe(audio_path, client, model, conv=conv)
+        event_bus.publish("transcript_ready", text)
+
+    await task_queue.worker("transcribe", _handle)
+
+
+async def generate_reply_worker() -> None:
+    """Background worker generating replies from queued jobs."""
+
+    async def _handle(
+        *,
+        question: str,
+        lang_hint: str | None,
+        client: Any | None = None,
+        model: str | None = None,
+        conv: ConversationManager | None = None,
+    ) -> None:
+        answer, _ = await oracle_answer_async(
+            question, lang_hint, client, model, conv=conv
+        )
+        event_bus.publish("response_ready", answer)
+
+    await task_queue.worker("generate_reply", _handle)
+
+
+async def synthesize_voice_worker() -> None:
+    """Background worker turning text into audio."""
+
+    async def _handle(*, text: str) -> None:
+        audio = await synthesize_async(text)
+        event_bus.publish("tts_ready", audio)
+
+    await task_queue.worker("synthesize_voice", _handle)
 
 
 # ---------------------------------------------------------------------------
@@ -713,4 +789,10 @@ __all__ = [
     "stream_generate",
     "transcribe",
     "fast_transcribe",
+    "enqueue_transcription",
+    "enqueue_generate_reply",
+    "enqueue_synthesize_voice",
+    "transcribe_worker",
+    "generate_reply_worker",
+    "synthesize_voice_worker",
 ]
