@@ -468,13 +468,23 @@ def transcribe(audio_path: Path, client: Any, model: str, *, lang_hint: str | No
     """Effettua una trascrizione gestendo gli errori in modo centralizzato.
 
     Il client passato deve esporre un metodo ``transcribe`` compatibile con le
-    firme utilizzate nei test. In caso di eccezioni la funzione utilizza
-    :func:`handle_error` per classificare l'errore e restituisce il messaggio
-    destinato all'utente.
+    firme utilizzate nei test. Per ``AsyncOpenAI`` – che non implementa tale
+    metodo – effettuiamo la chiamata diretta all'endpoint di trascrizione.
+    In caso di eccezioni la funzione utilizza :func:`handle_error` per
+    classificare l'errore e restituisce il messaggio destinato all'utente.
     """
 
     try:
-        return client.transcribe(audio_path, model, lang_hint=lang_hint)
+        if hasattr(client, "transcribe"):
+            return client.transcribe(audio_path, model, lang_hint=lang_hint)
+
+        # Fallback per ``AsyncOpenAI`` che espone l'API moderna
+        with audio_path.open("rb") as f:
+            params: dict[str, Any] = {"model": model, "file": f}
+            if lang_hint:
+                params["language"] = lang_hint
+            response = client.audio.transcriptions.create(**params)
+        return getattr(response, "text", None)
     except Exception as exc:  # noqa: BLE001 - delegato a handle_error
         return handle_error(exc, context="transcribe")
 
