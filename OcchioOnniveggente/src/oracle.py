@@ -299,3 +299,15 @@ def transcribe(*args, **kwargs) -> str | None:
     """Minimal speech-to-text stub used only for imports in tests."""
     return ""
 
+
+def fast_transcribe(*args, **kwargs) -> str | None:
+    """Compatibility wrapper around :func:`transcribe`.
+
+    The original project exposes a separate ``fast_transcribe`` helper for
+    quick speech-to-text operations.  In this trimmed down test environment we
+    simply delegate to :func:`transcribe` so that callers depending on the
+    function can import and use it without raising an ``ImportError``.
+    """
+
+    return transcribe(*args, **kwargs)
+
