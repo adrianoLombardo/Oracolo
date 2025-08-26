@@ -119,7 +119,7 @@ async def _sender(ws, q: "queue.Queue[bytes]") -> None:
         while True:
             data = await asyncio.get_running_loop().run_in_executor(None, q.get)
             await ws.send(data)
-    except (websockets.ConnectionClosed, asyncio.CancelledError):
+    except asyncio.CancelledError:
         return
 
 
@@ -243,13 +243,20 @@ async def _receiver(
                 token = data.get("text", "")
                 conv.chat.stream_assistant(iter([token]))
                 _emit("answer", token)
-    except (websockets.ConnectionClosed, asyncio.CancelledError):
+    except asyncio.CancelledError:
         return
 
 
-async def _run(url: str, sr: int, barge_threshold: float) -> None:
-    """Avvia la sessione realtime verso ``url``."""
+async def _run(
+    url: str,
+    sr: int,
+    barge_threshold: float,
+    retries: int,
+    attempt: int = 1,
+) -> None:
+    """Avvia la sessione realtime verso ``url`` con retry esponenziale."""
 
+    logger.info("Connessione %s/%s verso %s", attempt, retries, url)
     send_q: "queue.Queue[bytes]" = queue.Queue()
     audio_q: "queue.Queue[bytes]" = queue.Queue()
     try:
@@ -285,46 +292,64 @@ async def _run(url: str, sr: int, barge_threshold: float) -> None:
             conv.push_assistant(q)
             conv.transition(DialogState.LISTENING)
 
-    async with websockets.connect(url, ping_interval=20, ping_timeout=20) as ws:
-        await ws.send(
-            json.dumps(
-                {
-                    "type": "hello",
-                    "sr": sr,
-                    "format": "pcm_s16le",
-                    "channels": CHANNELS,
-                }
+    try:
+        async with websockets.connect(url, ping_interval=20, ping_timeout=20) as ws:
+            await ws.send(
+                json.dumps(
+                    {
+                        "type": "hello",
+                        "sr": sr,
+                        "format": "pcm_s16le",
+                        "channels": CHANNELS,
+                    }
+                )
             )
-        )
-        try:
-            ready_raw = await asyncio.wait_for(ws.recv(), timeout=10)
-            if not isinstance(ready_raw, (bytes, str)):
-                raise RuntimeError("Handshake non valido")
-            data = json.loads(ready_raw) if isinstance(ready_raw, str) else {}
-            if data.get("type") != "ready":
-                raise RuntimeError("Handshake non valido")
-        except Exception:
-            _emit("error", "Handshake non valido")
+            try:
+                ready_raw = await asyncio.wait_for(ws.recv(), timeout=10)
+                if not isinstance(ready_raw, (bytes, str)):
+                    raise RuntimeError("Handshake non valido")
+                data = json.loads(ready_raw) if isinstance(ready_raw, str) else {}
+                if data.get("type") != "ready":
+                    raise RuntimeError("Handshake non valido")
+            except asyncio.TimeoutError:
+                _emit("error", "Handshake timeout")
+                raise
+            except Exception:
+                _emit("error", "Handshake non valido")
+                return
+
+            _emit("status", "✅ pronto a ricevere audio")
+            _emit(
+                "status",
+                f"🔌 Realtime WS → {url}  (sr={sr}, in={sd.default.device[0]}, out={sd.default.device[1]})",
+            )
+
+            tasks = [
+                asyncio.create_task(_mic_worker(ws, send_q, sr=sr, state=state)),
+                asyncio.create_task(_sender(ws, send_q)),
+                asyncio.create_task(_receiver(ws, audio_q, conv, state)),
+                asyncio.create_task(_player(audio_q, sr=sr, state=state)),
+            ]
+            try:
+                await asyncio.gather(*tasks)
+            except asyncio.CancelledError:
+                for t in tasks:
+                    t.cancel()
+                raise
+    except (websockets.ConnectionClosed, asyncio.TimeoutError) as exc:
+        if attempt >= retries:
+            logger.error("Connessione fallita dopo %s tentativi: %s", attempt, exc)
             return
-
-        _emit("status", "✅ pronto a ricevere audio")
-        _emit(
-            "status",
-            f"🔌 Realtime WS → {url}  (sr={sr}, in={sd.default.device[0]}, out={sd.default.device[1]})",
+        delay = 2 ** (attempt - 1)
+        logger.warning(
+            "Connessione interrotta (%s). Ritento in %s s (tentativo %s/%s)",
+            exc,
+            delay,
+            attempt + 1,
+            retries,
         )
-
-        tasks = [
-            asyncio.create_task(_mic_worker(ws, send_q, sr=sr, state=state)),
-            asyncio.create_task(_sender(ws, send_q)),
-            asyncio.create_task(_receiver(ws, audio_q, conv, state)),
-            asyncio.create_task(_player(audio_q, sr=sr, state=state)),
-        ]
-        try:
-            await asyncio.gather(*tasks)
-        except asyncio.CancelledError:
-            for t in tasks:
-                t.cancel()
-            raise
+        await asyncio.sleep(delay)
+        await _run(url, sr, barge_threshold, retries, attempt + 1)
 
 
 def main() -> None:
@@ -347,6 +372,12 @@ def main() -> None:
         default=500.0,
         help="Soglia barge-in RMS",
     )
+    parser.add_argument(
+        "--retries",
+        type=int,
+        default=5,
+        help="Tentativi massimi di riconnessione",
+    )
     # Flag ignorati (per compatibilità con l'interfaccia precedente)
     parser.add_argument("--autostart", action="store_true")
     parser.add_argument("--quiet", action="store_true")
@@ -362,7 +393,7 @@ def main() -> None:
 
     sd.default.device = (_parse_dev(args.in_dev), _parse_dev(args.out_dev))
 
-    asyncio.run(_run(args.url, args.sr, args.barge_threshold))
+    asyncio.run(_run(args.url, args.sr, args.barge_threshold, args.retries))
 
 
 if __name__ == "__main__":
