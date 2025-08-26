@@ -159,20 +159,21 @@ def _record_with_webrtcvad(
         with sd.RawInputStream(**stream_kwargs) as stream:
             while total_ms < MAX_MS:
                 block, _ = stream.read(frame_samples)
+                block_bytes = bytes(block)
                 if tts_playing is not None and tts_playing.is_set():
                     continue
                 total_ms += frame_ms
                 if not started:
-                    if vad.is_speech(block.tobytes(), sr):
+                    if vad.is_speech(block_bytes, sr):
                         speech_ms += frame_ms
                         if speech_ms >= START_MS:
                             started = True
-                            voiced.extend(block.tobytes())
+                            voiced.extend(block_bytes)
                     else:
                         speech_ms = 0
                 else:
-                    voiced.extend(block.tobytes())
-                    if vad.is_speech(block.tobytes(), sr):
+                    voiced.extend(block_bytes)
+                    if vad.is_speech(block_bytes, sr):
                         silence_ms = 0
                     else:
                         silence_ms += frame_ms
