@@ -3,13 +3,8 @@ from pathlib import Path
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
-from OcchioOnniveggente.src.retrieval import Context
 from OcchioOnniveggente.src.oracle import (
-
-    QUESTIONS_BY_CONTEXT,
-
     get_questions,
-
     random_question,
     _USED_QUESTIONS,
 )
@@ -17,42 +12,29 @@ from OcchioOnniveggente.src.oracle import (
 
 def test_random_question_no_repeat_until_exhaustion():
     category = "poetica"
-    context = Context.GENERIC
-    # reset session tracking
     _USED_QUESTIONS.clear()
-
-
-    total = len(QUESTIONS_BY_CONTEXT[context][category])
-    seen = set()
-    for _ in range(total):
-        q = random_question(category, context)
 
     total = len(get_questions()[category])
     seen = set()
     for _ in range(total):
         q = random_question(category)
-
+        assert q is not None
         assert q.domanda not in seen
         seen.add(q.domanda)
 
     assert len(seen) == total
-    assert len(_USED_QUESTIONS[(context, category)]) == total
+    assert len(_USED_QUESTIONS[category]) == total
 
     # After exhausting all questions, the next call should reset the set
-
-    q = random_question(category, context)
-    assert q.domanda in seen
-    assert len(_USED_QUESTIONS[(context, category)]) == 1
-
     q = random_question(category)
-    assert q.domanda in seen
+    assert q is not None and q.domanda in seen
     assert len(_USED_QUESTIONS[category]) == 1
 
-    # Drawing the remaining questions again should not repeat within the
-    # new cycle.
+    # Drawing the remaining questions again should not repeat within the new cycle.
     seen_second_cycle = {q.domanda}
     for _ in range(total - 1):
         q = random_question(category)
+        assert q is not None
         assert q.domanda not in seen_second_cycle
         seen_second_cycle.add(q.domanda)
 

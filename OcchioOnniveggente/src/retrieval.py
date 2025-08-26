@@ -54,13 +54,12 @@ class Chunk:
 
 @dataclass
 class Question:
+    """Representation of a single question entry."""
+
+    id: str
     domanda: str
     type: str
     follow_up: str | None = None
-    opera: str | None = None
-    artista: str | None = None
-    location: str | None = None
-    tag: List[str] | None = None
 
     def __getitem__(self, key: str) -> Any:
         return getattr(self, key)
@@ -187,28 +186,14 @@ def _load_index(path: str | Path) -> List[Dict]:
 
 
 
-def load_questions(path: str | Path | None = None) -> Dict[Context, Dict[str, List[Question]]]:
-    """Read question datasets and group entries by context and category.
+def load_questions(path: str | Path | None = None) -> Dict[str, List[Question]]:
+    """Read question datasets and group entries by category."""
 
-    The function accepts either a directory containing one JSON file per
-    ``Context`` or a single JSON file.  When a list of questions is provided,
-    it is associated with :data:`Context.GENERIC`.  When a dictionary is found
-    at the top level, its keys are interpreted as context names mapping to
-    lists of questions.
-
-    Parameters
-    ----------
-    path:
-        Location of the questions dataset.  When ``None`` the ``data`` directory
-        of the project is inspected.
-
-    Returns
-    -------
-    dict
-        ``Context`` to ``{category -> [Question, ...]}`` mapping.
-    """
-
-    root = Path(path) if path is not None else Path(__file__).resolve().parent.parent / "data"
+    root = (
+        Path(path)
+        if path is not None
+        else Path(__file__).resolve().parent.parent / "data" / "domande_oracolo.json"
+    )
 
     def _parse_list(data: list) -> Dict[str, List[Question]]:
         categories: Dict[str, List[Question]] = {}
@@ -216,9 +201,10 @@ def load_questions(path: str | Path | None = None) -> Dict[Context, Dict[str, Li
             if not isinstance(item, dict):
                 logger.warning("Invalid question at index %s: %r", idx, item)
                 continue
+            qid = item.get("id")
             domanda = item.get("domanda")
             qtype = item.get("type")
-            if not isinstance(domanda, str) or not isinstance(qtype, str):
+            if not isinstance(qid, (int, str)) or not isinstance(domanda, str) or not isinstance(qtype, str):
                 logger.warning(
                     "Question missing required fields at index %s: %r", idx, item
                 )
@@ -226,38 +212,12 @@ def load_questions(path: str | Path | None = None) -> Dict[Context, Dict[str, Li
             follow_up = item.get("follow_up")
             if follow_up is not None and not isinstance(follow_up, str):
                 follow_up = str(follow_up)
-            opera = item.get("opera")
-            if opera is not None and not isinstance(opera, str):
-                opera = str(opera)
-            artista = item.get("artista")
-            if artista is not None and not isinstance(artista, str):
-                artista = str(artista)
-            location = item.get("location")
-            if location is not None and not isinstance(location, str):
-                location = str(location)
-            tag_field = item.get("tag")
-            tags: List[str] | None
-            if tag_field is None:
-                tags = None
-            elif isinstance(tag_field, list):
-                tags = [str(t) for t in tag_field if isinstance(t, (str, int, float))]
-            else:
-                tags = [str(tag_field)]
-            cat = qtype.lower()
-            categories.setdefault(cat, []).append(
-                Question(
-                    domanda=domanda,
-                    type=cat,
-                    follow_up=follow_up,
-                    opera=opera,
-                    artista=artista,
-                    location=location,
-                    tag=tags,
-                )
+            categories.setdefault(qtype.lower(), []).append(
+                Question(id=str(qid), domanda=domanda, type=qtype.lower(), follow_up=follow_up)
             )
         return categories
 
-    result: Dict[Context, Dict[str, List[Question]]] = {}
+    result: Dict[str, List[Question]] = {}
 
     if root.is_dir():
         files = sorted(root.glob("*.json"))
@@ -269,14 +229,14 @@ def load_questions(path: str | Path | None = None) -> Dict[Context, Dict[str, Li
             except Exception:
                 logger.exception("Invalid JSON in questions file: %s", f)
                 continue
-            ctx = Context.from_str(f.stem)
             if isinstance(data, list):
-                result[ctx] = _parse_list(data)
+                for cat, qs in _parse_list(data).items():
+                    result.setdefault(cat, []).extend(qs)
             elif isinstance(data, dict):
-                # Nested contexts inside the file
-                for key, items in data.items():
+                for items in data.values():
                     if isinstance(items, list):
-                        result[Context.from_str(key)] = _parse_list(items)
+                        for cat, qs in _parse_list(items).items():
+                            result.setdefault(cat, []).extend(qs)
             else:
                 logger.warning("Unsupported structure in %s", f)
         if len(result) == 1:
@@ -293,18 +253,22 @@ def load_questions(path: str | Path | None = None) -> Dict[Context, Dict[str, Li
         logger.exception("Invalid JSON in questions file: %s", root)
         return result
 
+    if isinstance(data, list):
+        return _parse_list(data)
     if isinstance(data, dict):
-        for ctx_name, items in data.items():
+        for items in data.values():
             if isinstance(items, list):
-                result[Context.from_str(ctx_name)] = _parse_list(items)
-    elif isinstance(data, list):
-        result[Context.GENERIC] = _parse_list(data)
-    else:
-        logger.warning("Unsupported structure in %s", root)
+                for cat, qs in _parse_list(items).items():
+                    result.setdefault(cat, []).extend(qs)
+        return result
+
 
     if len(result) == 1:
         # When only one context is present expose the inner mapping directly
         return next(iter(result.values()))
+
+    logger.warning("Unsupported structure in %s", root)
+
     return result
 
 

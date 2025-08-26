@@ -8,802 +8,1010 @@
     "location": "museo",
     "tag": [
       "CryptoMadonne"
+
     ]
+
+    ],
+    "id": 1
+
   },
   {
     "domanda": "Quale metafora descrive il tuo percorso di vita?",
-    "type": "poetica"
+    "type": "poetica",
+    "id": 2
   },
   {
     "domanda": "Se potessi ascoltare il suono dei tuoi sogni, quale melodia sarebbe?",
-    "type": "poetica"
+    "type": "poetica",
+    "id": 3
   },
   {
     "domanda": "Quale colore rappresenta oggi il tuo spirito?",
-    "type": "poetica"
+    "type": "poetica",
+    "id": 4
   },
   {
     "domanda": "Se il tempo fosse un fiume, dove ti trovi lungo il suo corso?",
-    "type": "poetica"
+    "type": "poetica",
+    "id": 5
   },
   {
     "domanda": "Quale immagine racchiude il tuo desiderio più profondo?",
-    "type": "poetica"
+    "type": "poetica",
+    "id": 6
   },
   {
     "domanda": "Se la tua determinazione fosse una costellazione, come la chiameresti?",
-    "type": "poetica"
+    "type": "poetica",
+    "id": 7
   },
   {
     "domanda": "Quale poesia riscriveresti per raccontare l’oggi?",
-    "type": "poetica"
+    "type": "poetica",
+    "id": 8
   },
   {
     "domanda": "Se i tuoi pensieri fossero nuvole, che forme assumerebbero?",
-    "type": "poetica"
+    "type": "poetica",
+    "id": 9
   },
   {
     "domanda": "Quale vento guida la tua vela interiore?",
-    "type": "poetica"
+    "type": "poetica",
+    "id": 10
   },
   {
     "domanda": "Se potessi trasformare una ferita in un fiore, quale sboccerà?",
-    "type": "poetica"
+    "type": "poetica",
+    "id": 11
   },
   {
     "domanda": "Quale ritmo accompagna il battito del tuo cuore in questi giorni?",
-    "type": "poetica"
+    "type": "poetica",
+    "id": 12
   },
   {
     "domanda": "Se la speranza fosse una luce, di quale intensità brillerebbe?",
-    "type": "poetica"
+    "type": "poetica",
+    "id": 13
   },
   {
     "domanda": "Quale paesaggio onirico ti riflette?",
-    "type": "poetica"
+    "type": "poetica",
+    "id": 14
   },
   {
     "domanda": "Se potessi intrecciare le tue esperienze in un tappeto, quali colori dominerebbero?",
-    "type": "poetica"
+    "type": "poetica",
+    "id": 15
   },
   {
     "domanda": "Quale parola vorresti scolpire nel cielo?",
-    "type": "poetica"
+    "type": "poetica",
+    "id": 16
   },
   {
     "domanda": "Se la tua voce avesse un profumo, quale sarebbe?",
-    "type": "poetica"
+    "type": "poetica",
+    "id": 17
   },
   {
     "domanda": "Quale sentiero ti conduce verso la tua montagna interiore?",
-    "type": "poetica"
+    "type": "poetica",
+    "id": 18
   },
   {
     "domanda": "Se il coraggio fosse un animale, quale sarebbe il tuo?",
-    "type": "poetica"
+    "type": "poetica",
+    "id": 19
   },
   {
     "domanda": "Quale immagine fotografica racconta la tua ultima crescita?",
-    "type": "poetica"
+    "type": "poetica",
+    "id": 20
   },
   {
     "domanda": "Se potessi inviare una lettera alla luna, cosa le chiederesti?",
-    "type": "poetica"
+    "type": "poetica",
+    "id": 21
   },
   {
     "domanda": "Quale mare agitato dentro di te cerca riva?",
-    "type": "poetica"
+    "type": "poetica",
+    "id": 22
   },
   {
     "domanda": "Se i tuoi dubbi fossero foglie, da quale albero cadrebbero?",
-    "type": "poetica"
+    "type": "poetica",
+    "id": 23
   },
   {
     "domanda": "Quale trama di stelle descrive le tue speranze?",
-    "type": "poetica"
+    "type": "poetica",
+    "id": 24
   },
   {
     "domanda": "Se potessi dare un titolo poetico alla tua giornata, quale sarebbe?",
-    "type": "poetica"
+    "type": "poetica",
+    "id": 25
   },
   {
     "domanda": "Quale metamorfosi attendi ancora?",
-    "type": "poetica"
+    "type": "poetica",
+    "id": 26
   },
   {
     "domanda": "Se potessi raccogliere i tuoi sogni in un vaso, che profumo emanerebbero?",
-    "type": "poetica"
+    "type": "poetica",
+    "id": 27
   },
   {
     "domanda": "Quale pennello useresti per dipingere l’amicizia?",
-    "type": "poetica"
+    "type": "poetica",
+    "id": 28
   },
   {
     "domanda": "Se il futuro fosse un giardino, quali semi pianteresti oggi?",
-    "type": "poetica"
+    "type": "poetica",
+    "id": 29
   },
   {
     "domanda": "Quale canto della natura ti somiglia?",
-    "type": "poetica"
+    "type": "poetica",
+    "id": 30
   },
   {
     "domanda": "Se la tua saggezza fosse un fiume, da dove scorrerebbe?",
-    "type": "poetica"
+    "type": "poetica",
+    "id": 31
   },
   {
     "domanda": "Quale linea del palmo della mano vorresti riscrivere?",
-    "type": "poetica"
+    "type": "poetica",
+    "id": 32
   },
   {
     "domanda": "Se potessi abbracciare un ricordo con una poesia, quale sceglieresti?",
-    "type": "poetica"
+    "type": "poetica",
+    "id": 33
   },
   {
     "domanda": "Quale forma geometrica rende il tuo pensiero più armonioso?",
-    "type": "poetica"
+    "type": "poetica",
+    "id": 34
   },
   {
     "domanda": "Se il destino fosse un telaio, quali fili intrecceresti?",
-    "type": "poetica"
+    "type": "poetica",
+    "id": 35
   },
   {
     "domanda": "Quale luce ti accompagna nei momenti bui?",
-    "type": "poetica"
+    "type": "poetica",
+    "id": 36
   },
   {
     "domanda": "Se potessi danzare con una stagione, quale sceglieresti?",
-    "type": "poetica"
+    "type": "poetica",
+    "id": 37
   },
   {
     "domanda": "Quale simbolo incarna la tua resilienza?",
-    "type": "poetica"
+    "type": "poetica",
+    "id": 38
   },
   {
     "domanda": "Se avessi un totem che parla di te, come si esprimerebbe?",
-    "type": "poetica"
+    "type": "poetica",
+    "id": 39
   },
   {
     "domanda": "Quale verso antico vorresti reinventare?",
-    "type": "poetica"
+    "type": "poetica",
+    "id": 40
   },
   {
     "domanda": "Se le tue gioie fossero stelle cadenti, quante ne avresti visto?",
-    "type": "poetica"
+    "type": "poetica",
+    "id": 41
   },
   {
     "domanda": "Quale eco risuona quando pronunciano il tuo nome?",
-    "type": "poetica"
+    "type": "poetica",
+    "id": 42
   },
   {
     "domanda": "Se potessi trasformare un sogno in mosaico, quali tessere useresti?",
-    "type": "poetica"
+    "type": "poetica",
+    "id": 43
   },
   {
     "domanda": "Quale creatura fantastica incarna la tua curiosità?",
-    "type": "poetica"
+    "type": "poetica",
+    "id": 44
   },
   {
     "domanda": "Se la tua vita fosse una sinfonia, che strumento saresti?",
-    "type": "poetica"
+    "type": "poetica",
+    "id": 45
   },
   {
     "domanda": "Quale aroma descrive la tua memoria più dolce?",
-    "type": "poetica"
+    "type": "poetica",
+    "id": 46
   },
   {
     "domanda": "Se potessi camminare su una nuvola, cosa diresti al mondo sotto?",
-    "type": "poetica"
+    "type": "poetica",
+    "id": 47
   },
   {
     "domanda": "Quale sorgente ti disseta di ispirazione?",
-    "type": "poetica"
+    "type": "poetica",
+    "id": 48
   },
   {
     "domanda": "Se avessi un cielo personale, quali costellazioni inventeresti?",
-    "type": "poetica"
+    "type": "poetica",
+    "id": 49
   },
   {
     "domanda": "Quale domanda vorresti incidere nel vento?",
+
     "type": "poetica"
+
+    "type": "poetica",
+    "id": 50
+
   },
   {
     "domanda": "Quali strategie usi per organizzare il tuo tempo?",
-    "type": "didattica"
+    "type": "didattica",
+    "id": 51
   },
   {
     "domanda": "Come valuti il successo di un progetto personale?",
-    "type": "didattica"
+    "type": "didattica",
+    "id": 52
   },
   {
     "domanda": "Qual è il metodo più efficace che hai sperimentato per apprendere una nuova abilità?",
-    "type": "didattica"
+    "type": "didattica",
+    "id": 53
   },
   {
     "domanda": "Quali passi compi per risolvere un conflitto?",
-    "type": "didattica"
+    "type": "didattica",
+    "id": 54
   },
   {
     "domanda": "Come definisci un obiettivo misurabile?",
-    "type": "didattica"
+    "type": "didattica",
+    "id": 55
   },
   {
     "domanda": "Quale processo segui per prendere decisioni importanti?",
-    "type": "didattica"
+    "type": "didattica",
+    "id": 56
   },
   {
     "domanda": "Qual è la tua tecnica preferita per memorizzare informazioni?",
-    "type": "didattica"
+    "type": "didattica",
+    "id": 57
   },
   {
     "domanda": "Come ti prepari a una presentazione pubblica?",
-    "type": "didattica"
+    "type": "didattica",
+    "id": 58
   },
   {
     "domanda": "Quali criteri utilizzi per valutare la qualità di una fonte informativa?",
-    "type": "didattica"
+    "type": "didattica",
+    "id": 59
   },
   {
     "domanda": "Come strutturi una sessione di studio produttiva?",
-    "type": "didattica"
+    "type": "didattica",
+    "id": 60
   },
   {
     "domanda": "Quali strumenti digitali ti aiutano nella produttività?",
-    "type": "didattica"
+    "type": "didattica",
+    "id": 61
   },
   {
     "domanda": "Come bilanci teoria e pratica quando impari qualcosa di nuovo?",
-    "type": "didattica"
+    "type": "didattica",
+    "id": 62
   },
   {
     "domanda": "Quale metodo usi per monitorare i progressi nei tuoi progetti?",
-    "type": "didattica"
+    "type": "didattica",
+    "id": 63
   },
   {
     "domanda": "Come affronti la risoluzione di un problema complesso?",
-    "type": "didattica"
+    "type": "didattica",
+    "id": 64
   },
   {
     "domanda": "Quali abitudini supportano il tuo apprendimento continuo?",
-    "type": "didattica"
+    "type": "didattica",
+    "id": 65
   },
   {
     "domanda": "Come elabori un piano d’azione dopo aver definito un obiettivo?",
-    "type": "didattica"
+    "type": "didattica",
+    "id": 66
   },
   {
     "domanda": "Qual è la tua strategia per gestire le distrazioni?",
-    "type": "didattica"
+    "type": "didattica",
+    "id": 67
   },
   {
     "domanda": "Come sviluppi una competenza partendo da zero?",
-    "type": "didattica"
+    "type": "didattica",
+    "id": 68
   },
   {
     "domanda": "Quali domande ti poni per valutare criticamente un’idea?",
-    "type": "didattica"
+    "type": "didattica",
+    "id": 69
   },
   {
     "domanda": "Come utilizzi il feedback per migliorare?",
-    "type": "didattica"
+    "type": "didattica",
+    "id": 70
   },
   {
     "domanda": "Quali passaggi segui per scrivere un saggio efficace?",
-    "type": "didattica"
+    "type": "didattica",
+    "id": 71
   },
   {
     "domanda": "Come organizzi una riunione produttiva?",
-    "type": "didattica"
+    "type": "didattica",
+    "id": 72
   },
   {
     "domanda": "Quali tecniche di brainstorming trovi più efficaci?",
-    "type": "didattica"
+    "type": "didattica",
+    "id": 73
   },
   {
     "domanda": "Come gestisci le priorità quando tutto sembra urgente?",
-    "type": "didattica"
+    "type": "didattica",
+    "id": 74
   },
   {
     "domanda": "Quali misure adotti per evitare il burnout?",
-    "type": "didattica"
+    "type": "didattica",
+    "id": 75
   },
   {
     "domanda": "Come scegli le metriche per misurare un risultato?",
-    "type": "didattica"
+    "type": "didattica",
+    "id": 76
   },
   {
     "domanda": "Quale approccio segui nel problem solving scientifico?",
-    "type": "didattica"
+    "type": "didattica",
+    "id": 77
   },
   {
     "domanda": "Come suddividi un grande progetto in compiti gestibili?",
-    "type": "didattica"
+    "type": "didattica",
+    "id": 78
   },
   {
     "domanda": "Quali criteri usi per definire una buona fonte bibliografica?",
-    "type": "didattica"
+    "type": "didattica",
+    "id": 79
   },
   {
     "domanda": "Come testi accuratamente una nuova idea prima di implementarla?",
-    "type": "didattica"
+    "type": "didattica",
+    "id": 80
   },
   {
     "domanda": "Quali strumenti usi per la gestione delle versioni di un documento?",
-    "type": "didattica"
+    "type": "didattica",
+    "id": 81
   },
   {
     "domanda": "Come pianifichi l’apprendimento di una lingua straniera?",
-    "type": "didattica"
+    "type": "didattica",
+    "id": 82
   },
   {
     "domanda": "Quali passaggi segui per preparare un esame?",
-    "type": "didattica"
+    "type": "didattica",
+    "id": 83
   },
   {
     "domanda": "Come valuti l’efficacia di un piano di allenamento?",
-    "type": "didattica"
+    "type": "didattica",
+    "id": 84
   },
   {
     "domanda": "Quale metodo usi per archiviare documenti digitali?",
-    "type": "didattica"
+    "type": "didattica",
+    "id": 85
   },
   {
     "domanda": "Come definisci la portata di un progetto?",
-    "type": "didattica"
+    "type": "didattica",
+    "id": 86
   },
   {
     "domanda": "Quali domande ti fai prima di delegare un compito?",
-    "type": "didattica"
+    "type": "didattica",
+    "id": 87
   },
   {
     "domanda": "Come gestisci la revisione di un testo complesso?",
-    "type": "didattica"
+    "type": "didattica",
+    "id": 88
   },
   {
     "domanda": "Quali criteri segui per stabilire scadenze realistiche?",
-    "type": "didattica"
+    "type": "didattica",
+    "id": 89
   },
   {
     "domanda": "Come ti assicuri che un team comprenda gli obiettivi comuni?",
-    "type": "didattica"
+    "type": "didattica",
+    "id": 90
   },
   {
     "domanda": "Quale tecnica di notetaking preferisci e perché?",
-    "type": "didattica"
+    "type": "didattica",
+    "id": 91
   },
   {
     "domanda": "Come ti prepari a un colloquio di lavoro?",
-    "type": "didattica"
+    "type": "didattica",
+    "id": 92
   },
   {
     "domanda": "Quali elementi consideri per realizzare un budget personale?",
-    "type": "didattica"
+    "type": "didattica",
+    "id": 93
   },
   {
     "domanda": "Come affronti l’analisi dei dati in un progetto?",
-    "type": "didattica"
+    "type": "didattica",
+    "id": 94
   },
   {
     "domanda": "Quali esercizi pratichi per migliorare la concentrazione?",
-    "type": "didattica"
+    "type": "didattica",
+    "id": 95
   },
   {
     "domanda": "Come crei un ambiente di studio privo di distrazioni?",
-    "type": "didattica"
+    "type": "didattica",
+    "id": 96
   },
   {
     "domanda": "Quali domande fai per verificare la comprensione di un concetto?",
-    "type": "didattica"
+    "type": "didattica",
+    "id": 97
   },
   {
     "domanda": "Come affronti la revisione dopo un insuccesso?",
-    "type": "didattica"
+    "type": "didattica",
+    "id": 98
   },
   {
     "domanda": "Quali strategie usi per mantenere la motivazione a lungo termine?",
-    "type": "didattica"
+    "type": "didattica",
+    "id": 99
   },
   {
     "domanda": "Come pianifichi un percorso di apprendimento autodidatta?",
-    "type": "didattica"
+    "type": "didattica",
+    "id": 100
   },
   {
     "domanda": "Quale profumo ti riporta istantaneamente all’infanzia?",
-    "type": "evocativa"
+    "type": "evocativa",
+    "id": 101
   },
   {
     "domanda": "Che sensazione provi quando cammini scalzo sull’erba bagnata?",
-    "type": "evocativa"
+    "type": "evocativa",
+    "id": 102
   },
   {
     "domanda": "Qual è il suono che ti calma all’istante?",
-    "type": "evocativa"
+    "type": "evocativa",
+    "id": 103
   },
   {
     "domanda": "Quale ricordo associ al sapore di una torta appena sfornata?",
-    "type": "evocativa"
+    "type": "evocativa",
+    "id": 104
   },
   {
     "domanda": "Che immagine ti viene in mente quando pensi alla parola “estate”?",
-    "type": "evocativa"
+    "type": "evocativa",
+    "id": 105
   },
   {
     "domanda": "Quale atmosfera senti quando entri in una vecchia libreria?",
-    "type": "evocativa"
+    "type": "evocativa",
+    "id": 106
   },
   {
     "domanda": "Che emozione ti suscita il rumore della pioggia sui vetri?",
-    "type": "evocativa"
+    "type": "evocativa",
+    "id": 107
   },
   {
     "domanda": "Quale luogo ti fa sentire immediatamente al sicuro?",
-    "type": "evocativa"
+    "type": "evocativa",
+    "id": 108
   },
   {
     "domanda": "Che ricordi ti evoca il profumo di mare al mattino?",
-    "type": "evocativa"
+    "type": "evocativa",
+    "id": 109
   },
   {
     "domanda": "Quale sensazione provi nel toccare la sabbia calda?",
-    "type": "evocativa"
+    "type": "evocativa",
+    "id": 110
   },
   {
     "domanda": "Che colori vedi quando chiudi gli occhi e pensi alla felicità?",
-    "type": "evocativa"
+    "type": "evocativa",
+    "id": 111
   },
   {
     "domanda": "Quale canzone risveglia in te un amore passato?",
-    "type": "evocativa"
+    "type": "evocativa",
+    "id": 112
   },
   {
     "domanda": "Che emozione ti dà il fruscio delle foglie in autunno?",
-    "type": "evocativa"
+    "type": "evocativa",
+    "id": 113
   },
   {
     "domanda": "Quale ricordo associ a un vecchio quaderno di appunti?",
-    "type": "evocativa"
+    "type": "evocativa",
+    "id": 114
   },
   {
     "domanda": "Che sensazione provi quando indossi un capo di abbigliamento nuovo?",
-    "type": "evocativa"
+    "type": "evocativa",
+    "id": 115
   },
   {
     "domanda": "Quale immagine ti nasce ascoltando il canto degli uccelli all’alba?",
-    "type": "evocativa"
+    "type": "evocativa",
+    "id": 116
   },
   {
     "domanda": "Che sapore descrive la tua giornata ideale?",
-    "type": "evocativa"
+    "type": "evocativa",
+    "id": 117
   },
   {
     "domanda": "Quale ricordo affiora con l’odore di caffè appena fatto?",
-    "type": "evocativa"
+    "type": "evocativa",
+    "id": 118
   },
   {
     "domanda": "Che sensazione ti dà osservare un cielo stellato?",
-    "type": "evocativa"
+    "type": "evocativa",
+    "id": 119
   },
   {
     "domanda": "Quale emozione provi nel risvegliare un vecchio ricordo tramite una fotografia?",
-    "type": "evocativa"
+    "type": "evocativa",
+    "id": 120
   },
   {
     "domanda": "Che immagini sorgono pensando a un viaggio in treno?",
-    "type": "evocativa"
+    "type": "evocativa",
+    "id": 121
   },
   {
     "domanda": "Quale sensazione ti procura l’abbraccio di una persona cara?",
-    "type": "evocativa"
+    "type": "evocativa",
+    "id": 122
   },
   {
     "domanda": "Che ricordo suscita il rumore di un vecchio ventilatore?",
-    "type": "evocativa"
+    "type": "evocativa",
+    "id": 123
   },
   {
     "domanda": "Quale atmosfera senti in una mattina di neve?",
-    "type": "evocativa"
+    "type": "evocativa",
+    "id": 124
   },
   {
     "domanda": "Che emozione ti dà il tocco di una coperta ruvida?",
-    "type": "evocativa"
+    "type": "evocativa",
+    "id": 125
   },
   {
     "domanda": "Quale immagine associ al profumo di lavanda?",
-    "type": "evocativa"
+    "type": "evocativa",
+    "id": 126
   },
   {
     "domanda": "Che sensazione ti dà ascoltare il silenzio in una chiesa vuota?",
-    "type": "evocativa"
+    "type": "evocativa",
+    "id": 127
   },
   {
     "domanda": "Quale ricordo affiora con l’odore di legno bruciato?",
-    "type": "evocativa"
+    "type": "evocativa",
+    "id": 128
   },
   {
     "domanda": "Che emozione provi guardando il sole al tramonto?",
-    "type": "evocativa"
+    "type": "evocativa",
+    "id": 129
   },
   {
     "domanda": "Quale immagine ti evoca una strada di campagna?",
-    "type": "evocativa"
+    "type": "evocativa",
+    "id": 130
   },
   {
     "domanda": "Che sensazione ti dà il contatto con l’acqua fredda in un giorno caldo?",
-    "type": "evocativa"
+    "type": "evocativa",
+    "id": 131
   },
   {
     "domanda": "Quale ricordo suscita il suono di una campana lontana?",
-    "type": "evocativa"
+    "type": "evocativa",
+    "id": 132
   },
   {
     "domanda": "Che emozione ti dà rivedere un vecchio film?",
-    "type": "evocativa"
+    "type": "evocativa",
+    "id": 133
   },
   {
     "domanda": "Quale immagine ti viene in mente sentendo il canto delle cicale?",
-    "type": "evocativa"
+    "type": "evocativa",
+    "id": 134
   },
   {
     "domanda": "Che sensazione provi entrando in un negozio di antiquariato?",
-    "type": "evocativa"
+    "type": "evocativa",
+    "id": 135
   },
   {
     "domanda": "Quale ricordo ti suscita l’odore di terra dopo la pioggia?",
-    "type": "evocativa"
+    "type": "evocativa",
+    "id": 136
   },
   {
     "domanda": "Che emozione senti sfogliando un album fotografico?",
-    "type": "evocativa"
+    "type": "evocativa",
+    "id": 137
   },
   {
     "domanda": "Quale immagine associ a un primo giorno di scuola?",
-    "type": "evocativa"
+    "type": "evocativa",
+    "id": 138
   },
   {
     "domanda": "Che sensazione ti dà toccare un oggetto che apparteneva a un nonno?",
-    "type": "evocativa"
+    "type": "evocativa",
+    "id": 139
   },
   {
     "domanda": "Quale ricordo affiora con il sapore di una bevanda calda d’inverno?",
-    "type": "evocativa"
+    "type": "evocativa",
+    "id": 140
   },
   {
     "domanda": "Che emozione provi sentendo una ninna nanna?",
-    "type": "evocativa"
+    "type": "evocativa",
+    "id": 141
   },
   {
     "domanda": "Quale immagine ti appare quando osservi un campo di grano?",
-    "type": "evocativa"
+    "type": "evocativa",
+    "id": 142
   },
   {
     "domanda": "Che sensazione ti dà il rumore di un tappo di sughero che salta?",
-    "type": "evocativa"
+    "type": "evocativa",
+    "id": 143
   },
   {
     "domanda": "Quale ricordo porta il profumo di un dolce natalizio?",
-    "type": "evocativa"
+    "type": "evocativa",
+    "id": 144
   },
   {
     "domanda": "Che emozione provi al tatto di una pagina di carta ruvida?",
-    "type": "evocativa"
+    "type": "evocativa",
+    "id": 145
   },
   {
     "domanda": "Quale immagine associ a una città che non hai mai visitato?",
-    "type": "evocativa"
+    "type": "evocativa",
+    "id": 146
   },
   {
     "domanda": "Che sensazione ti provoca il suono lontano di un treno notturno?",
-    "type": "evocativa"
+    "type": "evocativa",
+    "id": 147
   },
   {
     "domanda": "Quale ricordo suscita l’odore di cherosene di un aeroporto?",
-    "type": "evocativa"
+    "type": "evocativa",
+    "id": 148
   },
   {
     "domanda": "Che emozione ti dà il sapore di un frutto colto da un albero?",
-    "type": "evocativa"
+    "type": "evocativa",
+    "id": 149
   },
   {
     "domanda": "Quale immagine ti evoca l’oscurità totale di una grotta?",
-    "type": "evocativa"
+    "type": "evocativa",
+    "id": 150
   },
   {
     "domanda": "Qual è la prima azione che potresti compiere per raggiungere il tuo obiettivo?",
-    "type": "orientamento"
+    "type": "orientamento",
+    "id": 151
   },
   {
     "domanda": "Come potresti suddividere il tuo sogno in piccoli passi?",
-    "type": "orientamento"
+    "type": "orientamento",
+    "id": 152
   },
   {
     "domanda": "Quale risorsa disponibile oggi potrebbe aiutarti a progredire?",
-    "type": "orientamento"
+    "type": "orientamento",
+    "id": 153
   },
   {
     "domanda": "Qual è un compromesso che sei disposto a fare per avanzare?",
-    "type": "orientamento"
+    "type": "orientamento",
+    "id": 154
   },
   {
     "domanda": "Come puoi monitorare i tuoi progressi in modo realistico?",
-    "type": "orientamento"
+    "type": "orientamento",
+    "id": 155
   },
   {
     "domanda": "Quale supporto potresti chiedere a una persona di fiducia?",
-    "type": "orientamento"
+    "type": "orientamento",
+    "id": 156
   },
   {
     "domanda": "Qual è una decisione che potresti prendere entro la fine della giornata?",
-    "type": "orientamento"
+    "type": "orientamento",
+    "id": 157
   },
   {
     "domanda": "Come potresti trasformare un ostacolo in un’opportunità?",
-    "type": "orientamento"
+    "type": "orientamento",
+    "id": 158
   },
   {
     "domanda": "Quale priorità merita la tua attenzione questa settimana?",
-    "type": "orientamento"
+    "type": "orientamento",
+    "id": 159
   },
   {
     "domanda": "Come puoi gestire meglio il tuo tempo domani?",
-    "type": "orientamento"
+    "type": "orientamento",
+    "id": 160
   },
   {
     "domanda": "Quale competenza ti avvicinerebbe al tuo obiettivo?",
-    "type": "orientamento"
+    "type": "orientamento",
+    "id": 161
   },
   {
     "domanda": "Come potresti migliorare la tua routine mattutina?",
-    "type": "orientamento"
+    "type": "orientamento",
+    "id": 162
   },
   {
     "domanda": "Quale budget potresti stabilire per sostenere un progetto personale?",
-    "type": "orientamento"
+    "type": "orientamento",
+    "id": 163
   },
   {
     "domanda": "Come puoi rendere più salutare la tua alimentazione quotidiana?",
-    "type": "orientamento"
+    "type": "orientamento",
+    "id": 164
   },
   {
     "domanda": "Quale strategia adotterai per affrontare una sfida imminente?",
-    "type": "orientamento"
+    "type": "orientamento",
+    "id": 165
   },
   {
     "domanda": "Come potresti ridurre lo stress nelle prossime 24 ore?",
-    "type": "orientamento"
+    "type": "orientamento",
+    "id": 166
   },
   {
     "domanda": "Quale piccolo gesto migliorerebbe il rapporto con un collega?",
-    "type": "orientamento"
+    "type": "orientamento",
+    "id": 167
   },
   {
     "domanda": "Come potresti strutturare la tua giornata per includere il movimento fisico?",
-    "type": "orientamento"
+    "type": "orientamento",
+    "id": 168
   },
   {
     "domanda": "Quali passi servono per organizzare un evento semplice ma significativo?",
-    "type": "orientamento"
+    "type": "orientamento",
+    "id": 169
   },
   {
     "domanda": "Come potresti rendere più efficiente il tuo spazio di lavoro?",
-    "type": "orientamento"
+    "type": "orientamento",
+    "id": 170
   },
   {
     "domanda": "Quale azione potresti compiere oggi per risparmiare denaro?",
-    "type": "orientamento"
+    "type": "orientamento",
+    "id": 171
   },
   {
     "domanda": "Come puoi prepararti a una conversazione difficile?",
-    "type": "orientamento"
+    "type": "orientamento",
+    "id": 172
   },
   {
     "domanda": "Quale abitudine vorresti inserire nella tua routine serale?",
-    "type": "orientamento"
+    "type": "orientamento",
+    "id": 173
   },
   {
     "domanda": "Come potresti valorizzare un talento che spesso trascuri?",
-    "type": "orientamento"
+    "type": "orientamento",
+    "id": 174
   },
   {
     "domanda": "Quale nuova connessione professionale potresti coltivare?",
-    "type": "orientamento"
+    "type": "orientamento",
+    "id": 175
   },
   {
     "domanda": "Come puoi bilanciare tempo libero e responsabilità?",
-    "type": "orientamento"
+    "type": "orientamento",
+    "id": 176
   },
   {
     "domanda": "Quale attività rilassante puoi concederti questa settimana?",
-    "type": "orientamento"
+    "type": "orientamento",
+    "id": 177
   },
   {
     "domanda": "Come potresti affrontare il cambiamento che temi?",
-    "type": "orientamento"
+    "type": "orientamento",
+    "id": 178
   },
   {
     "domanda": "Quale informazione ti manca per prendere una decisione consapevole?",
-    "type": "orientamento"
+    "type": "orientamento",
+    "id": 179
   },
   {
     "domanda": "Come puoi allenare la tua capacità di ascolto attivo?",
-    "type": "orientamento"
+    "type": "orientamento",
+    "id": 180
   },
   {
     "domanda": "Quale piccolo traguardo vorresti celebrare?",
-    "type": "orientamento"
+    "type": "orientamento",
+    "id": 181
   },
   {
     "domanda": "Come potresti evitare una distrazione ricorrente?",
-    "type": "orientamento"
+    "type": "orientamento",
+    "id": 182
   },
   {
     "domanda": "Quale progetto potrebbe beneficiare di una tua revisione?",
-    "type": "orientamento"
+    "type": "orientamento",
+    "id": 183
   },
   {
     "domanda": "Come puoi rendere più sostenibile il tuo stile di vita?",
-    "type": "orientamento"
+    "type": "orientamento",
+    "id": 184
   },
   {
     "domanda": "Quale app o strumento digitale migliorerebbe la tua organizzazione?",
-    "type": "orientamento"
+    "type": "orientamento",
+    "id": 185
   },
   {
     "domanda": "Come potresti iniziare una nuova amicizia in modo genuino?",
-    "type": "orientamento"
+    "type": "orientamento",
+    "id": 186
   },
   {
     "domanda": "Quale passo ti avvicinerebbe a una maggiore stabilità finanziaria?",
-    "type": "orientamento"
+    "type": "orientamento",
+    "id": 187
   },
   {
     "domanda": "Come puoi semplificare un compito complesso?",
-    "type": "orientamento"
+    "type": "orientamento",
+    "id": 188
   },
   {
     "domanda": "Quale responsabilità potresti delegare per alleggerirti?",
-    "type": "orientamento"
+    "type": "orientamento",
+    "id": 189
   },
   {
     "domanda": "Come potresti rafforzare la tua motivazione nei momenti difficili?",
-    "type": "orientamento"
+    "type": "orientamento",
+    "id": 190
   },
   {
     "domanda": "Quale attività creativa potresti sperimentare per rilassarti?",
-    "type": "orientamento"
+    "type": "orientamento",
+    "id": 191
   },
   {
     "domanda": "Come puoi mantenere coerenza tra valori e decisioni quotidiane?",
-    "type": "orientamento"
+    "type": "orientamento",
+    "id": 192
   },
   {
     "domanda": "Quale iniziativa potresti prendere per contribuire alla tua comunità?",
-    "type": "orientamento"
+    "type": "orientamento",
+    "id": 193
   },
   {
     "domanda": "Come potresti prepararti per un cambiamento di carriera?",
-    "type": "orientamento"
+    "type": "orientamento",
+    "id": 194
   },
   {
     "domanda": "Quale pratica di benessere potresti introdurre al mattino?",
-    "type": "orientamento"
+    "type": "orientamento",
+    "id": 195
   },
   {
     "domanda": "Come potresti organizzare un piano di studio efficace?",
-    "type": "orientamento"
+    "type": "orientamento",
+    "id": 196
   },
   {
     "domanda": "Quale passo ti aiuterebbe a migliorare la comunicazione con la famiglia?",
-    "type": "orientamento"
+    "type": "orientamento",
+    "id": 197
   },
   {
     "domanda": "Come puoi affrontare un imprevisto senza perdere la calma?",
-    "type": "orientamento"
+    "type": "orientamento",
+    "id": 198
   },
   {
     "domanda": "Quale obiettivo a lungo termine merita una revisione?",
-    "type": "orientamento"
+    "type": "orientamento",
+    "id": 199
   },
   {
     "domanda": "Come potresti celebrare le tue piccole vittorie quotidiane?",
-    "type": "orientamento"
+    "type": "orientamento",
+    "id": 200
   }
 ]
