@@ -15,6 +15,7 @@ import json
 import logging
 import os
 import random
+import hashlib
 from datetime import datetime
 from pathlib import Path
 from threading import Event
@@ -28,6 +29,15 @@ from .retrieval import Question, load_questions, Context
 from .event_bus import event_bus
 from .service_container import container
 from .task_queue import task_queue
+from .cache import cache_get_json, cache_set_json
+from .rate_limiter import rate_limiter
+from .exceptions import RateLimitExceeded, ExternalServiceError
+from .utils import retry_with_backoff
+
+try:  # pragma: no cover - optional dependency
+    from tenacity import retry, stop_after_attempt, wait_exponential
+except Exception:  # pragma: no cover - tenacity not available
+    retry = None  # type: ignore
 
 
 logger = logging.getLogger(__name__)
@@ -261,6 +271,14 @@ def oracle_answer(
     off_topic_category: str | None = None,
 ) -> Tuple[str, List[dict[str, Any]]]:
     """Return an answer from ``client`` and the context used."""
+    # Check cache first
+    cache_key = "oracle:" + hashlib.sha256(question.encode("utf-8")).hexdigest()
+    cached = cache_get_json(cache_key)
+    if cached:
+        return cached.get("answer", ""), cached.get("context", [])
+
+    # Enforce rate limiting
+    rate_limiter.hit("oracle_answer")
 
     client = client or container.llm_client()
     llm_model = llm_model or container.settings.openai.llm_model
@@ -268,12 +286,14 @@ def oracle_answer(
     if question_type == "off_topic":
         ans = off_topic_reply(categoria)
         event_bus.publish("response_ready", ans)
+        cache_set_json(cache_key, {"answer": ans, "context": []})
         return ans, []
     if off_topic_category:
         msg = OFF_TOPIC_RESPONSES.get(
             off_topic_category, OFF_TOPIC_RESPONSES["default"]
         )
         event_bus.publish("response_ready", msg)
+        cache_set_json(cache_key, {"answer": msg, "context": []})
         return msg, []
 
     if API_URL:
@@ -288,6 +308,7 @@ def oracle_answer(
         if conv:
             conv.push_user(question)
             conv.push_assistant(ans)
+        cache_set_json(cache_key, {"answer": ans, "context": context or []})
         return ans, context or []
 
     history = conv.messages_for_llm() if conv else None
@@ -297,18 +318,30 @@ def oracle_answer(
     instr = _build_instructions(lang_hint, context, style_prompt, mode, policy_prompt)
     chat_state = conv.chat if conv else None
 
+    def _call_openai(**kwargs: Any) -> Any:
+        return client.responses.create(**kwargs)
+
+    def _call_stream(**kwargs: Any) -> Any:
+        return client.responses.with_streaming_response.create(**kwargs)
+
+    # Apply retry strategy
+    if retry is not None:
+        retryer = retry(reraise=True, stop=stop_after_attempt(3), wait=wait_exponential(1, 3))
+        openai_call = retryer(_call_openai)
+        stream_call = retryer(_call_stream)
+    else:  # pragma: no cover - fallback
+        openai_call = lambda **kw: retry_with_backoff(_call_openai, retries=3, base_delay=1, **kw)
+        stream_call = lambda **kw: retry_with_backoff(_call_stream, retries=3, base_delay=1, **kw)
+
     if stream and hasattr(client.responses, "with_streaming_response"):
         text = ""
-        stream_obj = client.responses.with_streaming_response.create(
-            model=llm_model, instructions=instr, input=msgs
-        )
+        stream_obj = stream_call(model=llm_model, instructions=instr, input=msgs)
         for evt in stream_obj:
             if getattr(evt, "type", "") == "response.output_text.delta":
                 delta = getattr(evt, "delta", "")
                 text += delta
                 if on_token:
                     on_token(delta)
-
 
         if chat_state:
             chat_state.push_assistant(text)
@@ -318,11 +351,14 @@ def oracle_answer(
         if conv:
             conv.push_assistant(text)
 
+        cache_set_json(cache_key, {"answer": text, "context": context or []})
         return text, context or []
 
-    resp = client.responses.create(model=llm_model, instructions=instr, input=msgs)
+    try:
+        resp = openai_call(model=llm_model, instructions=instr, input=msgs)
+    except Exception as exc:  # pragma: no cover - defensive
+        raise ExternalServiceError(str(exc)) from exc
     ans = getattr(resp, "output_text", "")
-
 
     if chat_state:
         chat_state.push_assistant(ans)
@@ -332,6 +368,7 @@ def oracle_answer(
     if conv:
         conv.push_assistant(ans)
 
+    cache_set_json(cache_key, {"answer": ans, "context": context or []})
     return ans, context or []
 
 

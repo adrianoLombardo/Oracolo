@@ -9,7 +9,11 @@ from uuid import uuid4
 import numpy as np
 from openai import OpenAI
 
-from ..DataBase.conversation_store import ConversationStore
+# Support import both as ``OcchioOnniveggente.src`` and ``src`` package
+try:  # pragma: no cover - optional relative import
+    from ..DataBase.conversation_store import ConversationStore
+except ImportError:  # pragma: no cover - when ``src`` is top-level
+    from DataBase.conversation_store import ConversationStore  # type: ignore
 from .config import Settings, get_openai_api_key
 from .dialogue import DialogueManager, DialogState
 

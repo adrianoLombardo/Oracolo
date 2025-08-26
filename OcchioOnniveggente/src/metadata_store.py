@@ -34,6 +34,15 @@ from typing import Iterable, List, Tuple, Dict, Any
 import sqlite3
 import numpy as np
 import pickle
+from typing import Callable
+
+from .exceptions import ExternalServiceError
+from .utils import retry_with_backoff
+
+try:  # pragma: no cover - optional dependency
+    from tenacity import retry, stop_after_attempt, wait_exponential
+except Exception:  # pragma: no cover - tenacity might be missing
+    retry = None  # type: ignore
 
 try:  # optional PostgreSQL backend
     import psycopg2  # type: ignore
@@ -188,7 +197,22 @@ class VectorStore:
             raise ValueError(f"expected vector of size {self.dim}, got {q.size}")
 
         if self.index is not None and self.ids:  # pragma: no branch - optional
-            D, I = self.index.search(q.reshape(1, -1), top_k)
+            def _do_search() -> tuple[np.ndarray, np.ndarray]:
+                return self.index.search(q.reshape(1, -1), top_k)
+
+            if retry is not None:
+                retryer = retry(
+                    reraise=True, stop=stop_after_attempt(3), wait=wait_exponential(0.5, 2)
+                )
+                try:
+                    D, I = retryer(_do_search)()
+                except Exception as exc:  # pragma: no cover - defensive
+                    raise ExternalServiceError(str(exc)) from exc
+            else:  # pragma: no cover - tenacity missing
+                try:
+                    D, I = retry_with_backoff(_do_search, retries=3, base_delay=0.5)
+                except Exception as exc:  # pragma: no cover - defensive
+                    raise ExternalServiceError(str(exc)) from exc
             return [
                 (self.ids[i], float(D[0][j]))
                 for j, i in enumerate(I[0])
