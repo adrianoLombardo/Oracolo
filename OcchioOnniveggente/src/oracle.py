@@ -418,13 +418,38 @@ def synthesize(
     tts_model: str | None = None,
     tts_voice: str | None = None,
 ) -> None:
-    """Minimal TTS helper used by the UI.
+    """Synthesize ``text`` into ``out_path`` using a local TTS engine.
 
-    The function simply writes an empty file; the real project would call a TTS
-    backend.  It returns ``None`` to mirror the original signature.
+    The implementation favours ``pyttsx3`` for offline speech synthesis and
+    falls back to ``gTTS`` when available. If no backend can generate audio an
+    empty placeholder file is created so callers do not fail.
     """
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
+
+    try:
+        import pyttsx3  # type: ignore
+
+        engine = pyttsx3.init()
+        if tts_voice:
+            try:
+                engine.setProperty("voice", tts_voice)
+            except Exception:
+                pass
+        engine.save_to_file(text, out_path.as_posix())
+        engine.runAndWait()
+        return
+    except Exception:
+        pass
+
+    try:
+        from gtts import gTTS  # type: ignore
+
+        gTTS(text=text, lang="it").save(out_path.as_posix())
+        return
+    except Exception:
+        pass
+
     out_path.write_bytes(b"")
 
 

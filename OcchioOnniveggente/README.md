@@ -29,6 +29,10 @@ debug: true
 stt_backend: openai  # openai | whisper
 openai:
   stt_model: gpt-4o-mini-transcribe
+  tts_voice: alloy
+recording:
+  use_webrtcvad: true
+  vad_sensitivity: 2
 ```
 
 Per limitare le risposte a un determinato contesto è possibile definire un profilo di dominio:

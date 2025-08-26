@@ -61,7 +61,8 @@ class RecordingConfig(BaseModel):
     fallback_to_timed: bool = False
     min_speech_level: float = 0.02
     hold_off_after_tts_ms: int = 500
-    use_webrtcvad: bool = False
+    use_webrtcvad: bool = True
+    vad_sensitivity: int = 2
 
 
 class VadConfig(BaseModel):

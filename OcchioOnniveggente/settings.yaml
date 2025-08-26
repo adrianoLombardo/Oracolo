@@ -89,6 +89,8 @@ recording:
   # NUOVO: soglia minima di ampiezza (0..1) per considerare valida una registrazione.
   # Se il picco audio è sotto questa soglia, la registrazione viene scartata come "silenzio".
   min_speech_level: 0.01
+  use_webrtcvad: true        # abilita VAD adattivo WebRTC
+  vad_sensitivity: 2         # 0=più sensibile, 3=più severo
 
 vad:
   # Parametri del VAD "a energia"
