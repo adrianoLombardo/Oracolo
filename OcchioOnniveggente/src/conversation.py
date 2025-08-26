@@ -1,13 +1,15 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import Any, Dict, Iterator, List, Optional
 import time, json
+from uuid import uuid4
 
 import numpy as np
 from openai import OpenAI
 
+from ..DataBase.conversation_store import ConversationStore
 from .config import Settings, get_openai_api_key
 from .dialogue import DialogueManager, DialogState
 
@@ -70,7 +72,7 @@ def summarize_history(prev_summary: str, msgs: List[Dict[str, str]]) -> str:
 class ChatState:
     max_turns: int = 10
     persist_jsonl: Optional[Path] = None
-    session_id: str = str(int(time.time()))
+    session_id: str = field(default_factory=lambda: str(uuid4()))
     history: List[Dict[str, str]] = field(default_factory=list)
     topic_emb: Optional[np.ndarray] = field(default=None, repr=False)
     topic_text: Optional[str] = None
@@ -249,6 +251,7 @@ class ConversationManager:
     idle_timeout: float = 60.0
     max_history: int = 10
     chat: ChatState = field(default_factory=ChatState)
+    store: ConversationStore = field(default_factory=ConversationStore)
 
     dlg: DialogueManager = field(init=False)
     is_processing: bool = False
@@ -256,6 +259,8 @@ class ConversationManager:
 
     def __post_init__(self) -> None:  # pragma: no cover - simple delegation
         self.dlg = DialogueManager(self.idle_timeout)
+        # ensure initial state is persisted
+        self._save_state()
 
     # ------------------------- dialogue proxies -------------------------
     @property
@@ -299,10 +304,12 @@ class ConversationManager:
     def push_user(self, text: str) -> None:
         self.chat.push_user(text)
         self._trim_history()
+        self._save_state()
 
     def push_assistant(self, text: str) -> None:
         self.chat.push_assistant(text)
         self._trim_history()
+        self._save_state()
 
     def _trim_history(self) -> None:
         excess = len(self.chat.history) - self.max_history
@@ -317,6 +324,7 @@ class ConversationManager:
         if self.chat.history:
             self.chat.summary = summarize_history(self.chat.summary, self.chat.history)
             self.chat.history.clear()
+            self._save_state()
 
     @property
     def messages(self) -> List[Dict[str, str]]:
@@ -330,6 +338,27 @@ class ConversationManager:
         """Return recent messages including any accumulated summary."""
 
         return self.chat.messages_for_llm()
+
+    # ------------------------- persistence -------------------------
+    def _state_dict(self) -> Dict[str, Any]:
+        data = asdict(self.chat)
+        if self.chat.topic_emb is not None:
+            data["topic_emb"] = self.chat.topic_emb.tolist()
+        if self.chat.persist_jsonl is not None:
+            data["persist_jsonl"] = str(self.chat.persist_jsonl)
+        return data
+
+    def _save_state(self) -> None:
+        self.store.save_state(self.chat.session_id, self._state_dict())
+
+    def load_session(self, session_id: str) -> None:
+        """Load a session from the store into ``chat``."""
+        data = self.store.load_state(session_id)
+        if data is None:
+            self.chat = ChatState(session_id=session_id)
+        else:
+            self.chat = ChatState(**data)
+        self._save_state()
 
 
 __all__ = ["ChatState", "ConversationManager", "DialogState", "summarize_history"]
