@@ -482,7 +482,7 @@ def main() -> None:
                     if changed:
                         say("🔀 Cambio tema.")
                     pending_topic = chat.topic_text
-                    pending_history = chat.history
+                    pending_history = chat.messages_for_llm()
                 else:
                     pending_topic = None
                     pending_history = None
