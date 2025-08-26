@@ -27,7 +27,9 @@ import websockets
 from src.conversation import ConversationManager, DialogState
 from src.retrieval import load_questions
 from src import local_audio
-from src.oracle import answer_with_followup
+from src.oracle import QuestionSession
+
+SESSION = QuestionSession()
 
 logger = logging.getLogger(__name__)
 
@@ -219,7 +221,7 @@ async def _receiver(
                     off_list = state.get("off_topic_questions", [])
                     if any(norm == q.domanda.strip().lower() for q in off_list):
                         state["off_topic"] = True
-                        reply, _ = answer_with_followup(text, None, "")
+                        reply = SESSION.record_answer(text)
                         _emit("answer", f"🔮 {reply}")
                         conv.transition(DialogState.SPEAKING)
                         await _tts_say(reply, state)
