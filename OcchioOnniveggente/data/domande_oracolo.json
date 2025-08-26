@@ -11,8 +11,12 @@
 
     ]
 
+
+    ]
+
     ],
     "id": 1
+
 
   },
   {
@@ -257,14 +261,8 @@
   },
   {
     "domanda": "Quale domanda vorresti incidere nel vento?",
-
-    "type": "poetica"
-
-
     "type": "poetica",
     "id": 50
-
-
   },
   {
     "domanda": "Quali strategie usi per organizzare il tuo tempo?",

@@ -24,18 +24,33 @@ from langdetect import LangDetectException, detect  # type: ignore
 
 """Utility helpers for the Oracle application.
 
+
+This module provides small, self contained helpers that are used across the
+project and in the unit tests.  The real project contains a much richer
+implementation but the simplified version below focuses only on the features
+exercised by the tests.
+
 This module provides small, self contained helpers used across the project
 and in the unit tests.
+
 """
 
 
 from __future__ import annotations
+
+
+from dataclasses import asdict
+from datetime import datetime
 
 import asyncio
 import csv
 import inspect
 import json
 import random
+import time
+from pathlib import Path
+from threading import Event
+
 import random
 import time
 
@@ -43,6 +58,7 @@ from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
 from threading import Event
+
 
 from typing import Any, AsyncGenerator, Callable, Dict, Iterable, Iterator, List, Tuple
 
@@ -52,10 +68,24 @@ from langdetect import LangDetectException, detect
 
 from .retrieval import Question, load_questions, Context
 from .utils.error_handler import handle_error
+from .retrieval import Context, Question, load_questions
+
 
 
 from .retrieval import Question, load_questions, Context
 
+
+# ---------------------------------------------------------------------------
+# Questions handling
+# ---------------------------------------------------------------------------
+
+
+_QUESTIONS_CACHE: Dict[Context, Dict[str, List[Question]]] | None = None
+_QUESTIONS_MTIME: float | None = None
+
+
+def _load_all_questions() -> Dict[Context, Dict[str, List[Question]]]:
+    """Load question datasets, reloading them when files change."""
 
 # ---------------------------------------------------------------------------
 # Questions dataset and random sampling
@@ -69,14 +99,34 @@ _QUESTIONS_MTIME: float | None = None
 def get_questions() -> dict[str, List[Question]]:
     """Return the questions dataset reloading it when files change."""
 
+
     global _QUESTIONS_CACHE, _QUESTIONS_MTIME
     data_dir = Path(__file__).resolve().parent.parent / "data"
     json_files = list(data_dir.glob("*.json"))
     mtime = max((f.stat().st_mtime for f in json_files), default=None)
     if _QUESTIONS_CACHE is None or mtime != _QUESTIONS_MTIME:
-        _QUESTIONS_CACHE = load_questions(data_dir)
+        data = load_questions(data_dir)
+        if isinstance(data, dict) and all(isinstance(v, list) for v in data.values()):
+            _QUESTIONS_CACHE = {Context.GENERIC: data}  # type: ignore[arg-type]
+        else:
+            _QUESTIONS_CACHE = data  # type: ignore[assignment]
         _QUESTIONS_MTIME = mtime
     return _QUESTIONS_CACHE
+
+
+
+def get_questions(context: Context | str | None = None) -> Dict[str, List[Question]]:
+    """Return questions for ``context`` (defaults to generic)."""
+
+    data = _load_all_questions()
+    if context is None:
+        ctx = Context.GENERIC
+    elif isinstance(context, Context):
+        ctx = context
+    else:
+        ctx = Context.from_str(context)
+    return data.get(ctx, {})
+
 
 
 QUESTIONS_BY_TYPE: dict[str, List[Question]] = get_questions()
@@ -142,19 +192,32 @@ def get_questions(context: Context | str | None = None) -> Dict[str, List[Questi
 QUESTIONS_BY_CONTEXT = _QUESTIONS_BY_CONTEXT
 QUESTIONS_BY_TYPE: Dict[str, List[Question]] = get_questions()
 
+
 # Track already served questions per context/category
 _USED_QUESTIONS: Dict[str, set[int]] = {}
 
+
+QUESTIONS_BY_CONTEXT: Dict[Context, Dict[str, List[Question]]] = _load_all_questions()
+QUESTIONS_BY_TYPE: Dict[str, List[Question]] = get_questions()
+
+# Track questions already served to avoid immediate repetitions.  Keys are
+# either a category name or the pair ``(context, category)`` when a specific
+# context is used.
+_USED_QUESTIONS: Dict[Any, set[int]] = {}
+
 # Counter for :func:`log_interaction` if ever used
 _INTERACTION_COUNTER = 0
+
 
 
 from typing import Any, AsyncGenerator, Callable, Iterable, Iterator, List, Tuple, Dict
 
 from langdetect import LangDetectException, detect
 
+
 from .utils.error_handler import handle_error
 from .retrieval import Question, load_questions
+
 
 # ---------------------------------------------------------------------------
 # Question dataset helpers
@@ -219,9 +282,13 @@ def random_question(category: str) -> Question | None:
 
 class ConversationFlow:
 
+    """Simple state machine to model multi-phase dialogues."""
+
+
     """Minimal state machine modelling a fixed dialogue flow."""
 
     DEFAULT_FLOW = ["introduzione", "domanda_principale", "follow_up", "chiusura"]
+
 
     def __init__(self, *, context: str | None = None, flows: dict[str, list[str]] | None = None) -> None:
         flows = flows or {}
@@ -293,10 +360,54 @@ class ConversationFlow:
 
 
 # ---------------------------------------------------------------------------
+# Questions utilities
+# ---------------------------------------------------------------------------
+
+# Default follow-up messages per question category.  Used when a question does
+# not define its own ``follow_up`` field.
+DEFAULT_FOLLOW_UPS: Dict[str, str] = {
+    "poetica": "Ti va di approfondire questa immagine?",
+    "didattica": "Puoi fornire un esempio pratico?",
+    "evocativa": "Che altre sensazioni emergono?",
+    "orientamento": "Quale sarà il tuo prossimo passo concreto?",
+}
+
+
+def random_question(category: str, context: Context | str | None = None) -> Question | None:
+    """Return a random question from ``category`` avoiding repeats."""
+
+    cat = category.lower()
+    qs_map = get_questions(context)
+    qs = qs_map.get(cat)
+    if not qs:
+        return None
+
+    if context is None:
+        key: Any = cat
+    else:
+        ctx = context if isinstance(context, Context) else Context.from_str(context)
+        key = (ctx, cat)
+
+    used = _USED_QUESTIONS.setdefault(key, set())
+    if len(used) >= len(qs):
+        used.clear()
+    available = [i for i in range(len(qs)) if i not in used]
+    idx = random.choice(available)
+    used.add(idx)
+    return qs[idx]
+
+
+# Off-topic handling ---------------------------------------------------------
+
+OFF_TOPIC_RESPONSES: Dict[str, str] = {
+
+
+# ---------------------------------------------------------------------------
 # Off-topic helpers
 # ---------------------------------------------------------------------------
 
 OFF_TOPIC_RESPONSES: dict[str, str] = {
+
     "poetica": "Preferirei non avventurarmi in slanci poetici.",
     "didattica": "Al momento non posso fornire spiegazioni didattiche.",
     "evocativa": "Queste domande evocative sfuggono al mio scopo.",
@@ -304,7 +415,11 @@ OFF_TOPIC_RESPONSES: dict[str, str] = {
     "default": "Mi dispiace, non posso aiutarti con questa richiesta.",
 }
 
+
+OFF_TOPIC_REPLIES: Dict[str, str] = {
+
 OFF_TOPIC_REPLIES = {
+
     "poetica": "Mi dispiace, ma preferisco non rispondere a richieste poetiche.",
     "didattica": "Questa domanda sembra didattica e non rientra nel mio ambito.",
     "evocativa": "Temo che il suo carattere evocativo mi impedisca di rispondere.",
@@ -329,7 +444,13 @@ def off_topic_reply(category: str | None) -> str:
 
 
 def format_citations(sources: Iterable[dict[str, Any]]) -> str:
+    """Return a comma separated string of the ``id`` fields in ``sources``."""
+
+
+
+def format_citations(sources: Iterable[dict[str, Any]]) -> str:
     """Return a comma separated string of ``id`` fields from ``sources``."""
+
 
 
 def format_citations(sources: Iterable[dict[str, Any]]) -> str:
@@ -445,6 +566,9 @@ def export_audio_answer(
 
 def extract_summary(answer: str) -> str:
 
+    """Extract the summary section from a structured answer."""
+
+
     """Extract the summary section from ``answer`` when present."""
 
     """Extract the summary section from a structured answer."""
@@ -460,6 +584,9 @@ def extract_summary(answer: str) -> str:
 
 
 def detect_language(text: str) -> str | None:
+
+    """Detect the language of ``text`` using ``langdetect``."""
+
 
     try:
         return detect(text)
@@ -547,6 +674,13 @@ def oracle_answer(
     policy_prompt: str | None = None,
     stream: bool = False,
     on_token: Callable[[str], None] | None = None,
+
+    question_type: str | None = None,
+    categoria: str | None = None,
+    off_topic_category: str | None = None,
+) -> Tuple[str, List[dict[str, Any]]]:
+    """Return an answer from ``client`` and the context used."""
+
 ) -> tuple[str, list[dict[str, Any]]]:
     """Return the model answer and echo back ``context``."""
 
@@ -570,6 +704,7 @@ def oracle_answer(
     resp = client.responses.create(model=llm_model, instructions=instr, input=msgs)
     return getattr(resp, "output_text", ""), context or []
 
+
     question_type: str | None = None,
     categoria: str | None = None,
     off_topic_category: str | None = None,
@@ -582,6 +717,8 @@ def oracle_answer(
             off_topic_category, OFF_TOPIC_RESPONSES["default"]
         )
         return msg, []
+
+
 
 
     **_: Any,
@@ -635,6 +772,84 @@ async def oracle_answer_stream(
     client: Any,
     llm_model: str,
     style_prompt: str,
+    tone: str = "informal",
+    *,
+    context: List[dict[str, Any]] | None = None,
+    history: List[dict[str, str]] | None = None,
+    policy_prompt: str = "",
+    mode: str = "detailed",
+    topic: str | None = None,
+    stream: bool = False,
+    on_token: Callable[[str], None] | None = None,
+    question_type: str | None = None,
+    categoria: str | None = None,
+    off_topic_category: str | None = None,
+) -> Tuple[str, List[dict[str, Any]]]:
+    """Async variant of :func:`oracle_answer` supporting ``AsyncOpenAI``."""
+
+    if question_type == "off_topic":
+        return off_topic_reply(categoria), []
+    if off_topic_category:
+        msg = OFF_TOPIC_RESPONSES.get(
+            off_topic_category, OFF_TOPIC_RESPONSES["default"]
+        )
+        return msg, []
+
+    instructions = _build_instructions(lang_hint, context, mode, tone)
+    messages = _build_messages(question, context, history)
+
+    if stream:
+        create_fn = client.responses.with_streaming_response.create
+        if inspect.iscoroutinefunction(create_fn):
+            response = await create_fn(
+                model=llm_model, instructions=instructions, input=messages
+            )
+            output_text = ""
+            on_token = on_token or (lambda _t: None)
+            async with response as stream_resp:
+                async for event in stream_resp:
+                    if getattr(event, "type", "") == "response.output_text.delta":
+                        delta = getattr(event, "delta", "")
+                        output_text += delta
+                        on_token(delta)
+            return output_text, context or []
+        return oracle_answer(
+            question,
+            lang_hint,
+            client,
+            llm_model,
+            style_prompt,
+            context=context,
+            history=history,
+            policy_prompt=policy_prompt,
+            mode=mode,
+            topic=topic,
+            stream=True,
+            on_token=on_token,
+            question_type=question_type,
+            categoria=categoria,
+        )
+
+    create_fn = client.responses.create
+    if inspect.iscoroutinefunction(create_fn):
+        resp = await create_fn(
+            model=llm_model, instructions=instructions, input=messages
+        )
+        return resp.output_text, context or []
+    return oracle_answer(
+        question,
+        lang_hint,
+        client,
+        llm_model,
+        style_prompt,
+        context=context,
+        history=history,
+        policy_prompt=policy_prompt,
+        mode=mode,
+        topic=topic,
+        question_type=question_type,
+        categoria=categoria,
+
 
     *,
 
@@ -647,6 +862,7 @@ async def oracle_answer_stream(
     instr = _build_instructions(lang_hint, context, style_prompt, None, None)
     stream_obj = client.responses.with_streaming_response.create(
         model=llm_model, instructions=instr, input=msgs
+
     )
     text = ""
     for evt in stream_obj:
@@ -661,18 +877,37 @@ async def oracle_answer_stream(
     mode: str = "detailed",
     tone: str = "informal",
 ) -> AsyncGenerator[Tuple[str, bool], None]:
+
+    """Stream answer tokens from the model."""
+
+    if question_type == "off_topic":
+        yield off_topic_reply(categoria), True
+        return
+
+
     """Asynchronous generator emitting streaming response chunks."""
+
     instructions = _build_instructions(lang_hint, context, mode, tone)
     messages = _build_messages(question, context, history)
     stream = client.responses.with_streaming_response.create(
         model=llm_model, instructions=instructions, input=messages
     )
     output_text = ""
+
+    with response as stream_resp:
+        for event in stream_resp:
+            if getattr(event, "type", "") == "response.output_text.delta":
+                delta = getattr(event, "delta", "")
+                output_text += delta
+                yield delta, False
+                await asyncio.sleep(0)
+
     for event in stream:
         if getattr(event, "type", "") == "response.output_text.delta":
             delta = getattr(event, "delta", "")
             output_text += delta
             yield delta, False
+
     yield output_text, True
 
 
@@ -699,7 +934,21 @@ def stream_generate(
     llm_model: str,
     style_prompt: str,
     *,
+
+    context: List[dict[str, Any]] | None = None,
+    history: List[dict[str, str]] | None = None,
+    policy_prompt: str = "",
+    mode: str = "detailed",
+    topic: str | None = None,
+    timeout: float | None = None,
     stop_event: Event | None = None,
+    question_type: str | None = None,
+    categoria: str | None = None,
+) -> Iterator[str]:
+    """Yield answer tokens from the model synchronously."""
+
+    stop_event: Event | None = None,
+
 
 ) -> Iterable[str]:
     """Synchronous generator yielding streamed tokens."""
@@ -716,11 +965,39 @@ def stream_generate(
             yield getattr(evt, "delta", "")
 
 
+
+def answer_with_followup(
+    question_data: Question | dict[str, Any] | str,
+    client: Any,
+    llm_model: str,
+    *,
+    lang_hint: str = "it",
+) -> tuple[str, str]:
+    """Generate an answer for ``question_data`` and return its follow-up."""
+
+    if isinstance(question_data, Question):
+        question = question_data.domanda
+        follow_up = question_data.follow_up or DEFAULT_FOLLOW_UPS.get(
+            question_data.type.lower(), ""
+        )
+    elif isinstance(question_data, dict):
+        question = question_data.get("domanda", "")
+        qtype = question_data.get("type", "").lower()
+        follow_up = question_data.get("follow_up") or DEFAULT_FOLLOW_UPS.get(
+            qtype, ""
+        )
+    else:
+        question = str(question_data)
+        follow_up = ""
+
+    answer, _ = oracle_answer(question, lang_hint, client, llm_model, "")
+    return answer, follow_up
+
 # ---------------------------------------------------------------------------
 # Follow-up handling and logging
 # ---------------------------------------------------------------------------
 
-=======
+
 ) -> Iterator[str]:
 
     """Yield tokens from ``client`` as they arrive."""
@@ -763,6 +1040,7 @@ DEFAULT_FOLLOW_UPS: dict[str, str] = {
 
 
 
+
 def answer_and_log_followup(
     question_data: Question | dict[str, str],
     client: Any,
@@ -770,11 +1048,47 @@ def answer_and_log_followup(
     log_path: Path,
     *,
     session_id: str,
+
+    lang_hint: str = "it",
+) -> tuple[str, str]:
+    """Generate an answer and log the follow-up for the user."""
+
+    answer, follow_up = answer_with_followup(
+        question_data, client, llm_model, lang_hint=lang_hint
+    )
+
+
 ) -> Tuple[str, str]:
+
     if isinstance(question_data, Question):
         qtext = question_data.domanda
         follow = question_data.follow_up or DEFAULT_FOLLOW_UPS.get(question_data.type, "")
     else:
+
+        question_text = question_data.get("domanda", "")
+
+    append_log(
+        question_text,
+        answer,
+        log_path,
+        session_id=session_id,
+        lang=lang_hint,
+    )
+    if follow_up:
+        append_log(
+            follow_up,
+            "",
+            log_path,
+            session_id=session_id,
+            lang=lang_hint,
+        )
+    return answer, follow_up
+
+
+# ---------------------------------------------------------------------------
+# Logging
+# ---------------------------------------------------------------------------
+
         qtext = question_data.get("domanda", "")
         qtype = question_data.get("type", "")
         follow = question_data.get("follow_up") or DEFAULT_FOLLOW_UPS.get(qtype, "")
@@ -782,6 +1096,8 @@ def answer_and_log_followup(
     append_log(qtext, answer, log_path, session_id=session_id)
     append_log(follow, "", log_path, session_id=session_id)
     return answer, follow
+
+
 
 
 
@@ -796,9 +1112,13 @@ def append_log(
     sources: List[dict[str, Any]] | None = None,
 ) -> str:
 
+    """Append an interaction to ``path``."""
+
+
     """Append an interaction to ``path`` in JSON lines format."""
 
     ts = datetime.utcnow().isoformat()
+
 
     entry = {
         "timestamp": ts,
@@ -860,11 +1180,15 @@ def append_log(
                 ]
             )
     else:
+
+
         path.parent.mkdir(parents=True, exist_ok=True)
->
+
+
         with path.open("a", encoding="utf-8") as f:
             f.write(json.dumps(entry, ensure_ascii=False) + "\n")
     return session_id
+
 
 
 def answer_and_log_followup(
@@ -894,6 +1218,7 @@ def answer_and_log_followup(
     return answer, follow
 
 
+
 def log_interaction(
     *,
     context: Any | None = None,
@@ -903,7 +1228,11 @@ def log_interaction(
     user_response: str | None = None,
     path: Path | None = None,
 ) -> int:
+
+    """Log a user interaction and return its sequential counter."""
+
     """Log a user interaction to ``path`` returning a sequential counter."""
+
 
     log_interaction.counter += 1
     entry = {
@@ -938,11 +1267,26 @@ def export_audio_answer(text: str, out_path: Path, *, synth: Callable[[str, Path
 # ---------------------------------------------------------------------------
 
 
+def synthesize(
+    text: str,
+    out_path: Path,
+    client: Any | None = None,
+    tts_model: str | None = None,
+    tts_voice: str | None = None,
+) -> None:
+    """Synthesize ``text`` into ``out_path`` using a local TTS engine."""
+
 def synthesize(text: str, out_path: Path, client: Any | None = None, tts_model: str | None = None, tts_voice: str | None = None) -> None:
+
 
     """Synthesize ``text`` into ``out_path`` using ``client``."""
     out_path.parent.mkdir(parents=True, exist_ok=True)
+
+
+    try:  # pragma: no cover - optional dependency
+
     try:
+
         import pyttsx3  # type: ignore
 
         engine = pyttsx3.init()
@@ -958,6 +1302,10 @@ def synthesize(text: str, out_path: Path, client: Any | None = None, tts_model: 
         pass
 
 
+    try:  # pragma: no cover - optional dependency
+        from gtts import gTTS  # type: ignore
+
+
 
 def synthesize(text: str, out_path: Path) -> None:
     """Very small TTS stub used in tests."""
@@ -969,6 +1317,7 @@ def synthesize(text: str, out_path: Path) -> None:
 async def synthesize_async(*args, **kwargs):  # pragma: no cover - thin wrapper
 
     synthesize(*args, **kwargs)
+
 
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -983,6 +1332,7 @@ async def synthesize_async(*args, **kwargs) -> None:  # pragma: no cover - thin 
 
 
 
+
 async def transcribe(
     audio_path: Path,
     client: Any,
@@ -991,7 +1341,11 @@ async def transcribe(
     lang_hint: str | None = None,
 ) -> str | None:
 
+    """Effettua una trascrizione gestendo gli errori in modo centralizzato."""
+
+
     """Transcribe ``audio_path`` using ``client`` handling errors."""
+
 
 
     """Effettua una trascrizione gestendo gli errori in modo centralizzato."""
@@ -1003,7 +1357,9 @@ async def transcribe(
                 result = await result
             return result
 
+
     except Exception as exc:  # noqa: BLE001
+
 
 
         with audio_path.open("rb") as f:
@@ -1016,9 +1372,13 @@ async def transcribe(
                 response = await response
         return getattr(response, "text", None)
 
+    except Exception as exc:  # noqa: BLE001 - delegated to handler
+
+
     except Exception as exc:  # noqa: BLE001 - delegated
 
     except Exception as exc:  # noqa: BLE001 - delegated to handle_error
+
 
 
         return handle_error(exc, context="transcribe")
@@ -1032,6 +1392,9 @@ async def fast_transcribe(
     *,
     lang_hint: str | None = None,
 ) -> str | None:
+
+    """Wrapper around :func:`transcribe` returning only the transcription."""
+
 
     """Convenience wrapper returning only the transcription text."""
 
@@ -1139,6 +1502,7 @@ def answer_and_log_followup(
 
 
 
+
     return await transcribe(audio_path, client, model, lang_hint=lang_hint)
 
 
@@ -1177,3 +1541,4 @@ __all__ = [
     "synthesize_async",
     "transcribe",
 ]
+
