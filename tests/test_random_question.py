@@ -4,7 +4,7 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 from OcchioOnniveggente.src.oracle import (
-    QUESTIONS_BY_TYPE,
+    get_questions,
     random_question,
     _USED_QUESTIONS,
 )
@@ -15,7 +15,7 @@ def test_random_question_no_repeat_until_exhaustion():
     # reset session tracking
     _USED_QUESTIONS.clear()
 
-    total = len(QUESTIONS_BY_TYPE[category])
+    total = len(get_questions()[category])
     seen = set()
     for _ in range(total):
         q = random_question(category)
