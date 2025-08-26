@@ -8,10 +8,13 @@ from typing import Generator, Literal
 import logging
 import hashlib
 import shutil
+import tempfile
 
 logger = logging.getLogger(__name__)
 
 import numpy as np
+import soundfile as sf
+import sounddevice as sd
 
 from .audio import AudioPreprocessor, load_audio_as_float
 from .config import Settings
@@ -131,6 +134,26 @@ def tts_local(
     out_path.write_bytes(b"")
 
 
+
+
+def tts_speak(text: str, *, lang: str = "it") -> None:
+    """Synthesize ``text`` and play it using the default audio device.
+
+    The function relies on :func:`tts_local` for synthesis and tries to play
+    the resulting audio with ``sounddevice``. Any error is logged and ignored
+    so that callers are not interrupted during realtime interactions.
+    """
+
+    tmp = Path(tempfile.gettempdir()) / "tts_tmp.wav"
+    try:
+        tts_local(text, tmp, lang=lang)
+        data, sr = sf.read(tmp.as_posix(), dtype="float32")
+        if data.ndim > 1:
+            data = data.mean(axis=1)
+        sd.play(data, sr)
+        sd.wait()
+    except Exception:  # pragma: no cover - best effort playback
+        logger.warning("tts_speak failed", exc_info=True)
 
 
 def stt_local(audio_path: Path, lang: str = "it") -> str:
