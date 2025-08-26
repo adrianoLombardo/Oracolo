@@ -36,23 +36,3 @@ __all__ = [
     "publish_transcript",
     "publish_response",
 ]
-=======
-from .service_container import container
-
-
-def get_chat() -> ChatState:
-    """Return the shared :class:`ChatState` from the service container."""
-
-    if container.ui_state.conversation is None:
-        container.ui_state.conversation = ChatState()
-    return container.ui_state.conversation
-
-
-__all__ = ["ChatState", "summarize_history", "get_chat"]
-=======
-from .conversation import ChatState, ConversationManager, summarize_history
-
-__all__ = ["ChatState", "ConversationManager", "summarize_history"]
-
-
-

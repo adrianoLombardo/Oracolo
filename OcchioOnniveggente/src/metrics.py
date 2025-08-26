@@ -16,6 +16,7 @@ from prometheus_client import (
 )
 from starlette.requests import Request
 from starlette.responses import Response
+from .task_queue import task_queue
 
 try:  # pragma: no cover - optional dependencies
     import torch  # type: ignore
@@ -42,6 +43,9 @@ REQUEST_LATENCY = Histogram(
 GPU_MEMORY = Gauge("gpu_memory_bytes", "Allocated GPU memory in bytes", registry=REGISTRY)
 GPU_UTILIZATION = Gauge("gpu_utilization_percent", "GPU utilisation percentage", registry=REGISTRY)
 CPU_PERCENT = Gauge("cpu_usage_percent", "CPU usage percentage", registry=REGISTRY)
+QUEUE_LENGTH = Gauge(
+    "task_queue_length", "Number of pending tasks", ["job"], registry=REGISTRY
+)
 
 
 async def metrics_middleware(request: Request, call_next):  # type: ignore[no-untyped-def]
@@ -94,11 +98,19 @@ def record_system_metrics() -> Dict[str, float]:
     return m
 
 
+def record_queue_metrics() -> None:
+    """Update queue length gauges for all registered jobs."""
+
+    for name in ("transcribe", "generate_reply", "synthesize_voice"):
+        QUEUE_LENGTH.labels(name).set(task_queue.size(name))
+
+
 async def metrics_loop(interval: float = 5.0) -> None:
     """Background task periodically collecting system metrics."""
 
     while True:  # pragma: no cover - simple loop
         record_system_metrics()
+        record_queue_metrics()
         await asyncio.sleep(interval)
 
 
