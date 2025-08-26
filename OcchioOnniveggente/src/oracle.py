@@ -14,6 +14,7 @@ import csv
 import json
 import inspect
 import time
+import random
 from threading import Event
 from pathlib import Path
 from typing import Any, AsyncGenerator, Callable, Iterable, Iterator, List, Tuple
@@ -21,6 +22,10 @@ from typing import Any, AsyncGenerator, Callable, Iterable, Iterator, List, Tupl
 from langdetect import LangDetectException, detect
 
 from .utils.error_handler import handle_error
+from .retrieval import load_questions
+
+
+GOOD_QUESTIONS, OFF_TOPIC_QUESTIONS, FOLLOW_UPS = load_questions()
 
 
 # ---------------------------------------------------------------------------
@@ -339,6 +344,47 @@ def stream_generate(
                 delta = getattr(event, "delta", "")
                 if delta:
                     yield delta
+
+
+# ---------------------------------------------------------------------------
+# Questions handling
+# ---------------------------------------------------------------------------
+
+
+def random_good_question() -> dict[str, str] | None:
+    """Return a random entry from the preloaded good questions list."""
+
+    if not GOOD_QUESTIONS:
+        return None
+    return random.choice(GOOD_QUESTIONS)
+
+
+def answer_with_followup(
+    question: str,
+    client: Any,
+    llm_model: str,
+    *,
+    lang_hint: str = "it",
+) -> tuple[str, str]:
+    """Generate an answer for ``question`` and suggest a follow-up.
+
+    If the question is present in the off-topic list a polite refusal is
+    returned instead.  The response type associated with good questions is
+    passed to :func:`oracle_answer` via ``style_prompt`` so that the model can
+    tailor the answer.
+    """
+
+    if any(question == q.get("question") for q in OFF_TOPIC_QUESTIONS):
+        answer = "Mi dispiace, preferisco non rispondere a questa domanda."
+    else:
+        resp_type = next(
+            (q.get("response_type", "") for q in GOOD_QUESTIONS if q.get("question") == question),
+            "",
+        )
+        answer, _ = oracle_answer(question, lang_hint, client, llm_model, resp_type)
+    follow_up = random.choice(FOLLOW_UPS) if FOLLOW_UPS else ""
+    return answer, follow_up
+
 
 
 # ---------------------------------------------------------------------------
