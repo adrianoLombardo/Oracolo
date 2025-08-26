@@ -25,11 +25,11 @@ from .utils.error_handler import handle_error
 from .retrieval import Question, load_questions
 
 
-_QUESTIONS_CACHE: dict[str, List[dict[str, Any]]] | None = None
+_QUESTIONS_CACHE: dict[str, List[Question]] | None = None
 _QUESTIONS_MTIME: float | None = None
 
 
-def get_questions() -> dict[str, List[dict[str, Any]]]:
+def get_questions() -> dict[str, List[Question]]:
     """Return the questions dataset reloading it when the file changes."""
 
     global _QUESTIONS_CACHE, _QUESTIONS_MTIME
@@ -42,14 +42,82 @@ def get_questions() -> dict[str, List[dict[str, Any]]]:
 
     return _QUESTIONS_CACHE or {}
 
-QUESTIONS_BY_TYPE: dict[str, List[Question]] = load_questions()
-
 # Track questions already asked for each category during the current session.
 # Keys are category names (lowercase) and values are the indexes of questions
 # that have been served.  Once all questions in a category have been used the
 # set is cleared to start a new cycle.
 _USED_QUESTIONS: dict[str, set[int]] = {}
 
+# Counter for user interactions logged via :func:`log_interaction`.
+_INTERACTION_COUNTER = 0
+
+
+
+# ---------------------------------------------------------------------------
+# Conversation state machine
+# ---------------------------------------------------------------------------
+
+
+class ConversationFlow:
+    """Simple state machine to model multi-phase dialogues.
+
+    The flow is defined as an ordered list of phase names.  By default the
+    phases are ``introduzione`` → ``domanda_principale`` → ``follow_up`` →
+    ``chiusura``.  Custom flows for specific contexts can be supplied via the
+    ``flows`` mapping at construction time.
+    """
+
+    DEFAULT_FLOW = [
+        "introduzione",
+        "domanda_principale",
+        "follow_up",
+        "chiusura",
+    ]
+
+    def __init__(
+        self,
+        *,
+        context: str | None = None,
+        flows: dict[str, list[str]] | None = None,
+    ) -> None:
+        flows = flows or {}
+        self._flows = flows
+        self._context = context
+        self._phases = list(flows.get(context, self.DEFAULT_FLOW))
+        if not self._phases:
+            raise ValueError("Flow must contain at least one phase")
+        self._index = 0
+
+    @property
+    def state(self) -> str:
+        """Return the name of the current phase."""
+
+        return self._phases[self._index]
+
+    def advance(self) -> str:
+        """Advance to the next phase and return it.
+
+        If already at the last phase, the state remains unchanged.
+        """
+
+        if self._index < len(self._phases) - 1:
+            self._index += 1
+        return self.state
+
+    def is_finished(self) -> bool:
+        """Return ``True`` when the flow reached its final phase."""
+
+        return self._index >= len(self._phases) - 1
+
+    def reset(self, *, context: str | None = None) -> None:
+        """Reset to the first phase optionally switching ``context``."""
+
+        if context is not None:
+            self._context = context
+            self._phases = list(self._flows.get(context, self.DEFAULT_FLOW))
+            if not self._phases:
+                raise ValueError("Flow must contain at least one phase")
+        self._index = 0
 
 
 # Risposte predefinite per domande fuori tema
@@ -445,9 +513,14 @@ def stream_generate(
                     yield delta
 
 
+
+"""Questions handling utilities."""
+
 # ---------------------------------------------------------------------------
 # Questions handling
 # ---------------------------------------------------------------------------
+
+def random_question(category: str) -> dict[str, str] | None:
 
 
 
@@ -461,6 +534,54 @@ def random_question(category: str) -> Question | None:
 
     cat = category.lower()
     qs = QUESTIONS_BY_TYPE.get(cat)
+
+
+# Default follow-up messages per question category.  When a question does not
+# specify its own ``follow_up`` field the message for its category is used.
+DEFAULT_FOLLOW_UPS: dict[str, str] = {
+    "poetica": "Ti va di approfondire questa immagine?",
+    "didattica": "Puoi fornire un esempio pratico?",
+    "evocativa": "Che altre sensazioni emergono?",
+    "orientamento": "Quale sarà il tuo prossimo passo concreto?",
+}
+
+
+def random_question(category: str) -> Question | None:
+
+
+def random_question(category: str) -> dict[str, str] | None:
+    """Return a random question from ``category`` without immediate repeats.
+
+    Questions are loaded as :class:`Question` dataclasses but this helper returns
+    a plain dictionary for ease of use by higher level components and tests.
+    Already served questions are tracked and the cycle restarts once all
+    questions in a category have been used.
+    """
+
+    cat = category.lower()
+    qs = QUESTIONS_BY_TYPE.get(cat)
+
+
+    """Return a random question from ``category`` without immediate repeats.
+
+    Questions already returned are tracked per category.  Once all questions in
+    a category have been used the tracking set is cleared, allowing the cycle to
+    restart.  The returned object is a plain ``dict`` with keys ``domanda``,
+    ``type`` and ``follow_up`` (resolved to the default for the category when
+    absent).
+    """
+
+
+
+    """Return a random question from ``category`` without immediate repeats."""
+
+
+
+    cat = category.lower()
+    qs = get_questions().get(cat)
+
+
+
     if not qs:
         return None
 
@@ -472,16 +593,41 @@ def random_question(category: str) -> Question | None:
     available = [i for i in range(len(qs)) if i not in used]
     idx = random.choice(available)
     used.add(idx)
-    return qs[idx]
+
+
+    q = qs[idx]
+    return {"domanda": q.domanda, "type": q.type, "follow_up": q.follow_up}
 
 
 def answer_with_followup(
+
     question_data: Question | dict[str, str] | str,
+
+    question_data: Question | dict[str, str],
+
+    q = qs[idx]
+
+    return {"domanda": q.domanda, "follow_up": q.follow_up}
+
+    follow = q.follow_up or DEFAULT_FOLLOW_UPS.get(q.type.lower(), "")
+    return {"domanda": q.domanda, "type": q.type, "follow_up": follow}
+
+
+
+def answer_with_followup(
+
+    question_data: Question | dict[str, Any],
+
+    question_data: Question | dict[str, str],
+
+
+
     client: Any,
     llm_model: str,
     *,
     lang_hint: str = "it",
 ) -> tuple[str, str]:
+
     """Generate an answer for ``question_data`` and return its follow-up.
 
     ``question_data`` can be either a :class:`Question` object, a mapping with
@@ -500,11 +646,86 @@ def answer_with_followup(
         follow_up = ""
 
     answer, _ = oracle_answer(question, lang_hint, client, llm_model, "")
+
+
+    """Generate an answer for ``question_data`` and return its follow-up."""
+    if isinstance(question_data, dict):
+        question = question_data.get("domanda", "")
+        follow_up = question_data.get("follow_up") or ""
+    else:
+        question = question_data.domanda
+        follow_up = question_data.follow_up or ""
+    answer, _ = oracle_answer(question, lang_hint, client, llm_model, "")
+
+    """Generate an answer for ``question_data`` and return its follow-up.
+
+
+    ``question_data`` may be either a :class:`Question` object or a plain
+    dictionary with ``domanda`` and optional ``follow_up`` keys.
+    """
+
+    if isinstance(question_data, dict):
+        question = question_data.get("domanda", "")
+        follow_up = question_data.get("follow_up", "") or ""
+    else:
+        question = question_data.domanda
+        follow_up = question_data.follow_up or ""
+    answer, _ = oracle_answer(question, lang_hint, client, llm_model, "")
+
+
+    ``question_data`` may be a :class:`Question` instance or a plain dict with at
+    least the keys ``domanda`` and ``type``.  If the input does not define a
+    ``follow_up`` field the default message for its category is used.
+    """
+
+    if isinstance(question_data, dict):
+        question = question_data.get("domanda", "")
+        qtype = question_data.get("type", "").lower()
+        follow_up = question_data.get("follow_up")
+    else:
+        question = question_data.domanda
+        qtype = question_data.type.lower()
+        follow_up = question_data.follow_up
+
+
+
+    if isinstance(question_data, dict):
+        question = question_data.get("domanda", "")
+        follow_up = question_data.get("follow_up") or ""
+    else:
+        question = question_data.domanda
+        follow_up = question_data.follow_up or ""
+    answer, _ = oracle_answer(question, lang_hint, client, llm_model, "")
+
+    answer, _ = oracle_answer(question, lang_hint, client, llm_model, "")
+    if not follow_up:
+        follow_up = DEFAULT_FOLLOW_UPS.get(qtype, "")
+
+    if isinstance(question_data, Question):
+        question = question_data.domanda
+        follow_up = question_data.follow_up or ""
+    else:
+        question = question_data.get("domanda", "")
+        follow_up = question_data.get("follow_up") or ""
+
+    answer, _ = oracle_answer(question, lang_hint, client, llm_model, "")
+
+
+
+
     return answer, follow_up
 
 
 def answer_and_log_followup(
+
     question_data: Question | dict[str, str],
+
+
+    question_data: Question | dict[str, str],
+
+    question_data: Question,
+
+
     client: Any,
     llm_model: str,
     log_path: Path,
@@ -525,6 +746,7 @@ def answer_and_log_followup(
         question_data, client, llm_model, lang_hint=lang_hint
     )
 
+
     if isinstance(question_data, Question):
         question_text = question_data.domanda
     else:
@@ -532,6 +754,19 @@ def answer_and_log_followup(
 
     append_log(
         question_text,
+
+    question = (
+        question_data.domanda
+        if isinstance(question_data, Question)
+        else question_data.get("domanda", "")
+    )
+    append_log(
+
+        question,
+
+        question_data.domanda,
+
+
         answer,
         log_path,
         session_id=session_id,
@@ -616,6 +851,65 @@ def append_log(
             f.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
     return session_id
+
+
+# ---------------------------------------------------------------------------
+# Interaction logging
+# ---------------------------------------------------------------------------
+
+def log_interaction(
+    *,
+    context: Any | None = None,
+    category: str | None = None,
+    question: str | None = None,
+    follow_up: str | None = None,
+    user_response: str | None = None,
+    path: Path | None = None,
+    endpoint: str | None = None,
+) -> int:
+    """Log a user interaction and return its sequential counter.
+
+    The interaction is appended to ``path`` as JSON lines when provided or
+    sent via HTTP POST to ``endpoint``.  Both destinations may be used at the
+    same time.  The entry records the provided ``context``, ``category``,
+    ``question`` and ``follow_up`` along with the ``user_response`` and a
+    monotonically increasing ``interaction`` counter.
+    """
+
+    global _INTERACTION_COUNTER
+    _INTERACTION_COUNTER += 1
+    entry = {
+        "timestamp": datetime.utcnow().isoformat(),
+        "interaction": _INTERACTION_COUNTER,
+        "context": context,
+        "category": category,
+        "question": question,
+        "follow_up": follow_up,
+        "user_response": user_response,
+    }
+
+    data = json.dumps(entry, ensure_ascii=False)
+
+    if endpoint:
+        try:
+            import urllib.request
+
+            req = urllib.request.Request(
+                endpoint,
+                data=data.encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            urllib.request.urlopen(req, timeout=5)
+        except Exception:
+            pass
+
+    if path:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as f:
+            f.write(data + "\n")
+
+    return _INTERACTION_COUNTER
 
 
 # ---------------------------------------------------------------------------
