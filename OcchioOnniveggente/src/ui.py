@@ -30,19 +30,17 @@ from urllib.parse import urlparse
 from src.retrieval import retrieve
 from src.chat import ChatState
 from src.conversation import ConversationManager
-from src.oracle import (
-    oracle_answer,
-    oracle_answer_async,
-    synthesize,
-    synthesize_async,
-)
+from src.oracle import oracle_answer, synthesize
+try:
+    from src.oracle import oracle_answer_async, synthesize_async
+except ImportError:  # pragma: no cover - async wrappers optional
+    pass
 
 from src.domain import validate_question
 from src.validators import validate_device_config
 from src.config import get_openai_api_key
 from src.ui_state import UIState
 from src.ui_controller import UIController
-from src.oracle import synthesize
 from src.ui_controller import UiController, _REASON_RE
 from src.ui_theme import THEME
 
