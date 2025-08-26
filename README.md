@@ -92,6 +92,28 @@ prestazioni su CPU rispetto all'uso diretto di PyTorch.
 In caso di errore il sistema effettua automaticamente il fallback al backend
 OpenAI.
 
+## Modalità streaming
+
+È possibile ricevere la risposta dell'LLM in tempo reale utilizzando la nuova
+funzione `stream_generate` in `src/oracle.py`. La funzione restituisce un
+iteratore che emette piccoli chunk di testo man mano che vengono prodotti dal
+modello, permettendo di aggiornare l'interfaccia senza attese.
+
+Esempio minimo in modalità testuale:
+
+```python
+from OcchioOnniveggente.src.oracle import stream_generate
+from OcchioOnniveggente.src.cli import stream_say
+from openai import OpenAI
+
+client = OpenAI()
+tokens = stream_generate("Ciao?", "it", client, "gpt-4o", "")
+stream_say(tokens)
+```
+
+Lo streaming può essere interrotto impostando un `threading.Event`, passando
+un parametro `timeout` oppure premendo `CTRL+C` nella CLI.
+
 
 ---
 
