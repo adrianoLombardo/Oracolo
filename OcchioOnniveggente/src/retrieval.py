@@ -76,6 +76,49 @@ def _load_index(path: str | Path) -> List[Dict]:
     return documents
 
 
+def load_questions(path: str | Path) -> Dict[str, Any]:
+    """Load oracle questions from ``path`` grouping off-topic ones by category.
+
+    The JSON file is expected to contain a list of objects.  Entries without
+    ``type`` or where ``type`` is different from ``off_topic`` are considered
+    regular questions and returned in the ``good`` list.  Entries tagged with
+    ``off_topic`` must also provide a ``categoria`` field; these are grouped
+    under ``off_topic`` using the category as key.
+
+    Parameters
+    ----------
+    path:
+        Location of ``domande_oracolo.json``.
+
+    Returns
+    -------
+    dict
+        ``{"good": [...], "off_topic": {"cat": [...]}}``
+    """
+
+    p = Path(path)
+    if not p.exists():
+        logger.warning("Questions file not found: %s", p)
+        return {"good": [], "off_topic": {}}
+
+    try:
+        data = json.loads(p.read_text(encoding="utf-8"))
+    except Exception:
+        logger.exception("Invalid JSON in questions file: %s", p)
+        return {"good": [], "off_topic": {}}
+
+    good: List[Dict[str, Any]] = []
+    off_topic: Dict[str, List[Dict[str, Any]]] = {}
+    for item in data if isinstance(data, list) else []:
+        if item.get("type") == "off_topic":
+            cat = str(item.get("categoria", "")) or "unknown"
+            off_topic.setdefault(cat, []).append(item)
+        else:
+            good.append(item)
+
+    return {"good": good, "off_topic": off_topic}
+
+
 def _make_chunks(text: str, max_chars: int = 800, overlap_ratio: float = 0.1) -> List[str]:
     """Split text into semantically coherent chunks.
 
