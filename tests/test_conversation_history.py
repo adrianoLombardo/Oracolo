@@ -33,8 +33,7 @@ def test_history_summary_is_passed_to_model():
     conv.push_user("ciao")
     conv.push_assistant("salve")
     conv.push_user("come va?")
-    history = conv.messages_for_llm()
-    assert history[0]["role"] == "system"  # summary present
+    assert conv.messages[0]["role"] == "system"  # summary present
     client = DummyClient()
     oracle_answer(
         question="prossima?",
@@ -42,7 +41,7 @@ def test_history_summary_is_passed_to_model():
         client=client,
         llm_model="m",
         style_prompt="",
-        history=history,
+        conv=conv,
     )
     _, _, messages = client.responses.called_with
     assert messages[0]["role"] == "system"
