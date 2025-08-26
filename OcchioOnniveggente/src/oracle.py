@@ -13,21 +13,24 @@ import asyncio
 import csv
 import json
 import logging
+import os
 import random
 from datetime import datetime
 from pathlib import Path
 from threading import Event
 from typing import Any, AsyncGenerator, Callable, ClassVar, Dict, Iterable, Iterator, List, Tuple
+import requests
 
 from langdetect import LangDetectException, detect  # type: ignore
 
-from .conversation import ConversationManager
+from .conversation import ConversationManager, ChatState
 from .retrieval import Question, load_questions, Context
 from .event_bus import event_bus
 from .service_container import container
 
 
 logger = logging.getLogger(__name__)
+API_URL = os.getenv("ORACOLO_API_URL")
 
 # ---------------------------------------------------------------------------
 # Question dataset utilities
@@ -272,11 +275,26 @@ def oracle_answer(
         event_bus.publish("response_ready", msg)
         return msg, []
 
+    if API_URL:
+        resp = requests.post(
+            f"{API_URL}/chat",
+            json={"message": question},
+            timeout=30,
+        )
+        resp.raise_for_status()
+        ans = resp.json().get("response", "")
+        event_bus.publish("response_ready", ans)
+        if conv:
+            conv.push_user(question)
+            conv.push_assistant(ans)
+        return ans, context or []
+
     history = conv.messages_for_llm() if conv else None
     msgs = _build_messages(question, context, history)
     if conv:
         conv.push_user(question)
     instr = _build_instructions(lang_hint, context, style_prompt, mode, policy_prompt)
+    chat_state = conv.chat if conv else None
 
     if stream and hasattr(client.responses, "with_streaming_response"):
         text = ""
@@ -290,8 +308,8 @@ def oracle_answer(
                 if on_token:
                     on_token(delta)
 
-        if chat:
-            chat.push_assistant(text)
+        if chat_state:
+            chat_state.push_assistant(text)
         event_bus.publish("response_ready", text)
 
         if conv:
@@ -302,8 +320,8 @@ def oracle_answer(
     resp = client.responses.create(model=llm_model, instructions=instr, input=msgs)
     ans = getattr(resp, "output_text", "")
 
-    if chat:
-        chat.push_assistant(ans)
+    if chat_state:
+        chat_state.push_assistant(ans)
     event_bus.publish("response_ready", ans)
 
     if conv:
@@ -365,6 +383,21 @@ async def oracle_answer_stream(
     conv: ConversationManager | None = None,
 ) -> AsyncGenerator[Tuple[str, bool], None]:
     """Async generator yielding response chunks and completion flag."""
+    if API_URL:
+        resp = requests.post(
+            f"{API_URL}/chat",
+            json={"message": question},
+            timeout=30,
+        )
+        resp.raise_for_status()
+        text = resp.json().get("response", "")
+        event_bus.publish("response_ready", text)
+        if conv:
+            conv.push_user(question)
+            conv.push_assistant(text)
+        yield text, True
+        return
+
     client = client or container.llm_client()
     llm_model = llm_model or container.settings.openai.llm_model
 
@@ -376,6 +409,7 @@ async def oracle_answer_stream(
     stream = client.responses.with_streaming_response.create(
         model=llm_model, instructions=instr, input=msgs
     )
+    chat_state = conv.chat if conv else None
     text = ""
     for evt in stream:
         if getattr(evt, "type", "") == "response.output_text.delta":
@@ -383,8 +417,8 @@ async def oracle_answer_stream(
             text += delta
             yield delta, False
 
-    if chat:
-        chat.push_assistant(text)
+    if chat_state:
+        chat_state.push_assistant(text)
     event_bus.publish("response_ready", text)
 
     if conv:
@@ -426,8 +460,9 @@ def stream_generate(
                 text += delta
                 yield delta
 
-        if chat:
-            chat.push_assistant(text)
+        chat_state = conv.chat if conv else None
+        if chat_state:
+            chat_state.push_assistant(text)
         event_bus.publish("response_ready", text)
 
         if conv:
@@ -527,32 +562,29 @@ async def synthesize_async(
 # ---------------------------------------------------------------------------
 
 async def transcribe(
-
     audio_path: Path,
     client: Any | None = None,
     model: str | None = None,
     *,
     chat: ChatState | None = None,
-
-    audio_path: Path, client: Any, model: str, *, conv: ConversationManager | None = None
-
+    conv: ConversationManager | None = None,
 ) -> str:
     """Best effort transcription with coarse error handling."""
-
 
     if client is None:
         stt = container.speech_to_text()
         text = await asyncio.to_thread(stt.transcribe, audio_path)
         if chat:
             chat.push_user(text)
+        if conv:
+            conv.push_user(text)
         return text
 
-    ``AsyncOpenAI`` removed the ``client.transcribe`` shortcut in favour of the
-    ``audio.transcriptions.create`` endpoint.  The helper now supports both
-    calling conventions for compatibility with older clients used in the tests.
-    When ``conv`` is provided the transcribed text is appended to it as a user
-    message.
-    """
+    # ``AsyncOpenAI`` removed the ``client.transcribe`` shortcut in favour of
+    # the ``audio.transcriptions.create`` endpoint. The helper now supports both
+    # calling conventions for compatibility with older clients used in the tests.
+    # When ``conv`` is provided the transcribed text is appended to it as a user
+    # message.
 
 
     try:
@@ -601,15 +633,11 @@ async def transcribe(
 
 
 async def fast_transcribe(
-
     audio_path: Path,
     client: Any | None = None,
     model: str | None = None,
     *,
-    chat: ChatState | None = None,
-
-    audio_path: Path, client: Any, model: str, *, conv: ConversationManager | None = None
-
+    conv: ConversationManager | None = None,
 ) -> str:
     """Alias of :func:`transcribe` maintained for backwards compatibility."""
 

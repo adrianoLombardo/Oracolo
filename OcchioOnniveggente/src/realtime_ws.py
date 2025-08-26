@@ -1,18 +1,30 @@
 # src/realtime_ws.py
+"""Minimal WebSocket client for OpenAI's realtime API.
+
+This helper is primarily used for manual experiments.  The function now pulls a
+shared :class:`ConversationManager` and an asynchronous queue from the service
+container so that messages received from the websocket are funnelled through the
+same backend used by the HTTP gateway.
 """
-Starter per Realtime API via WebSocket (ASR+TTS low-latency).
-Non è integrato nel main loop; usalo per prove e poi lo innestiamo.
-"""
+
 import asyncio, json, os, sys
 import websockets
 
 from src.config import get_openai_api_key
+from .service_container import container
 
 REALTIME_MODEL = os.getenv("REALTIME_MODEL", "gpt-4o-realtime-preview")
 WS_URL = f"wss://api.openai.com/v1/realtime?model={REALTIME_MODEL}"
 
 
-async def run(api_key: str):
+async def run(
+    api_key: str,
+    *,
+    conv=None,
+    queue: asyncio.Queue | None = None,
+):
+    conv = conv or container.conversation_manager
+    queue = queue or container.message_queue
     async with websockets.connect(
         WS_URL,
         extra_headers={
@@ -23,10 +35,17 @@ async def run(api_key: str):
         ping_interval=20,
         ping_timeout=20,
     ) as ws:
-        # esempio: manda un “response.create” (solo testo)
-        await ws.send(json.dumps({"type": "response.create", "response": {"instructions":"Say hello from realtime."}}))
+        await ws.send(
+            json.dumps(
+                {
+                    "type": "response.create",
+                    "response": {"instructions": "Say hello from realtime."},
+                }
+            )
+        )
         while True:
             msg = await ws.recv()
+            await queue.put(msg)
             print(msg)
 
 

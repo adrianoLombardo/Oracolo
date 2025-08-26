@@ -10,9 +10,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Any
+import asyncio
 
 from .audio import SpeechToText, TextToSpeech, LocalSpeechToText, LocalTextToSpeech
 from .openai_async import LLMClient, OpenAILLMClient
+from .conversation import ConversationManager
 
 import atexit
 
@@ -47,6 +49,12 @@ class ServiceContainer:
     ui_state: UIState = field(default_factory=UIState)
     datastore: Any | None = None
     audio_module: Any | None = None
+    conversation_manager: ConversationManager = field(
+        default_factory=ConversationManager
+    )
+    message_queue: asyncio.Queue[Any] = field(
+        default_factory=asyncio.Queue
+    )
 
     _executor: ProcessPoolExecutor | None = field(default=None, init=False)
     _openai_client: AsyncOpenAI | None = field(default=None, init=False)
