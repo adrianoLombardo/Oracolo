@@ -173,6 +173,10 @@ class PersonaConfig(BaseModel):
 class Settings(BaseModel):
     debug: bool = False
     stt_backend: Literal["openai", "whisper"] = "openai"
+    # Selettori dinamici dei provider per i servizi core
+    stt_provider: str = "local"
+    tts_provider: str = "local"
+    llm_provider: str = "openai"
     wakeword: Optional[str] = None
     openai: OpenAIConfig = OpenAIConfig()
     compute: ComputeConfig = ComputeConfig()

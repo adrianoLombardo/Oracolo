@@ -110,3 +110,28 @@ def shutdown() -> None:  # pragma: no cover - compatibility stub
     """Previously closed the thread pool; now a no-op for compatibility."""
     return None
 
+
+from typing import Protocol, Any
+
+
+class LLMClient(Protocol):
+    """Minimal interface for language model clients."""
+
+    responses: Any
+
+
+class _ResponseWrapper:
+    def __init__(self, client: Any):
+        self._client = client
+
+    def create(self, **kwargs: Any) -> Any:
+        return run(self._client.responses.create, **kwargs)
+
+
+class OpenAILLMClient:
+    """Wrapper exposing a blocking interface for ``AsyncOpenAI``."""
+
+    def __init__(self, client: Any):
+        self.responses = _ResponseWrapper(client)
+
+
