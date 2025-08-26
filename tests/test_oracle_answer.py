@@ -1,9 +1,10 @@
+import json
 import sys
 from pathlib import Path
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
-from OcchioOnniveggente.src.oracle import oracle_answer
+from OcchioOnniveggente.src.oracle import answer_and_log_followup, oracle_answer
 
 
 class DummyResp:
@@ -44,3 +45,20 @@ def test_oracle_answer_returns_response_and_context():
     assert "Rispondi in italiano." in instructions
     assert "Rispondi SOLO usando i passaggi" in instructions
     assert messages[-1] == {"role": "user", "content": "Che cos'è?"}
+
+
+def test_answer_and_log_followup(tmp_path: Path):
+    client = DummyClient()
+    qdata = {"domanda": "Chi sei?", "follow_up": "Vuoi continuare?"}
+    log = tmp_path / "log.jsonl"
+    answer, follow_up = answer_and_log_followup(
+        qdata, client, "test-model", log, session_id="sess-1"
+    )
+    assert answer == "risposta"
+    assert follow_up == "Vuoi continuare?"
+    lines = log.read_text(encoding="utf-8").strip().splitlines()
+    assert len(lines) == 2
+    first, second = [json.loads(l) for l in lines]
+    assert first["question"] == "Chi sei?"
+    assert second["question"] == "Vuoi continuare?"
+    assert second["answer"] == ""

@@ -319,6 +319,13 @@ All'avvio il client carica le domande da `data/domande_oracolo.json`,
 separandole tra **buone** e **off_topic**. Quando una nuova sessione inizia,
 viene scelta una domanda buona casuale e letta tramite sintesi vocale locale.
 Dopo ogni risposta valida l'Oracolo propone una micro‑domanda di follow‑up.
+Esempio:
+
+```
+Domanda: "Chi sei?"
+Risposta: "Sono un oracolo virtuale."
+Follow-up: "Vuoi sapere come funziono?"
+```
 Se la trascrizione dell'utente corrisponde a una voce off-topic, il sistema
 risponde con un cortese rifiuto generato dall'Oracolo e non propone follow‑up.
 
