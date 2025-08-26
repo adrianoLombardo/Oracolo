@@ -6,6 +6,7 @@ import yaml
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Dict, Iterable, Optional, Any
+from enum import Enum
 import numpy as np
 
 
@@ -54,6 +55,27 @@ class Question:
     domanda: str
     type: str
     follow_up: str | None = None
+
+
+class Context(str, Enum):
+    """Enumeration of thematic contexts for questions datasets."""
+
+    GENERIC = "generic"
+    CONFERENZA_DIDATTICA = "conferenza_didattica"
+    MOSTRA = "mostra"
+
+    @classmethod
+    def from_str(cls, value: str) -> "Context":
+        """Return the matching ``Context`` for ``value`` (case insensitive).
+
+        Unknown values default to :data:`Context.GENERIC` so that additional
+        contexts can be introduced without breaking existing callers.
+        """
+
+        try:
+            return cls(value.lower())
+        except ValueError:
+            return cls.GENERIC
 
 
 def _simple_sentences(txt: str) -> List[str]:
@@ -117,37 +139,31 @@ def _load_index(path: str | Path) -> List[Dict]:
 
 
 
-def load_questions(path: str | Path | None = None) -> Dict[str, List[Question]]:
-    """Read the entire questions dataset and group entries by category.
+def load_questions(path: str | Path | None = None) -> Dict[Context, Dict[str, List[Question]]]:
+    """Read question datasets and group entries by context and category.
+
+    The function accepts either a directory containing one JSON file per
+    ``Context`` or a single JSON file.  When a list of questions is provided,
+    it is associated with :data:`Context.GENERIC`.  When a dictionary is found
+    at the top level, its keys are interpreted as context names mapping to
+    lists of questions.
 
     Parameters
     ----------
     path:
-        Optional location of ``domande_oracolo.json``. When ``None`` the file
-        is searched relative to the project root.
+        Location of the questions dataset.  When ``None`` the ``data`` directory
+        of the project is inspected.
 
     Returns
     -------
     dict
-        Mapping each question ``type`` to the list of question objects.
+        ``Context`` to ``{category -> [Question, ...]}`` mapping.
     """
 
-    p = (
-        Path(path)
-        if path is not None
-        else Path(__file__).resolve().parent.parent / "data" / "domande_oracolo.json"
-    )
-    if not p.exists():
-        logger.warning("Questions file not found: %s", p)
-        return {}
-    try:
-        data = json.loads(p.read_text(encoding="utf-8"))
-    except Exception:
-        logger.exception("Invalid JSON in questions file: %s", p)
-        return {}
+    root = Path(path) if path is not None else Path(__file__).resolve().parent.parent / "data"
 
-    categories: Dict[str, List[Question]] = {}
-    if isinstance(data, list):
+    def _parse_list(data: list) -> Dict[str, List[Question]]:
+        categories: Dict[str, List[Question]] = {}
         for idx, item in enumerate(data):
             if not isinstance(item, dict):
                 logger.warning("Invalid question at index %s: %r", idx, item)
@@ -166,8 +182,52 @@ def load_questions(path: str | Path | None = None) -> Dict[str, List[Question]]:
             categories.setdefault(cat, []).append(
                 Question(domanda=domanda, type=cat, follow_up=follow_up)
             )
+        return categories
 
-    return categories
+    result: Dict[Context, Dict[str, List[Question]]] = {}
+
+    if root.is_dir():
+        files = sorted(root.glob("*.json"))
+        if not files:
+            logger.warning("No question files found in directory: %s", root)
+        for f in files:
+            try:
+                data = json.loads(f.read_text(encoding="utf-8"))
+            except Exception:
+                logger.exception("Invalid JSON in questions file: %s", f)
+                continue
+            ctx = Context.from_str(f.stem)
+            if isinstance(data, list):
+                result[ctx] = _parse_list(data)
+            elif isinstance(data, dict):
+                # Nested contexts inside the file
+                for key, items in data.items():
+                    if isinstance(items, list):
+                        result[Context.from_str(key)] = _parse_list(items)
+            else:
+                logger.warning("Unsupported structure in %s", f)
+        return result
+
+    if not root.exists():
+        logger.warning("Questions file not found: %s", root)
+        return result
+
+    try:
+        data = json.loads(root.read_text(encoding="utf-8"))
+    except Exception:
+        logger.exception("Invalid JSON in questions file: %s", root)
+        return result
+
+    if isinstance(data, dict):
+        for ctx_name, items in data.items():
+            if isinstance(items, list):
+                result[Context.from_str(ctx_name)] = _parse_list(items)
+    elif isinstance(data, list):
+        result[Context.GENERIC] = _parse_list(data)
+    else:
+        logger.warning("Unsupported structure in %s", root)
+
+    return result
 
 
 

@@ -17,38 +17,40 @@ import time
 import random
 from threading import Event
 from pathlib import Path
-from typing import Any, AsyncGenerator, Callable, Iterable, Iterator, List, Tuple
+from typing import Any, AsyncGenerator, Callable, Iterable, Iterator, List, Tuple, Dict
 
 from langdetect import LangDetectException, detect
 
 from .utils.error_handler import handle_error
-from .retrieval import Question, load_questions
+from .retrieval import Question, load_questions, Context
 
 
-_QUESTIONS_CACHE: dict[str, List[dict[str, Any]]] | None = None
+_QUESTIONS_CACHE: dict[Context, Dict[str, List[Question]]] | None = None
 _QUESTIONS_MTIME: float | None = None
 
 
-def get_questions() -> dict[str, List[dict[str, Any]]]:
-    """Return the questions dataset reloading it when the file changes."""
+def get_questions() -> dict[Context, Dict[str, List[Question]]]:
+    """Return the questions dataset reloading it when any file changes."""
 
     global _QUESTIONS_CACHE, _QUESTIONS_MTIME
-    path = Path(__file__).resolve().parent.parent / "data" / "domande_oracolo.json"
-    mtime = path.stat().st_mtime if path.exists() else None
+    data_dir = Path(__file__).resolve().parent.parent / "data"
+    json_files = list(data_dir.glob("*.json"))
+    mtime = max((f.stat().st_mtime for f in json_files), default=None)
 
     if _QUESTIONS_CACHE is None or mtime != _QUESTIONS_MTIME:
-        _QUESTIONS_CACHE = load_questions(path)
+        _QUESTIONS_CACHE = load_questions(data_dir)
         _QUESTIONS_MTIME = mtime
 
     return _QUESTIONS_CACHE or {}
 
-QUESTIONS_BY_TYPE: dict[str, List[Question]] = load_questions()
 
-# Track questions already asked for each category during the current session.
-# Keys are category names (lowercase) and values are the indexes of questions
-# that have been served.  Once all questions in a category have been used the
-# set is cleared to start a new cycle.
-_USED_QUESTIONS: dict[str, set[int]] = {}
+QUESTIONS_BY_CONTEXT: dict[Context, Dict[str, List[Question]]] = get_questions()
+
+# Track questions already asked for each category in a context during the
+# current session.  The key is the pair ``(context, category)`` and the value is
+# the set of question indexes already served.  Once all questions for a pair are
+# used the set is cleared to start a new cycle.
+_USED_QUESTIONS: dict[tuple[Context, str], set[int]] = {}
 
 
 
@@ -450,29 +452,25 @@ def stream_generate(
 # ---------------------------------------------------------------------------
 
 
+def random_question(category: str, context: Context = Context.GENERIC) -> Question | None:
+    """Return a random question from ``category`` within ``context``.
 
-def random_question(category: str) -> Question | None:
-    """Return a random question object from the desired ``category``."""
-
-
-    qs = get_questions().get(category.lower())
-
-def random_question(category: str) -> dict[str, str] | None:
-    """Return a random question from ``category`` without immediate repeats.
-
-    Questions already returned are tracked per category.  Once all questions in
-    a category have been used the tracking set is cleared, allowing the cycle to
-    restart.
+    Questions already returned are tracked per ``(context, category)`` pair to
+    avoid immediate repeats.  Once all questions for the pair have been used
+    the tracking set is cleared so that the cycle can restart.
     """
 
-
     cat = category.lower()
-    qs = QUESTIONS_BY_TYPE.get(cat)
+    ctx_questions = get_questions().get(context)
+    if not ctx_questions:
+        return None
 
+    qs = ctx_questions.get(cat)
     if not qs:
         return None
 
-    used = _USED_QUESTIONS.setdefault(cat, set())
+    key = (context, cat)
+    used = _USED_QUESTIONS.setdefault(key, set())
     if len(used) == len(qs):
         used.clear()
 
@@ -483,7 +481,7 @@ def random_question(category: str) -> dict[str, str] | None:
 
 
 def answer_with_followup(
-    question_data: Question,
+    question_data: Question | dict[str, str],
     client: Any,
     llm_model: str,
     *,
@@ -491,14 +489,19 @@ def answer_with_followup(
 ) -> tuple[str, str]:
     """Generate an answer for ``question_data`` and return its follow-up."""
 
-    question = question_data.domanda
+    if isinstance(question_data, dict):
+        question = question_data.get("domanda", "")
+        follow_up = question_data.get("follow_up") or ""
+    else:
+        question = question_data.domanda
+        follow_up = question_data.follow_up or ""
+
     answer, _ = oracle_answer(question, lang_hint, client, llm_model, "")
-    follow_up = question_data.follow_up or ""
     return answer, follow_up
 
 
 def answer_and_log_followup(
-    question_data: dict[str, str],
+    question_data: Question | dict[str, str],
     client: Any,
     llm_model: str,
     log_path: Path,
@@ -518,8 +521,13 @@ def answer_and_log_followup(
     answer, follow_up = answer_with_followup(
         question_data, client, llm_model, lang_hint=lang_hint
     )
+    question_text = (
+        question_data.get("domanda", "")
+        if isinstance(question_data, dict)
+        else question_data.domanda
+    )
     append_log(
-        question_data.get("domanda", ""),
+        question_text,
         answer,
         log_path,
         session_id=session_id,
