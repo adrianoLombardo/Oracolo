@@ -450,12 +450,16 @@ def stream_generate(
 
 
 def random_question(category: str) -> Question | None:
+
     """Return a random question from ``category`` without immediate repeats.
 
     Questions already returned are tracked per category.  Once all questions in
     a category have been used the tracking set is cleared, allowing the cycle to
     restart.
     """
+
+    """Return a random question from ``category`` without immediate repeats."""
+
 
     cat = category.lower()
     qs = get_questions().get(cat)
@@ -494,7 +498,11 @@ def answer_with_followup(
 
 
 def answer_and_log_followup(
+
     question_data: Question | dict[str, str],
+=======
+    question_data: Question,
+
     client: Any,
     llm_model: str,
     log_path: Path,
@@ -520,7 +528,11 @@ def answer_and_log_followup(
         else question_data.get("domanda", "")
     )
     append_log(
+
         question,
+
+        question_data.domanda,
+
         answer,
         log_path,
         session_id=session_id,
