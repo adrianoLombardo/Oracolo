@@ -1,1015 +1,1202 @@
 [
   {
-    "domanda": "Quale messaggio ti trasmette l'opera CryptoMadonne?",
+    "id": 1,
+    "domanda": "Qpoetica0",
     "type": "poetica",
-    "follow_up": "In che modo ti ispira?",
-    "opera": "CryptoMadonne",
-    "artista": "Artista Sconosciuto",
-    "location": "museo",
-    "tag": [
-      "CryptoMadonne"
-    ]
-  },
-   {
-    "domanda": "Quale metafora descrive il tuo percorso di vita?",
-    "type": "poetica",
-    "id": 1
-
-
+    "follow_up": "follow 0"
   },
   {
-    "domanda": "Quale metafora descrive il tuo percorso di vita?",
+    "id": 2,
+    "domanda": "Qpoetica1",
     "type": "poetica",
-    "id": 2
+    "follow_up": "follow 1"
   },
   {
-    "domanda": "Se potessi ascoltare il suono dei tuoi sogni, quale melodia sarebbe?",
+    "id": 3,
+    "domanda": "Qpoetica2",
     "type": "poetica",
-    "id": 3
+    "follow_up": "follow 2"
   },
   {
-    "domanda": "Quale colore rappresenta oggi il tuo spirito?",
+    "id": 4,
+    "domanda": "Qpoetica3",
     "type": "poetica",
-    "id": 4
+    "follow_up": "follow 3"
   },
   {
-    "domanda": "Se il tempo fosse un fiume, dove ti trovi lungo il suo corso?",
+    "id": 5,
+    "domanda": "Qpoetica4",
     "type": "poetica",
-    "id": 5
+    "follow_up": "follow 4"
   },
   {
-    "domanda": "Quale immagine racchiude il tuo desiderio più profondo?",
+    "id": 6,
+    "domanda": "Qpoetica5",
     "type": "poetica",
-    "id": 6
+    "follow_up": "follow 5"
   },
   {
-    "domanda": "Se la tua determinazione fosse una costellazione, come la chiameresti?",
+    "id": 7,
+    "domanda": "Qpoetica6",
     "type": "poetica",
-    "id": 7
+    "follow_up": "follow 6"
   },
   {
-    "domanda": "Quale poesia riscriveresti per raccontare l’oggi?",
+    "id": 8,
+    "domanda": "Qpoetica7",
     "type": "poetica",
-    "id": 8
+    "follow_up": "follow 7"
   },
   {
-    "domanda": "Se i tuoi pensieri fossero nuvole, che forme assumerebbero?",
+    "id": 9,
+    "domanda": "Qpoetica8",
     "type": "poetica",
-    "id": 9
+    "follow_up": "follow 8"
   },
   {
-    "domanda": "Quale vento guida la tua vela interiore?",
+    "id": 10,
+    "domanda": "Qpoetica9",
     "type": "poetica",
-    "id": 10
+    "follow_up": "follow 9"
   },
   {
-    "domanda": "Se potessi trasformare una ferita in un fiore, quale sboccerà?",
+    "id": 11,
+    "domanda": "Qpoetica10",
     "type": "poetica",
-    "id": 11
+    "follow_up": "follow 10"
   },
   {
-    "domanda": "Quale ritmo accompagna il battito del tuo cuore in questi giorni?",
+    "id": 12,
+    "domanda": "Qpoetica11",
     "type": "poetica",
-    "id": 12
+    "follow_up": "follow 11"
   },
   {
-    "domanda": "Se la speranza fosse una luce, di quale intensità brillerebbe?",
+    "id": 13,
+    "domanda": "Qpoetica12",
     "type": "poetica",
-    "id": 13
+    "follow_up": "follow 12"
   },
   {
-    "domanda": "Quale paesaggio onirico ti riflette?",
+    "id": 14,
+    "domanda": "Qpoetica13",
     "type": "poetica",
-    "id": 14
+    "follow_up": "follow 13"
   },
   {
-    "domanda": "Se potessi intrecciare le tue esperienze in un tappeto, quali colori dominerebbero?",
+    "id": 15,
+    "domanda": "Qpoetica14",
     "type": "poetica",
-    "id": 15
+    "follow_up": "follow 14"
   },
   {
-    "domanda": "Quale parola vorresti scolpire nel cielo?",
+    "id": 16,
+    "domanda": "Qpoetica15",
     "type": "poetica",
-    "id": 16
+    "follow_up": "follow 15"
   },
   {
-    "domanda": "Se la tua voce avesse un profumo, quale sarebbe?",
+    "id": 17,
+    "domanda": "Qpoetica16",
     "type": "poetica",
-    "id": 17
+    "follow_up": "follow 16"
   },
   {
-    "domanda": "Quale sentiero ti conduce verso la tua montagna interiore?",
+    "id": 18,
+    "domanda": "Qpoetica17",
     "type": "poetica",
-    "id": 18
+    "follow_up": "follow 17"
   },
   {
-    "domanda": "Se il coraggio fosse un animale, quale sarebbe il tuo?",
+    "id": 19,
+    "domanda": "Qpoetica18",
     "type": "poetica",
-    "id": 19
+    "follow_up": "follow 18"
   },
   {
-    "domanda": "Quale immagine fotografica racconta la tua ultima crescita?",
+    "id": 20,
+    "domanda": "Qpoetica19",
     "type": "poetica",
-    "id": 20
+    "follow_up": "follow 19"
   },
   {
-    "domanda": "Se potessi inviare una lettera alla luna, cosa le chiederesti?",
+    "id": 21,
+    "domanda": "Qpoetica20",
     "type": "poetica",
-    "id": 21
+    "follow_up": "follow 20"
   },
   {
-    "domanda": "Quale mare agitato dentro di te cerca riva?",
+    "id": 22,
+    "domanda": "Qpoetica21",
     "type": "poetica",
-    "id": 22
+    "follow_up": "follow 21"
   },
   {
-    "domanda": "Se i tuoi dubbi fossero foglie, da quale albero cadrebbero?",
+    "id": 23,
+    "domanda": "Qpoetica22",
     "type": "poetica",
-    "id": 23
+    "follow_up": "follow 22"
   },
   {
-    "domanda": "Quale trama di stelle descrive le tue speranze?",
+    "id": 24,
+    "domanda": "Qpoetica23",
     "type": "poetica",
-    "id": 24
+    "follow_up": "follow 23"
   },
   {
-    "domanda": "Se potessi dare un titolo poetico alla tua giornata, quale sarebbe?",
+    "id": 25,
+    "domanda": "Qpoetica24",
     "type": "poetica",
-    "id": 25
+    "follow_up": "follow 24"
   },
   {
-    "domanda": "Quale metamorfosi attendi ancora?",
+    "id": 26,
+    "domanda": "Qpoetica25",
     "type": "poetica",
-    "id": 26
+    "follow_up": "follow 25"
   },
   {
-    "domanda": "Se potessi raccogliere i tuoi sogni in un vaso, che profumo emanerebbero?",
+    "id": 27,
+    "domanda": "Qpoetica26",
     "type": "poetica",
-    "id": 27
+    "follow_up": "follow 26"
   },
   {
-    "domanda": "Quale pennello useresti per dipingere l’amicizia?",
+    "id": 28,
+    "domanda": "Qpoetica27",
     "type": "poetica",
-    "id": 28
+    "follow_up": "follow 27"
   },
   {
-    "domanda": "Se il futuro fosse un giardino, quali semi pianteresti oggi?",
+    "id": 29,
+    "domanda": "Qpoetica28",
     "type": "poetica",
-    "id": 29
+    "follow_up": "follow 28"
   },
   {
-    "domanda": "Quale canto della natura ti somiglia?",
+    "id": 30,
+    "domanda": "Qpoetica29",
     "type": "poetica",
-    "id": 30
+    "follow_up": "follow 29"
   },
   {
-    "domanda": "Se la tua saggezza fosse un fiume, da dove scorrerebbe?",
+    "id": 31,
+    "domanda": "Qpoetica30",
     "type": "poetica",
-    "id": 31
+    "follow_up": "follow 30"
   },
   {
-    "domanda": "Quale linea del palmo della mano vorresti riscrivere?",
+    "id": 32,
+    "domanda": "Qpoetica31",
     "type": "poetica",
-    "id": 32
+    "follow_up": "follow 31"
   },
   {
-    "domanda": "Se potessi abbracciare un ricordo con una poesia, quale sceglieresti?",
+    "id": 33,
+    "domanda": "Qpoetica32",
     "type": "poetica",
-    "id": 33
+    "follow_up": "follow 32"
   },
   {
-    "domanda": "Quale forma geometrica rende il tuo pensiero più armonioso?",
+    "id": 34,
+    "domanda": "Qpoetica33",
     "type": "poetica",
-    "id": 34
+    "follow_up": "follow 33"
   },
   {
-    "domanda": "Se il destino fosse un telaio, quali fili intrecceresti?",
+    "id": 35,
+    "domanda": "Qpoetica34",
     "type": "poetica",
-    "id": 35
+    "follow_up": "follow 34"
   },
   {
-    "domanda": "Quale luce ti accompagna nei momenti bui?",
+    "id": 36,
+    "domanda": "Qpoetica35",
     "type": "poetica",
-    "id": 36
+    "follow_up": "follow 35"
   },
   {
-    "domanda": "Se potessi danzare con una stagione, quale sceglieresti?",
+    "id": 37,
+    "domanda": "Qpoetica36",
     "type": "poetica",
-    "id": 37
+    "follow_up": "follow 36"
   },
   {
-    "domanda": "Quale simbolo incarna la tua resilienza?",
+    "id": 38,
+    "domanda": "Qpoetica37",
     "type": "poetica",
-    "id": 38
+    "follow_up": "follow 37"
   },
   {
-    "domanda": "Se avessi un totem che parla di te, come si esprimerebbe?",
+    "id": 39,
+    "domanda": "Qpoetica38",
     "type": "poetica",
-    "id": 39
+    "follow_up": "follow 38"
   },
   {
-    "domanda": "Quale verso antico vorresti reinventare?",
+    "id": 40,
+    "domanda": "Qpoetica39",
     "type": "poetica",
-    "id": 40
+    "follow_up": "follow 39"
   },
   {
-    "domanda": "Se le tue gioie fossero stelle cadenti, quante ne avresti visto?",
+    "id": 41,
+    "domanda": "Qpoetica40",
     "type": "poetica",
-    "id": 41
+    "follow_up": "follow 40"
   },
   {
-    "domanda": "Quale eco risuona quando pronunciano il tuo nome?",
+    "id": 42,
+    "domanda": "Qpoetica41",
     "type": "poetica",
-    "id": 42
+    "follow_up": "follow 41"
   },
   {
-    "domanda": "Se potessi trasformare un sogno in mosaico, quali tessere useresti?",
+    "id": 43,
+    "domanda": "Qpoetica42",
     "type": "poetica",
-    "id": 43
+    "follow_up": "follow 42"
   },
   {
-    "domanda": "Quale creatura fantastica incarna la tua curiosità?",
+    "id": 44,
+    "domanda": "Qpoetica43",
     "type": "poetica",
-    "id": 44
+    "follow_up": "follow 43"
   },
   {
-    "domanda": "Se la tua vita fosse una sinfonia, che strumento saresti?",
+    "id": 45,
+    "domanda": "Qpoetica44",
     "type": "poetica",
-    "id": 45
+    "follow_up": "follow 44"
   },
   {
-    "domanda": "Quale aroma descrive la tua memoria più dolce?",
+    "id": 46,
+    "domanda": "Qpoetica45",
     "type": "poetica",
-    "id": 46
+    "follow_up": "follow 45"
   },
   {
-    "domanda": "Se potessi camminare su una nuvola, cosa diresti al mondo sotto?",
+    "id": 47,
+    "domanda": "Qpoetica46",
     "type": "poetica",
-    "id": 47
+    "follow_up": "follow 46"
   },
   {
-    "domanda": "Quale sorgente ti disseta di ispirazione?",
+    "id": 48,
+    "domanda": "Qpoetica47",
     "type": "poetica",
-    "id": 48
+    "follow_up": "follow 47"
   },
   {
-    "domanda": "Se avessi un cielo personale, quali costellazioni inventeresti?",
+    "id": 49,
+    "domanda": "Qpoetica48",
     "type": "poetica",
-    "id": 49
+    "follow_up": "follow 48"
   },
   {
-    "domanda": "Quale domanda vorresti incidere nel vento?",
+    "id": 50,
+    "domanda": "Qpoetica49",
     "type": "poetica",
-    "id": 50
+    "follow_up": "follow 49"
   },
   {
-    "domanda": "Quali strategie usi per organizzare il tuo tempo?",
+    "id": 51,
+    "domanda": "Qdidattica0",
     "type": "didattica",
-    "id": 51
+    "follow_up": "follow 0"
   },
   {
-    "domanda": "Come valuti il successo di un progetto personale?",
+    "id": 52,
+    "domanda": "Qdidattica1",
     "type": "didattica",
-    "id": 52
+    "follow_up": "follow 1"
   },
   {
-    "domanda": "Qual è il metodo più efficace che hai sperimentato per apprendere una nuova abilità?",
+    "id": 53,
+    "domanda": "Qdidattica2",
     "type": "didattica",
-    "id": 53
+    "follow_up": "follow 2"
   },
   {
-    "domanda": "Quali passi compi per risolvere un conflitto?",
+    "id": 54,
+    "domanda": "Qdidattica3",
     "type": "didattica",
-    "id": 54
+    "follow_up": "follow 3"
   },
   {
-    "domanda": "Come definisci un obiettivo misurabile?",
+    "id": 55,
+    "domanda": "Qdidattica4",
     "type": "didattica",
-    "id": 55
+    "follow_up": "follow 4"
   },
   {
-    "domanda": "Quale processo segui per prendere decisioni importanti?",
+    "id": 56,
+    "domanda": "Qdidattica5",
     "type": "didattica",
-    "id": 56
+    "follow_up": "follow 5"
   },
   {
-    "domanda": "Qual è la tua tecnica preferita per memorizzare informazioni?",
+    "id": 57,
+    "domanda": "Qdidattica6",
     "type": "didattica",
-    "id": 57
+    "follow_up": "follow 6"
   },
   {
-    "domanda": "Come ti prepari a una presentazione pubblica?",
+    "id": 58,
+    "domanda": "Qdidattica7",
     "type": "didattica",
-    "id": 58
+    "follow_up": "follow 7"
   },
   {
-    "domanda": "Quali criteri utilizzi per valutare la qualità di una fonte informativa?",
+    "id": 59,
+    "domanda": "Qdidattica8",
     "type": "didattica",
-    "id": 59
+    "follow_up": "follow 8"
   },
   {
-    "domanda": "Come strutturi una sessione di studio produttiva?",
+    "id": 60,
+    "domanda": "Qdidattica9",
     "type": "didattica",
-    "id": 60
+    "follow_up": "follow 9"
   },
   {
-    "domanda": "Quali strumenti digitali ti aiutano nella produttività?",
+    "id": 61,
+    "domanda": "Qdidattica10",
     "type": "didattica",
-    "id": 61
+    "follow_up": "follow 10"
   },
   {
-    "domanda": "Come bilanci teoria e pratica quando impari qualcosa di nuovo?",
+    "id": 62,
+    "domanda": "Qdidattica11",
     "type": "didattica",
-    "id": 62
+    "follow_up": "follow 11"
   },
   {
-    "domanda": "Quale metodo usi per monitorare i progressi nei tuoi progetti?",
+    "id": 63,
+    "domanda": "Qdidattica12",
     "type": "didattica",
-    "id": 63
+    "follow_up": "follow 12"
   },
   {
-    "domanda": "Come affronti la risoluzione di un problema complesso?",
+    "id": 64,
+    "domanda": "Qdidattica13",
     "type": "didattica",
-    "id": 64
+    "follow_up": "follow 13"
   },
   {
-    "domanda": "Quali abitudini supportano il tuo apprendimento continuo?",
+    "id": 65,
+    "domanda": "Qdidattica14",
     "type": "didattica",
-    "id": 65
+    "follow_up": "follow 14"
   },
   {
-    "domanda": "Come elabori un piano d’azione dopo aver definito un obiettivo?",
+    "id": 66,
+    "domanda": "Qdidattica15",
     "type": "didattica",
-    "id": 66
+    "follow_up": "follow 15"
   },
   {
-    "domanda": "Qual è la tua strategia per gestire le distrazioni?",
+    "id": 67,
+    "domanda": "Qdidattica16",
     "type": "didattica",
-    "id": 67
+    "follow_up": "follow 16"
   },
   {
-    "domanda": "Come sviluppi una competenza partendo da zero?",
+    "id": 68,
+    "domanda": "Qdidattica17",
     "type": "didattica",
-    "id": 68
+    "follow_up": "follow 17"
   },
   {
-    "domanda": "Quali domande ti poni per valutare criticamente un’idea?",
+    "id": 69,
+    "domanda": "Qdidattica18",
     "type": "didattica",
-    "id": 69
+    "follow_up": "follow 18"
   },
   {
-    "domanda": "Come utilizzi il feedback per migliorare?",
+    "id": 70,
+    "domanda": "Qdidattica19",
     "type": "didattica",
-    "id": 70
+    "follow_up": "follow 19"
   },
   {
-    "domanda": "Quali passaggi segui per scrivere un saggio efficace?",
+    "id": 71,
+    "domanda": "Qdidattica20",
     "type": "didattica",
-    "id": 71
+    "follow_up": "follow 20"
   },
   {
-    "domanda": "Come organizzi una riunione produttiva?",
+    "id": 72,
+    "domanda": "Qdidattica21",
     "type": "didattica",
-    "id": 72
+    "follow_up": "follow 21"
   },
   {
-    "domanda": "Quali tecniche di brainstorming trovi più efficaci?",
+    "id": 73,
+    "domanda": "Qdidattica22",
     "type": "didattica",
-    "id": 73
+    "follow_up": "follow 22"
   },
   {
-    "domanda": "Come gestisci le priorità quando tutto sembra urgente?",
+    "id": 74,
+    "domanda": "Qdidattica23",
     "type": "didattica",
-    "id": 74
+    "follow_up": "follow 23"
   },
   {
-    "domanda": "Quali misure adotti per evitare il burnout?",
+    "id": 75,
+    "domanda": "Qdidattica24",
     "type": "didattica",
-    "id": 75
+    "follow_up": "follow 24"
   },
   {
-    "domanda": "Come scegli le metriche per misurare un risultato?",
+    "id": 76,
+    "domanda": "Qdidattica25",
     "type": "didattica",
-    "id": 76
+    "follow_up": "follow 25"
   },
   {
-    "domanda": "Quale approccio segui nel problem solving scientifico?",
+    "id": 77,
+    "domanda": "Qdidattica26",
     "type": "didattica",
-    "id": 77
+    "follow_up": "follow 26"
   },
   {
-    "domanda": "Come suddividi un grande progetto in compiti gestibili?",
+    "id": 78,
+    "domanda": "Qdidattica27",
     "type": "didattica",
-    "id": 78
+    "follow_up": "follow 27"
   },
   {
-    "domanda": "Quali criteri usi per definire una buona fonte bibliografica?",
+    "id": 79,
+    "domanda": "Qdidattica28",
     "type": "didattica",
-    "id": 79
+    "follow_up": "follow 28"
   },
   {
-    "domanda": "Come testi accuratamente una nuova idea prima di implementarla?",
+    "id": 80,
+    "domanda": "Qdidattica29",
     "type": "didattica",
-    "id": 80
+    "follow_up": "follow 29"
   },
   {
-    "domanda": "Quali strumenti usi per la gestione delle versioni di un documento?",
+    "id": 81,
+    "domanda": "Qdidattica30",
     "type": "didattica",
-    "id": 81
+    "follow_up": "follow 30"
   },
   {
-    "domanda": "Come pianifichi l’apprendimento di una lingua straniera?",
+    "id": 82,
+    "domanda": "Qdidattica31",
     "type": "didattica",
-    "id": 82
+    "follow_up": "follow 31"
   },
   {
-    "domanda": "Quali passaggi segui per preparare un esame?",
+    "id": 83,
+    "domanda": "Qdidattica32",
     "type": "didattica",
-    "id": 83
+    "follow_up": "follow 32"
   },
   {
-    "domanda": "Come valuti l’efficacia di un piano di allenamento?",
+    "id": 84,
+    "domanda": "Qdidattica33",
     "type": "didattica",
-    "id": 84
+    "follow_up": "follow 33"
   },
   {
-    "domanda": "Quale metodo usi per archiviare documenti digitali?",
+    "id": 85,
+    "domanda": "Qdidattica34",
     "type": "didattica",
-    "id": 85
+    "follow_up": "follow 34"
   },
   {
-    "domanda": "Come definisci la portata di un progetto?",
+    "id": 86,
+    "domanda": "Qdidattica35",
     "type": "didattica",
-    "id": 86
+    "follow_up": "follow 35"
   },
   {
-    "domanda": "Quali domande ti fai prima di delegare un compito?",
+    "id": 87,
+    "domanda": "Qdidattica36",
     "type": "didattica",
-    "id": 87
+    "follow_up": "follow 36"
   },
   {
-    "domanda": "Come gestisci la revisione di un testo complesso?",
+    "id": 88,
+    "domanda": "Qdidattica37",
     "type": "didattica",
-    "id": 88
+    "follow_up": "follow 37"
   },
   {
-    "domanda": "Quali criteri segui per stabilire scadenze realistiche?",
+    "id": 89,
+    "domanda": "Qdidattica38",
     "type": "didattica",
-    "id": 89
+    "follow_up": "follow 38"
   },
   {
-    "domanda": "Come ti assicuri che un team comprenda gli obiettivi comuni?",
+    "id": 90,
+    "domanda": "Qdidattica39",
     "type": "didattica",
-    "id": 90
+    "follow_up": "follow 39"
   },
   {
-    "domanda": "Quale tecnica di notetaking preferisci e perché?",
+    "id": 91,
+    "domanda": "Qdidattica40",
     "type": "didattica",
-    "id": 91
+    "follow_up": "follow 40"
   },
   {
-    "domanda": "Come ti prepari a un colloquio di lavoro?",
+    "id": 92,
+    "domanda": "Qdidattica41",
     "type": "didattica",
-    "id": 92
+    "follow_up": "follow 41"
   },
   {
-    "domanda": "Quali elementi consideri per realizzare un budget personale?",
+    "id": 93,
+    "domanda": "Qdidattica42",
     "type": "didattica",
-    "id": 93
+    "follow_up": "follow 42"
   },
   {
-    "domanda": "Come affronti l’analisi dei dati in un progetto?",
+    "id": 94,
+    "domanda": "Qdidattica43",
     "type": "didattica",
-    "id": 94
+    "follow_up": "follow 43"
   },
   {
-    "domanda": "Quali esercizi pratichi per migliorare la concentrazione?",
+    "id": 95,
+    "domanda": "Qdidattica44",
     "type": "didattica",
-    "id": 95
+    "follow_up": "follow 44"
   },
   {
-    "domanda": "Come crei un ambiente di studio privo di distrazioni?",
+    "id": 96,
+    "domanda": "Qdidattica45",
     "type": "didattica",
-    "id": 96
+    "follow_up": "follow 45"
   },
   {
-    "domanda": "Quali domande fai per verificare la comprensione di un concetto?",
+    "id": 97,
+    "domanda": "Qdidattica46",
     "type": "didattica",
-    "id": 97
+    "follow_up": "follow 46"
   },
   {
-    "domanda": "Come affronti la revisione dopo un insuccesso?",
+    "id": 98,
+    "domanda": "Qdidattica47",
     "type": "didattica",
-    "id": 98
+    "follow_up": "follow 47"
   },
   {
-    "domanda": "Quali strategie usi per mantenere la motivazione a lungo termine?",
+    "id": 99,
+    "domanda": "Qdidattica48",
     "type": "didattica",
-    "id": 99
+    "follow_up": "follow 48"
   },
   {
-    "domanda": "Come pianifichi un percorso di apprendimento autodidatta?",
+    "id": 100,
+    "domanda": "Qdidattica49",
     "type": "didattica",
-    "id": 100
+    "follow_up": "follow 49"
   },
   {
-    "domanda": "Quale profumo ti riporta istantaneamente all’infanzia?",
+    "id": 101,
+    "domanda": "Qevocativa0",
     "type": "evocativa",
-    "id": 101
+    "follow_up": "follow 0"
   },
   {
-    "domanda": "Che sensazione provi quando cammini scalzo sull’erba bagnata?",
+    "id": 102,
+    "domanda": "Qevocativa1",
     "type": "evocativa",
-    "id": 102
+    "follow_up": "follow 1"
   },
   {
-    "domanda": "Qual è il suono che ti calma all’istante?",
+    "id": 103,
+    "domanda": "Qevocativa2",
     "type": "evocativa",
-    "id": 103
+    "follow_up": "follow 2"
   },
   {
-    "domanda": "Quale ricordo associ al sapore di una torta appena sfornata?",
+    "id": 104,
+    "domanda": "Qevocativa3",
     "type": "evocativa",
-    "id": 104
+    "follow_up": "follow 3"
   },
   {
-    "domanda": "Che immagine ti viene in mente quando pensi alla parola “estate”?",
+    "id": 105,
+    "domanda": "Qevocativa4",
     "type": "evocativa",
-    "id": 105
+    "follow_up": "follow 4"
   },
   {
-    "domanda": "Quale atmosfera senti quando entri in una vecchia libreria?",
+    "id": 106,
+    "domanda": "Qevocativa5",
     "type": "evocativa",
-    "id": 106
+    "follow_up": "follow 5"
   },
   {
-    "domanda": "Che emozione ti suscita il rumore della pioggia sui vetri?",
+    "id": 107,
+    "domanda": "Qevocativa6",
     "type": "evocativa",
-    "id": 107
+    "follow_up": "follow 6"
   },
   {
-    "domanda": "Quale luogo ti fa sentire immediatamente al sicuro?",
+    "id": 108,
+    "domanda": "Qevocativa7",
     "type": "evocativa",
-    "id": 108
+    "follow_up": "follow 7"
   },
   {
-    "domanda": "Che ricordi ti evoca il profumo di mare al mattino?",
+    "id": 109,
+    "domanda": "Qevocativa8",
     "type": "evocativa",
-    "id": 109
+    "follow_up": "follow 8"
   },
   {
-    "domanda": "Quale sensazione provi nel toccare la sabbia calda?",
+    "id": 110,
+    "domanda": "Qevocativa9",
     "type": "evocativa",
-    "id": 110
+    "follow_up": "follow 9"
   },
   {
-    "domanda": "Che colori vedi quando chiudi gli occhi e pensi alla felicità?",
+    "id": 111,
+    "domanda": "Qevocativa10",
     "type": "evocativa",
-    "id": 111
+    "follow_up": "follow 10"
   },
   {
-    "domanda": "Quale canzone risveglia in te un amore passato?",
+    "id": 112,
+    "domanda": "Qevocativa11",
     "type": "evocativa",
-    "id": 112
+    "follow_up": "follow 11"
   },
   {
-    "domanda": "Che emozione ti dà il fruscio delle foglie in autunno?",
+    "id": 113,
+    "domanda": "Qevocativa12",
     "type": "evocativa",
-    "id": 113
+    "follow_up": "follow 12"
   },
   {
-    "domanda": "Quale ricordo associ a un vecchio quaderno di appunti?",
+    "id": 114,
+    "domanda": "Qevocativa13",
     "type": "evocativa",
-    "id": 114
+    "follow_up": "follow 13"
   },
   {
-    "domanda": "Che sensazione provi quando indossi un capo di abbigliamento nuovo?",
+    "id": 115,
+    "domanda": "Qevocativa14",
     "type": "evocativa",
-    "id": 115
+    "follow_up": "follow 14"
   },
   {
-    "domanda": "Quale immagine ti nasce ascoltando il canto degli uccelli all’alba?",
+    "id": 116,
+    "domanda": "Qevocativa15",
     "type": "evocativa",
-    "id": 116
+    "follow_up": "follow 15"
   },
   {
-    "domanda": "Che sapore descrive la tua giornata ideale?",
+    "id": 117,
+    "domanda": "Qevocativa16",
     "type": "evocativa",
-    "id": 117
+    "follow_up": "follow 16"
   },
   {
-    "domanda": "Quale ricordo affiora con l’odore di caffè appena fatto?",
+    "id": 118,
+    "domanda": "Qevocativa17",
     "type": "evocativa",
-    "id": 118
+    "follow_up": "follow 17"
   },
   {
-    "domanda": "Che sensazione ti dà osservare un cielo stellato?",
+    "id": 119,
+    "domanda": "Qevocativa18",
     "type": "evocativa",
-    "id": 119
+    "follow_up": "follow 18"
   },
   {
-    "domanda": "Quale emozione provi nel risvegliare un vecchio ricordo tramite una fotografia?",
+    "id": 120,
+    "domanda": "Qevocativa19",
     "type": "evocativa",
-    "id": 120
+    "follow_up": "follow 19"
   },
   {
-    "domanda": "Che immagini sorgono pensando a un viaggio in treno?",
+    "id": 121,
+    "domanda": "Qevocativa20",
     "type": "evocativa",
-    "id": 121
+    "follow_up": "follow 20"
   },
   {
-    "domanda": "Quale sensazione ti procura l’abbraccio di una persona cara?",
+    "id": 122,
+    "domanda": "Qevocativa21",
     "type": "evocativa",
-    "id": 122
+    "follow_up": "follow 21"
   },
   {
-    "domanda": "Che ricordo suscita il rumore di un vecchio ventilatore?",
+    "id": 123,
+    "domanda": "Qevocativa22",
     "type": "evocativa",
-    "id": 123
+    "follow_up": "follow 22"
   },
   {
-    "domanda": "Quale atmosfera senti in una mattina di neve?",
+    "id": 124,
+    "domanda": "Qevocativa23",
     "type": "evocativa",
-    "id": 124
+    "follow_up": "follow 23"
   },
   {
-    "domanda": "Che emozione ti dà il tocco di una coperta ruvida?",
+    "id": 125,
+    "domanda": "Qevocativa24",
     "type": "evocativa",
-    "id": 125
+    "follow_up": "follow 24"
   },
   {
-    "domanda": "Quale immagine associ al profumo di lavanda?",
+    "id": 126,
+    "domanda": "Qevocativa25",
     "type": "evocativa",
-    "id": 126
+    "follow_up": "follow 25"
   },
   {
-    "domanda": "Che sensazione ti dà ascoltare il silenzio in una chiesa vuota?",
+    "id": 127,
+    "domanda": "Qevocativa26",
     "type": "evocativa",
-    "id": 127
+    "follow_up": "follow 26"
   },
   {
-    "domanda": "Quale ricordo affiora con l’odore di legno bruciato?",
+    "id": 128,
+    "domanda": "Qevocativa27",
     "type": "evocativa",
-    "id": 128
+    "follow_up": "follow 27"
   },
   {
-    "domanda": "Che emozione provi guardando il sole al tramonto?",
+    "id": 129,
+    "domanda": "Qevocativa28",
     "type": "evocativa",
-    "id": 129
+    "follow_up": "follow 28"
   },
   {
-    "domanda": "Quale immagine ti evoca una strada di campagna?",
+    "id": 130,
+    "domanda": "Qevocativa29",
     "type": "evocativa",
-    "id": 130
+    "follow_up": "follow 29"
   },
   {
-    "domanda": "Che sensazione ti dà il contatto con l’acqua fredda in un giorno caldo?",
+    "id": 131,
+    "domanda": "Qevocativa30",
     "type": "evocativa",
-    "id": 131
+    "follow_up": "follow 30"
   },
   {
-    "domanda": "Quale ricordo suscita il suono di una campana lontana?",
+    "id": 132,
+    "domanda": "Qevocativa31",
     "type": "evocativa",
-    "id": 132
+    "follow_up": "follow 31"
   },
   {
-    "domanda": "Che emozione ti dà rivedere un vecchio film?",
+    "id": 133,
+    "domanda": "Qevocativa32",
     "type": "evocativa",
-    "id": 133
+    "follow_up": "follow 32"
   },
   {
-    "domanda": "Quale immagine ti viene in mente sentendo il canto delle cicale?",
+    "id": 134,
+    "domanda": "Qevocativa33",
     "type": "evocativa",
-    "id": 134
+    "follow_up": "follow 33"
   },
   {
-    "domanda": "Che sensazione provi entrando in un negozio di antiquariato?",
+    "id": 135,
+    "domanda": "Qevocativa34",
     "type": "evocativa",
-    "id": 135
+    "follow_up": "follow 34"
   },
   {
-    "domanda": "Quale ricordo ti suscita l’odore di terra dopo la pioggia?",
+    "id": 136,
+    "domanda": "Qevocativa35",
     "type": "evocativa",
-    "id": 136
+    "follow_up": "follow 35"
   },
   {
-    "domanda": "Che emozione senti sfogliando un album fotografico?",
+    "id": 137,
+    "domanda": "Qevocativa36",
     "type": "evocativa",
-    "id": 137
+    "follow_up": "follow 36"
   },
   {
-    "domanda": "Quale immagine associ a un primo giorno di scuola?",
+    "id": 138,
+    "domanda": "Qevocativa37",
     "type": "evocativa",
-    "id": 138
+    "follow_up": "follow 37"
   },
   {
-    "domanda": "Che sensazione ti dà toccare un oggetto che apparteneva a un nonno?",
+    "id": 139,
+    "domanda": "Qevocativa38",
     "type": "evocativa",
-    "id": 139
+    "follow_up": "follow 38"
   },
   {
-    "domanda": "Quale ricordo affiora con il sapore di una bevanda calda d’inverno?",
+    "id": 140,
+    "domanda": "Qevocativa39",
     "type": "evocativa",
-    "id": 140
+    "follow_up": "follow 39"
   },
   {
-    "domanda": "Che emozione provi sentendo una ninna nanna?",
+    "id": 141,
+    "domanda": "Qevocativa40",
     "type": "evocativa",
-    "id": 141
+    "follow_up": "follow 40"
   },
   {
-    "domanda": "Quale immagine ti appare quando osservi un campo di grano?",
+    "id": 142,
+    "domanda": "Qevocativa41",
     "type": "evocativa",
-    "id": 142
+    "follow_up": "follow 41"
   },
   {
-    "domanda": "Che sensazione ti dà il rumore di un tappo di sughero che salta?",
+    "id": 143,
+    "domanda": "Qevocativa42",
     "type": "evocativa",
-    "id": 143
+    "follow_up": "follow 42"
   },
   {
-    "domanda": "Quale ricordo porta il profumo di un dolce natalizio?",
+    "id": 144,
+    "domanda": "Qevocativa43",
     "type": "evocativa",
-    "id": 144
+    "follow_up": "follow 43"
   },
   {
-    "domanda": "Che emozione provi al tatto di una pagina di carta ruvida?",
+    "id": 145,
+    "domanda": "Qevocativa44",
     "type": "evocativa",
-    "id": 145
+    "follow_up": "follow 44"
   },
   {
-    "domanda": "Quale immagine associ a una città che non hai mai visitato?",
+    "id": 146,
+    "domanda": "Qevocativa45",
     "type": "evocativa",
-    "id": 146
+    "follow_up": "follow 45"
   },
   {
-    "domanda": "Che sensazione ti provoca il suono lontano di un treno notturno?",
+    "id": 147,
+    "domanda": "Qevocativa46",
     "type": "evocativa",
-    "id": 147
+    "follow_up": "follow 46"
   },
   {
-    "domanda": "Quale ricordo suscita l’odore di cherosene di un aeroporto?",
+    "id": 148,
+    "domanda": "Qevocativa47",
     "type": "evocativa",
-    "id": 148
+    "follow_up": "follow 47"
   },
   {
-    "domanda": "Che emozione ti dà il sapore di un frutto colto da un albero?",
+    "id": 149,
+    "domanda": "Qevocativa48",
     "type": "evocativa",
-    "id": 149
+    "follow_up": "follow 48"
   },
   {
-    "domanda": "Quale immagine ti evoca l’oscurità totale di una grotta?",
+    "id": 150,
+    "domanda": "Qevocativa49",
     "type": "evocativa",
-    "id": 150
+    "follow_up": "follow 49"
   },
   {
-    "domanda": "Qual è la prima azione che potresti compiere per raggiungere il tuo obiettivo?",
+    "id": 151,
+    "domanda": "Qorientamento0",
     "type": "orientamento",
-    "id": 151
+    "follow_up": "follow 0"
   },
   {
-    "domanda": "Come potresti suddividere il tuo sogno in piccoli passi?",
+    "id": 152,
+    "domanda": "Qorientamento1",
     "type": "orientamento",
-    "id": 152
+    "follow_up": "follow 1"
   },
   {
-    "domanda": "Quale risorsa disponibile oggi potrebbe aiutarti a progredire?",
+    "id": 153,
+    "domanda": "Qorientamento2",
     "type": "orientamento",
-    "id": 153
+    "follow_up": "follow 2"
   },
   {
-    "domanda": "Qual è un compromesso che sei disposto a fare per avanzare?",
+    "id": 154,
+    "domanda": "Qorientamento3",
     "type": "orientamento",
-    "id": 154
+    "follow_up": "follow 3"
   },
   {
-    "domanda": "Come puoi monitorare i tuoi progressi in modo realistico?",
+    "id": 155,
+    "domanda": "Qorientamento4",
     "type": "orientamento",
-    "id": 155
+    "follow_up": "follow 4"
   },
   {
-    "domanda": "Quale supporto potresti chiedere a una persona di fiducia?",
+    "id": 156,
+    "domanda": "Qorientamento5",
     "type": "orientamento",
-    "id": 156
+    "follow_up": "follow 5"
   },
   {
-    "domanda": "Qual è una decisione che potresti prendere entro la fine della giornata?",
+    "id": 157,
+    "domanda": "Qorientamento6",
     "type": "orientamento",
-    "id": 157
+    "follow_up": "follow 6"
   },
   {
-    "domanda": "Come potresti trasformare un ostacolo in un’opportunità?",
+    "id": 158,
+    "domanda": "Qorientamento7",
     "type": "orientamento",
-    "id": 158
+    "follow_up": "follow 7"
   },
   {
-    "domanda": "Quale priorità merita la tua attenzione questa settimana?",
+    "id": 159,
+    "domanda": "Qorientamento8",
     "type": "orientamento",
-    "id": 159
+    "follow_up": "follow 8"
   },
   {
-    "domanda": "Come puoi gestire meglio il tuo tempo domani?",
+    "id": 160,
+    "domanda": "Qorientamento9",
     "type": "orientamento",
-    "id": 160
+    "follow_up": "follow 9"
   },
   {
-    "domanda": "Quale competenza ti avvicinerebbe al tuo obiettivo?",
+    "id": 161,
+    "domanda": "Qorientamento10",
     "type": "orientamento",
-    "id": 161
+    "follow_up": "follow 10"
   },
   {
-    "domanda": "Come potresti migliorare la tua routine mattutina?",
+    "id": 162,
+    "domanda": "Qorientamento11",
     "type": "orientamento",
-    "id": 162
+    "follow_up": "follow 11"
   },
   {
-    "domanda": "Quale budget potresti stabilire per sostenere un progetto personale?",
+    "id": 163,
+    "domanda": "Qorientamento12",
     "type": "orientamento",
-    "id": 163
+    "follow_up": "follow 12"
   },
   {
-    "domanda": "Come puoi rendere più salutare la tua alimentazione quotidiana?",
+    "id": 164,
+    "domanda": "Qorientamento13",
     "type": "orientamento",
-    "id": 164
+    "follow_up": "follow 13"
   },
   {
-    "domanda": "Quale strategia adotterai per affrontare una sfida imminente?",
+    "id": 165,
+    "domanda": "Qorientamento14",
     "type": "orientamento",
-    "id": 165
+    "follow_up": "follow 14"
   },
   {
-    "domanda": "Come potresti ridurre lo stress nelle prossime 24 ore?",
+    "id": 166,
+    "domanda": "Qorientamento15",
     "type": "orientamento",
-    "id": 166
+    "follow_up": "follow 15"
   },
   {
-    "domanda": "Quale piccolo gesto migliorerebbe il rapporto con un collega?",
+    "id": 167,
+    "domanda": "Qorientamento16",
     "type": "orientamento",
-    "id": 167
+    "follow_up": "follow 16"
   },
   {
-    "domanda": "Come potresti strutturare la tua giornata per includere il movimento fisico?",
+    "id": 168,
+    "domanda": "Qorientamento17",
     "type": "orientamento",
-    "id": 168
+    "follow_up": "follow 17"
   },
   {
-    "domanda": "Quali passi servono per organizzare un evento semplice ma significativo?",
+    "id": 169,
+    "domanda": "Qorientamento18",
     "type": "orientamento",
-    "id": 169
+    "follow_up": "follow 18"
   },
   {
-    "domanda": "Come potresti rendere più efficiente il tuo spazio di lavoro?",
+    "id": 170,
+    "domanda": "Qorientamento19",
     "type": "orientamento",
-    "id": 170
+    "follow_up": "follow 19"
   },
   {
-    "domanda": "Quale azione potresti compiere oggi per risparmiare denaro?",
+    "id": 171,
+    "domanda": "Qorientamento20",
     "type": "orientamento",
-    "id": 171
+    "follow_up": "follow 20"
   },
   {
-    "domanda": "Come puoi prepararti a una conversazione difficile?",
+    "id": 172,
+    "domanda": "Qorientamento21",
     "type": "orientamento",
-    "id": 172
+    "follow_up": "follow 21"
   },
   {
-    "domanda": "Quale abitudine vorresti inserire nella tua routine serale?",
+    "id": 173,
+    "domanda": "Qorientamento22",
     "type": "orientamento",
-    "id": 173
+    "follow_up": "follow 22"
   },
   {
-    "domanda": "Come potresti valorizzare un talento che spesso trascuri?",
+    "id": 174,
+    "domanda": "Qorientamento23",
     "type": "orientamento",
-    "id": 174
+    "follow_up": "follow 23"
   },
   {
-    "domanda": "Quale nuova connessione professionale potresti coltivare?",
+    "id": 175,
+    "domanda": "Qorientamento24",
     "type": "orientamento",
-    "id": 175
+    "follow_up": "follow 24"
   },
   {
-    "domanda": "Come puoi bilanciare tempo libero e responsabilità?",
+    "id": 176,
+    "domanda": "Qorientamento25",
     "type": "orientamento",
-    "id": 176
+    "follow_up": "follow 25"
   },
   {
-    "domanda": "Quale attività rilassante puoi concederti questa settimana?",
+    "id": 177,
+    "domanda": "Qorientamento26",
     "type": "orientamento",
-    "id": 177
+    "follow_up": "follow 26"
   },
   {
-    "domanda": "Come potresti affrontare il cambiamento che temi?",
+    "id": 178,
+    "domanda": "Qorientamento27",
     "type": "orientamento",
-    "id": 178
+    "follow_up": "follow 27"
   },
   {
-    "domanda": "Quale informazione ti manca per prendere una decisione consapevole?",
+    "id": 179,
+    "domanda": "Qorientamento28",
     "type": "orientamento",
-    "id": 179
+    "follow_up": "follow 28"
   },
   {
-    "domanda": "Come puoi allenare la tua capacità di ascolto attivo?",
+    "id": 180,
+    "domanda": "Qorientamento29",
     "type": "orientamento",
-    "id": 180
+    "follow_up": "follow 29"
   },
   {
-    "domanda": "Quale piccolo traguardo vorresti celebrare?",
+    "id": 181,
+    "domanda": "Qorientamento30",
     "type": "orientamento",
-    "id": 181
+    "follow_up": "follow 30"
   },
   {
-    "domanda": "Come potresti evitare una distrazione ricorrente?",
+    "id": 182,
+    "domanda": "Qorientamento31",
     "type": "orientamento",
-    "id": 182
+    "follow_up": "follow 31"
   },
   {
-    "domanda": "Quale progetto potrebbe beneficiare di una tua revisione?",
+    "id": 183,
+    "domanda": "Qorientamento32",
     "type": "orientamento",
-    "id": 183
+    "follow_up": "follow 32"
   },
   {
-    "domanda": "Come puoi rendere più sostenibile il tuo stile di vita?",
+    "id": 184,
+    "domanda": "Qorientamento33",
     "type": "orientamento",
-    "id": 184
+    "follow_up": "follow 33"
   },
   {
-    "domanda": "Quale app o strumento digitale migliorerebbe la tua organizzazione?",
+    "id": 185,
+    "domanda": "Qorientamento34",
     "type": "orientamento",
-    "id": 185
+    "follow_up": "follow 34"
   },
   {
-    "domanda": "Come potresti iniziare una nuova amicizia in modo genuino?",
+    "id": 186,
+    "domanda": "Qorientamento35",
     "type": "orientamento",
-    "id": 186
+    "follow_up": "follow 35"
   },
   {
-    "domanda": "Quale passo ti avvicinerebbe a una maggiore stabilità finanziaria?",
+    "id": 187,
+    "domanda": "Qorientamento36",
     "type": "orientamento",
-    "id": 187
+    "follow_up": "follow 36"
   },
   {
-    "domanda": "Come puoi semplificare un compito complesso?",
+    "id": 188,
+    "domanda": "Qorientamento37",
     "type": "orientamento",
-    "id": 188
+    "follow_up": "follow 37"
   },
   {
-    "domanda": "Quale responsabilità potresti delegare per alleggerirti?",
+    "id": 189,
+    "domanda": "Qorientamento38",
     "type": "orientamento",
-    "id": 189
+    "follow_up": "follow 38"
   },
   {
-    "domanda": "Come potresti rafforzare la tua motivazione nei momenti difficili?",
+    "id": 190,
+    "domanda": "Qorientamento39",
     "type": "orientamento",
-    "id": 190
+    "follow_up": "follow 39"
   },
   {
-    "domanda": "Quale attività creativa potresti sperimentare per rilassarti?",
+    "id": 191,
+    "domanda": "Qorientamento40",
     "type": "orientamento",
-    "id": 191
+    "follow_up": "follow 40"
   },
   {
-    "domanda": "Come puoi mantenere coerenza tra valori e decisioni quotidiane?",
+    "id": 192,
+    "domanda": "Qorientamento41",
     "type": "orientamento",
-    "id": 192
+    "follow_up": "follow 41"
   },
   {
-    "domanda": "Quale iniziativa potresti prendere per contribuire alla tua comunità?",
+    "id": 193,
+    "domanda": "Qorientamento42",
     "type": "orientamento",
-    "id": 193
+    "follow_up": "follow 42"
   },
   {
-    "domanda": "Come potresti prepararti per un cambiamento di carriera?",
+    "id": 194,
+    "domanda": "Qorientamento43",
     "type": "orientamento",
-    "id": 194
+    "follow_up": "follow 43"
   },
   {
-    "domanda": "Quale pratica di benessere potresti introdurre al mattino?",
+    "id": 195,
+    "domanda": "Qorientamento44",
     "type": "orientamento",
-    "id": 195
+    "follow_up": "follow 44"
   },
   {
-    "domanda": "Come potresti organizzare un piano di studio efficace?",
+    "id": 196,
+    "domanda": "Qorientamento45",
     "type": "orientamento",
-    "id": 196
+    "follow_up": "follow 45"
   },
   {
-    "domanda": "Quale passo ti aiuterebbe a migliorare la comunicazione con la famiglia?",
+    "id": 197,
+    "domanda": "Qorientamento46",
     "type": "orientamento",
-    "id": 197
+    "follow_up": "follow 46"
   },
   {
-    "domanda": "Come puoi affrontare un imprevisto senza perdere la calma?",
+    "id": 198,
+    "domanda": "Qorientamento47",
     "type": "orientamento",
-    "id": 198
+    "follow_up": "follow 47"
   },
   {
-    "domanda": "Quale obiettivo a lungo termine merita una revisione?",
+    "id": 199,
+    "domanda": "Qorientamento48",
     "type": "orientamento",
-    "id": 199
+    "follow_up": "follow 48"
   },
   {
-    "domanda": "Come potresti celebrare le tue piccole vittorie quotidiane?",
+    "id": 200,
+    "domanda": "Qorientamento49",
     "type": "orientamento",
-    "id": 200
+    "follow_up": "follow 49"
   }
 ]
