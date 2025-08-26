@@ -9,6 +9,7 @@ import logging
 import hashlib
 import shutil
 import tempfile
+import threading
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +33,7 @@ from .service_container import container
 # modello e consente di riutilizzare la stessa istanza tra più chiamate
 # senza ricaricarlo in VRAM.
 _WHISPER_CACHE: dict[tuple[str, str, bool], object] = {}
+_WHISPER_LOCK = threading.Lock()
 
 
 def _get_whisper(
@@ -50,20 +52,22 @@ def _get_whisper(
         except Exception as exc:  # pragma: no cover - runtime dep
             raise RuntimeError("onnxruntime è richiesto per modelli ONNX") from exc
         key = (model_name, device, True)
-        model = _WHISPER_CACHE.get(key)
-        if model is None:
-            model = ort.InferenceSession(model_name)
-            _WHISPER_CACHE[key] = model
-        return model
+        with _WHISPER_LOCK:
+            model = _WHISPER_CACHE.get(key)
+            if model is None:
+                model = ort.InferenceSession(model_name)
+                _WHISPER_CACHE[key] = model
+            return model
 
     from faster_whisper import WhisperModel  # type: ignore
 
     key = (model_name, device, False)
-    model = _WHISPER_CACHE.get(key)
-    if model is None:
-        model = WhisperModel(model_name, device=device, compute_type=compute_type)
-        _WHISPER_CACHE[key] = model
-    return model
+    with _WHISPER_LOCK:
+        model = _WHISPER_CACHE.get(key)
+        if model is None:
+            model = WhisperModel(model_name, device=device, compute_type=compute_type)
+            _WHISPER_CACHE[key] = model
+        return model
 
 
 
@@ -114,6 +118,8 @@ def tts_local(
         engine.runAndWait()
         set_tts_cache(text, lang, out_path)
         return
+    except Exception:
+        pass
 
     metrics.record_system_metrics()
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -157,10 +163,6 @@ def tts_speak(text: str, *, lang: str = "it") -> None:
 
 
 def stt_local(audio_path: Path, lang: str = "it") -> str:
-
-
-
-def stt_local(audio_path: Path, lang: str = "it") -> str:
     """Attempt a local transcription of ``audio_path`` using cached models."""
 
     backend, model = container.load_stt_model()
@@ -173,6 +175,8 @@ def stt_local(audio_path: Path, lang: str = "it") -> str:
             return "".join(seg.text for seg in segments).strip()
         except Exception:
             return ""
+    return ""
+
 
 def stt_local(
     audio_path: Path,
@@ -185,62 +189,24 @@ def stt_local(
     try:
         import torch  # type: ignore
 
-
-
         actual_device = (
             "cuda" if device == "auto" and torch.cuda.is_available() else device
         )
     except Exception:
         actual_device = "cpu" if device == "auto" else device
 
-
     metrics.record_system_metrics()
 
     compute_type = "int8_float16" if actual_device == "cuda" else "int8"
-
 
     try:
         model = _get_whisper("base", actual_device, compute_type)
         segments, _ = model.transcribe(
             audio_path.as_posix(), language=lang, task="transcribe"
         )
-
-
-            device = metrics.resolve_device("auto")
-        except Exception:
-            device = "cpu"
-
-        device = resolve_device("auto")
-
-        compute_type = "int8_float16" if device == "cuda" else "int8"
-        model = WhisperModel("base", device=device, compute_type=compute_type)
-        segments, _ = model.transcribe(audio_path.as_posix(), language=lang, task="transcribe")
-
         return "".join(seg.text for seg in segments).strip()
     except Exception:
-        pass
-
-
-    if backend == "speech_recognition":
-        try:
-            import speech_recognition as sr  # type: ignore
-
-            setts = Settings.model_validate_yaml(Path("settings.yaml"))
-            sr_cfg = setts.audio.sample_rate
-            pre = AudioPreprocessor(
-                sr_cfg,
-                denoise=getattr(setts.audio, "denoise", False),
-                echo_cancel=getattr(setts.audio, "echo_cancel", False),
-            )
-            y, sr_in = load_audio_as_float(audio_path, sr_cfg)
-            y = pre.process(y)
-            pcm = (np.clip(y, -1, 1) * 32767).astype(np.int16).tobytes()
-            audio = sr.AudioData(pcm, sr_in, 2)
-            return model.recognize_sphinx(audio, language=lang)
-        except Exception:
-            return ""
-
-    return ""
+        return ""
 
 
 def stt_local_faster(
@@ -257,11 +223,10 @@ def stt_local_faster(
 
     backend, model = container.load_stt_model()
     if backend != "faster_whisper":
-
-    ``device`` can be ``"cpu"`` or ``"cuda"``; ``compute_type`` controls the
-    precision used by the model.  On failure or missing dependencies an empty
-    string is returned.
-    """
+        return ""
+    # ``device`` can be ``"cpu"`` or ``"cuda"``; ``compute_type`` controls the
+    # precision used by the model. On failure or missing dependencies an empty
+    # string is returned.
 
 
     setts = container.settings
