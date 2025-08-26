@@ -58,6 +58,7 @@ def main() -> None:
         action="store_true",
         help="Nasconde i log dalla console (vista conversazione pulita)",
     )
+    parser.add_argument("--persona", type=str, default=None, help="Personalità iniziale")
     args = parser.parse_args()
 
     listener = setup_logging(
@@ -98,6 +99,7 @@ def main() -> None:
     client = AsyncOpenAI(api_key=api_key)
 
     session_profile_name, _ = get_active_profile(raw_settings)
+    session_persona_name = args.persona or raw_settings.get("persona", {}).get("current") or getattr(getattr(SET, "persona", None), "current", "standard")
 
     DEBUG = bool(SET.debug) and (not args.quiet)
 
@@ -267,6 +269,10 @@ def main() -> None:
             except Exception:
                 CURRENT_CFG = {}
             prof_name, prof = get_active_profile(CURRENT_CFG, session_profile_name)
+            persona_cfg = CURRENT_CFG.get("persona", {}) or {}
+            persona_name = persona_cfg.get("current", session_persona_name)
+            personas = persona_cfg.get("profiles", {}) or {}
+            persona = personas.get(persona_name, {})
             if CHAT_ENABLED:
                 chat = chat_histories[session_profile_name]
             else:
@@ -474,6 +480,37 @@ def main() -> None:
                     pending_full_answer = pending_answer
                     dlg.transition(DialogState.SPEAKING)
                     continue
+                m = re.search(r"cambia personalit[aà] in\s+(.+)", low_q)
+                if not m:
+                    m = re.search(r"change persona to\s+(.+)", low_q)
+                if m:
+                    new_pers = m.group(1).strip().lower()
+                    personas = CURRENT_CFG.get("persona", {}).get("profiles", {})
+                    target = None
+                    for name in personas:
+                        if new_pers == name.lower():
+                            target = name
+                            break
+                    if target is None:
+                        matches = difflib.get_close_matches(new_pers, list(personas.keys()), n=1, cutoff=0.6)
+                        if matches:
+                            target = matches[0]
+                    if target:
+                        CURRENT_CFG.setdefault("persona", {})["current"] = target
+                        try:
+                            cfg_path.write_text(
+                                yaml.safe_dump(CURRENT_CFG, allow_unicode=True),
+                                encoding="utf-8",
+                            )
+                        except Exception:
+                            pass
+                        pending_answer = f"Personalità cambiata in {target}."
+                        session_persona_name = target
+                    else:
+                        pending_answer = "Personalità non trovata."
+                    pending_full_answer = pending_answer
+                    dlg.transition(DialogState.SPEAKING)
+                    continue
                 pending_q = q
                 pending_lang = eff_lang
                 if CHAT_ENABLED and chat is not None:
@@ -549,12 +586,16 @@ def main() -> None:
                     item.get("text", "") for item in (context or []) if isinstance(item, dict)
                 ]
                 profile_hint = prof.get("system_hint", "")
+                effective_system = ORACLE_SYSTEM
                 if profile_hint:
                     effective_system = (
-                        f"{ORACLE_SYSTEM}\n\n[Profilo: {prof.get('label', prof_name)}]\n{profile_hint}"
+                        f"{effective_system}\n\n[Profilo: {prof.get('label', prof_name)}]\n{profile_hint}"
                     )
-                else:
-                    effective_system = ORACLE_SYSTEM
+                if persona:
+                    persona_prompt = f"Tono: {persona.get('tone', '')}. Stile: {persona.get('style', '')}."
+                    effective_system = (
+                        f"{effective_system}\n\n[Personalità: {persona_name}]\n{persona_prompt}"
+                    )
                 pending_answer, pending_sources = oracle_answer(
                     pending_q,
                     pending_lang,

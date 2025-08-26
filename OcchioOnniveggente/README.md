@@ -39,6 +39,22 @@ domain:
   topic: ""        # contesto specifico opzionale
 ```
 
+Una sezione analoga è disponibile per le **personalità** dell'assistente:
+
+```yaml
+persona:
+  current: saggia
+  profiles:
+    saggia:
+      tone: solenne
+      style: poetico
+    scherzosa:
+      tone: allegro
+      style: colloquiale
+```
+
+La personalità scelta viene aggiunta al prompt di sistema e influenza tono e stile delle risposte.
+
 Per utilizzare `stt_backend: whisper` sono necessari i modelli
 `faster-whisper`; per prestazioni ottimali è consigliata una GPU NVIDIA
 con almeno 4 GB di VRAM, altrimenti la trascrizione avviene via CPU con

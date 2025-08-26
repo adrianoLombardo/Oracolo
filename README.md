@@ -157,6 +157,24 @@ Queste opzioni permettono di risvegliare l'Oracolo con una frase chiave e di
 passare rapidamente tra preset completi (prompt, dominio, archivio e memoria
 della chat).
 
+### Persona
+
+In `settings.yaml` puoi anche configurare diverse **personalità** che definiscono tono e stile della risposta:
+
+```yaml
+persona:
+  current: saggia
+  profiles:
+    saggia:
+      tone: solenne
+      style: poetico
+    scherzosa:
+      tone: allegro
+      style: colloquiale
+```
+
+La personalità attiva viene inserita nel prompt di sistema. Durante la conversazione puoi dire (o digitare) `cambia personalità in scherzosa` per rendere l'Oracolo più leggero e informale.
+
 ---
 
 ## 3. Avvio dell'Oracolo
