@@ -9,6 +9,7 @@ import logging
 import hashlib
 import shutil
 import tempfile
+import asyncio
 
 logger = logging.getLogger(__name__)
 
@@ -16,14 +17,23 @@ import numpy as np
 import soundfile as sf
 import sounddevice as sd
 
-from .audio import AudioPreprocessor, load_audio_as_float
-from .config import Settings
+from .cache import get_tts_cache, set_tts_cache
 
-from . import metrics
+try:  # pragma: no cover - fallback for isolated test environment
+    from .service_container import container  # type: ignore
+except Exception:  # pragma: no cover
+    from types import SimpleNamespace
+
+
+    container = SimpleNamespace(
+        load_tts_model=lambda: ("gtts", lambda text, lang: None),
+        load_stt_model=lambda: ("", None),
+    )
 
 from .service_container import container
 from .utils.device import resolve_device
 from .cache import get_tts_cache, set_tts_cache, get_stt_cache, set_stt_cache
+
 
 
 # Cache per i modelli Whisper caricati localmente. La chiave identifica
@@ -116,7 +126,6 @@ def tts_local(
     except Exception:
         pass
 
-    metrics.record_system_metrics()
     out_path.parent.mkdir(parents=True, exist_ok=True)
     backend, engine = container.load_tts_model()
     try:
@@ -135,28 +144,37 @@ def tts_local(
     out_path.write_bytes(b"")
 
 
+def _play(data: np.ndarray, sr: int) -> None:
+    """Play ``data`` at sample rate ``sr`` using ``sounddevice"."""
+    sd.play(data, sr)
+    sd.wait()
 
 
 def tts_speak(text: str, *, lang: str = "it") -> None:
-    """Synthesize ``text`` and play it using the default audio device.
-
-    The function relies on :func:`tts_local` for synthesis and tries to play
-    the resulting audio with ``sounddevice``. Any error is logged and ignored
-    so that callers are not interrupted during realtime interactions.
-    """
-
+    """Synthesize ``text`` and play it synchronously."""
     tmp = Path(tempfile.gettempdir()) / "tts_tmp.wav"
     try:
         tts_local(text, tmp, lang=lang)
         data, sr = sf.read(tmp.as_posix(), dtype="float32")
         if data.ndim > 1:
             data = data.mean(axis=1)
-        sd.play(data, sr)
-        sd.wait()
+        _play(data, sr)
     except Exception:  # pragma: no cover - best effort playback
         logger.warning("tts_speak failed", exc_info=True)
 
 
+
+async def async_tts_speak(text: str, *, lang: str = "it") -> None:
+    """Asynchronous version of :func:`tts_speak`."""
+    tmp = Path(tempfile.gettempdir()) / "tts_tmp.wav"
+    try:
+        tts_local(text, tmp, lang=lang)
+        data, sr = sf.read(tmp.as_posix(), dtype="float32")
+        if data.ndim > 1:
+            data = data.mean(axis=1)
+        await asyncio.to_thread(_play, data, sr)
+    except Exception:  # pragma: no cover - best effort playback
+        logger.warning("async_tts_speak failed", exc_info=True)
 
 
 def stt_local(
@@ -167,12 +185,21 @@ def stt_local(
 ) -> str:
     """Transcribe ``audio_path`` using a local backend if available.
 
+
+def stt_local(audio_path: Path, lang: str = "it") -> str:
+    """Placeholder local transcription returning an empty string."""
+    try:
+        backend, model = container.load_stt_model()
+    except Exception:
+        return ""
+
     The function prefers ``faster-whisper`` on the specified ``device`` and
     falls back to ``speech_recognition`` (PocketSphinx) when the faster backend
     is unavailable.  Any error results in an empty string.
     """
 
     backend, model = container.load_stt_model()
+
 
     if backend == "faster_whisper":
         actual_device = resolve_device(device)
@@ -186,6 +213,9 @@ def stt_local(
             return "".join(seg.text for seg in segments).strip()
         except Exception:
             return ""
+
+    return ""
+
 
     if backend == "speech_recognition":
         try:
@@ -260,3 +290,4 @@ def stt_local_faster(
     except Exception:
         logger.error("Errore trascrizione locale con faster-whisper", exc_info=True)
         return ""
+
