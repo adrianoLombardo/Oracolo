@@ -23,7 +23,9 @@ from langdetect import LangDetectException, detect  # type: ignore
 
 from .conversation import ConversationManager
 from .retrieval import Question, load_questions, Context
+from .event_bus import event_bus
 from .service_container import container
+
 
 logger = logging.getLogger(__name__)
 
@@ -260,11 +262,14 @@ def oracle_answer(
     llm_model = llm_model or container.settings.openai.llm_model
 
     if question_type == "off_topic":
-        return off_topic_reply(categoria), []
+        ans = off_topic_reply(categoria)
+        event_bus.publish("response_ready", ans)
+        return ans, []
     if off_topic_category:
         msg = OFF_TOPIC_RESPONSES.get(
             off_topic_category, OFF_TOPIC_RESPONSES["default"]
         )
+        event_bus.publish("response_ready", msg)
         return msg, []
 
     history = conv.messages_for_llm() if conv else None
@@ -284,14 +289,26 @@ def oracle_answer(
                 text += delta
                 if on_token:
                     on_token(delta)
+
+        if chat:
+            chat.push_assistant(text)
+        event_bus.publish("response_ready", text)
+
         if conv:
             conv.push_assistant(text)
+
         return text, context or []
 
     resp = client.responses.create(model=llm_model, instructions=instr, input=msgs)
     ans = getattr(resp, "output_text", "")
+
+    if chat:
+        chat.push_assistant(ans)
+    event_bus.publish("response_ready", ans)
+
     if conv:
         conv.push_assistant(ans)
+
     return ans, context or []
 
 
@@ -365,8 +382,14 @@ async def oracle_answer_stream(
             delta = getattr(evt, "delta", "")
             text += delta
             yield delta, False
+
+    if chat:
+        chat.push_assistant(text)
+    event_bus.publish("response_ready", text)
+
     if conv:
         conv.push_assistant(text)
+
     yield text, True
 
 
@@ -402,8 +425,14 @@ def stream_generate(
                 delta = getattr(evt, "delta", "")
                 text += delta
                 yield delta
+
+        if chat:
+            chat.push_assistant(text)
+        event_bus.publish("response_ready", text)
+
         if conv:
             conv.push_assistant(text)
+
 
     return _gen()
 

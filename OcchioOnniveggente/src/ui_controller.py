@@ -8,6 +8,7 @@ import logging
 from src.conversation import ConversationManager
 from src.ui_state import UIState
 from src.chat import ChatState
+from src.event_bus import event_bus
 
 
 class UIController:
@@ -24,6 +25,9 @@ class UIController:
         self.logger = logging.getLogger("backend")
         self._log_handler: logging.Handler | None = None
         self._apply_log_level()
+        event_bus.subscribe("recording_started", self._on_recording_started)
+        event_bus.subscribe("transcript_ready", self._on_transcript_ready)
+        event_bus.subscribe("response_ready", self._on_response_ready)
 
     # ------------------------------------------------------------------
     # configuration
@@ -62,6 +66,15 @@ class UIController:
         if not text:
             return
         self.chat_state.push_user(text)
+
+    def _on_recording_started(self) -> None:
+        self.logger.info("Recording started")
+
+    def _on_transcript_ready(self, text: str) -> None:
+        self.submit_user_input(text)
+
+    def _on_response_ready(self, text: str) -> None:
+        self.chat_state.push_assistant(text)
 
     # ------------------------------------------------------------------
     # audio reference
@@ -194,6 +207,9 @@ class UiController:
         self.logger = logging.getLogger("backend")
         self._log_handler: logging.Handler | None = None
         self.reload_settings()
+        event_bus.subscribe("recording_started", self._on_recording_started)
+        event_bus.subscribe("transcript_ready", self._on_transcript_ready)
+        event_bus.subscribe("response_ready", self._on_response_ready)
 
     def reload_settings(self) -> None:
         self.base_settings, self.local_settings, self.settings = load_settings_pair(self.root_dir)
@@ -301,4 +317,13 @@ class UiController:
         )
         self.conv.push_assistant(ans)
         return ans, used_ctx
+
+    def _on_recording_started(self) -> None:
+        self.logger.info("Recording started")
+
+    def _on_transcript_ready(self, text: str) -> None:
+        self.conv.push_user(text)
+
+    def _on_response_ready(self, text: str) -> None:
+        self.chat_state.push_assistant(text)
 
