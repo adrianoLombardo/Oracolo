@@ -6,7 +6,7 @@ import logging
 import os
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable, TypeVar
 
 try:
     from redis import Redis  # type: ignore
@@ -26,7 +26,10 @@ if Redis is not None:
         _cache = None
 
 
-def _safe_call(func, *args, **kwargs):
+T = TypeVar("T")
+
+
+def _safe_call(func: Callable[..., T], *args: Any, **kwargs: Any) -> T | None:
     if _cache is None:
         return None
     try:
@@ -75,7 +78,7 @@ def cache_set_json(key: str, value: Any, *, ttl: int = 3600) -> None:
 #  File-based cache helpers for TTS/STT outputs
 # ---------------------------------------------------------------------------
 
-from .config import Settings
+from .config import Settings  # noqa: E402
 
 
 def _settings() -> Settings:
