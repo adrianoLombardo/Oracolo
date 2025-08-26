@@ -22,7 +22,7 @@ from typing import Any, AsyncGenerator, Callable, Iterable, Iterator, List, Tupl
 from langdetect import LangDetectException, detect
 
 from .utils.error_handler import handle_error
-from .retrieval import load_questions
+from .retrieval import Question, load_questions
 
 
 _QUESTIONS_CACHE: dict[str, List[dict[str, Any]]] | None = None
@@ -41,6 +41,15 @@ def get_questions() -> dict[str, List[dict[str, Any]]]:
         _QUESTIONS_MTIME = mtime
 
     return _QUESTIONS_CACHE or {}
+
+QUESTIONS_BY_TYPE: dict[str, List[Question]] = load_questions()
+
+# Track questions already asked for each category during the current session.
+# Keys are category names (lowercase) and values are the indexes of questions
+# that have been served.  Once all questions in a category have been used the
+# set is cleared to start a new cycle.
+_USED_QUESTIONS: dict[str, set[int]] = {}
+
 
 
 # Risposte predefinite per domande fuori tema
@@ -441,17 +450,40 @@ def stream_generate(
 # ---------------------------------------------------------------------------
 
 
-def random_question(category: str) -> dict[str, str] | None:
+
+def random_question(category: str) -> Question | None:
     """Return a random question object from the desired ``category``."""
 
+
     qs = get_questions().get(category.lower())
+
+def random_question(category: str) -> dict[str, str] | None:
+    """Return a random question from ``category`` without immediate repeats.
+
+    Questions already returned are tracked per category.  Once all questions in
+    a category have been used the tracking set is cleared, allowing the cycle to
+    restart.
+    """
+
+
+    cat = category.lower()
+    qs = QUESTIONS_BY_TYPE.get(cat)
+
     if not qs:
         return None
-    return random.choice(qs)
+
+    used = _USED_QUESTIONS.setdefault(cat, set())
+    if len(used) == len(qs):
+        used.clear()
+
+    available = [i for i in range(len(qs)) if i not in used]
+    idx = random.choice(available)
+    used.add(idx)
+    return qs[idx]
 
 
 def answer_with_followup(
-    question_data: dict[str, str],
+    question_data: Question,
     client: Any,
     llm_model: str,
     *,
@@ -459,9 +491,9 @@ def answer_with_followup(
 ) -> tuple[str, str]:
     """Generate an answer for ``question_data`` and return its follow-up."""
 
-    question = question_data.get("domanda", "")
+    question = question_data.domanda
     answer, _ = oracle_answer(question, lang_hint, client, llm_model, "")
-    follow_up = question_data.get("follow_up", "")
+    follow_up = question_data.follow_up or ""
     return answer, follow_up
 
 
