@@ -77,6 +77,15 @@ def _load_index(path: str | Path) -> List[Dict]:
 
 
 
+def load_questions(path: str | Path) -> Dict[str, List[Dict[str, Any]]]:
+    """Load oracle questions and categorize off-topic entries.
+
+    The JSON file is expected to contain a list of question objects.  Entries
+    marked with ``"type": "off_topic"`` are grouped by their ``categoria``
+    field (e.g. ``poetica`` or ``didattica``).  All other entries are returned
+    under the ``"good"`` key.
+
+
 def load_questions(path: str | Path) -> Dict[str, Any]:
     """Load oracle questions from ``path`` grouping off-topic ones by category.
 
@@ -102,21 +111,43 @@ def load_questions(
     -------
     dict
         ``{"good": [...], "off_topic": {"cat": [...]}}``
+
     """
 
     p = Path(path)
     if not p.exists():
+
         logger.warning("Questions file not found: %s", p)
+
         return {"good": [], "off_topic": {}}
 
     try:
         data = json.loads(p.read_text(encoding="utf-8"))
     except Exception:
+
+
         logger.exception("Invalid JSON in questions file: %s", p)
+
         return {"good": [], "off_topic": {}}
 
     good: List[Dict[str, Any]] = []
     off_topic: Dict[str, List[Dict[str, Any]]] = {}
+
+
+    if isinstance(data, list):
+        for item in data:
+            if not isinstance(item, dict):
+                continue
+            qtype = str(item.get("type", "")).lower()
+            if qtype == "off_topic":
+                cat = str(item.get("categoria", "")).lower()
+                off_topic.setdefault(cat, []).append(item)
+            else:
+                good.append(item)
+
+    return {"good": good, "off_topic": off_topic}
+
+
     for item in data if isinstance(data, list) else []:
         if item.get("type") == "off_topic":
             cat = str(item.get("categoria", "")) or "unknown"
@@ -157,6 +188,7 @@ def load_questions(
     off_topic = data.get("off_topic", []) if isinstance(data, dict) else []
     follow_ups = [q.get("follow_up", "") for q in good + off_topic if q.get("follow_up")]
     return good, off_topic, follow_ups
+
 
 
 
