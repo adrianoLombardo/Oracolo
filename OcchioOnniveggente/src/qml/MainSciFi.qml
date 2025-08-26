@@ -63,18 +63,6 @@ Window {
                             width: 260
                             height: 60
                         }
-                        NeonIconButton {
-                            anchors.horizontalCenter: parent.horizontalCenter
-                            iconText: "\uD83C\uDFA4" // microphone emoji
-                            onClicked: Bridge.onMicTapped()
-                        }
-                        Text {
-                            anchors.horizontalCenter: parent.horizontalCenter
-                            text: "WAKE WORD RECOGNIZED"
-                            font.family: Theme.font
-                            font.pixelSize: 12
-                            color: Bridge.wakeWordRecognized ? Theme.neonA : Theme.textSoft
-                        }
                     }
                 }
 
@@ -84,35 +72,29 @@ Window {
                     anchors.bottom: parent.bottom
                     width: parent.width * 0.55
 
-                    Column {
+                    Item {
                         anchors.fill: parent
                         anchors.margins: 16
-                        spacing: 12
 
-                        Flickable {
+                        ChatHistory {
                             id: chatView
                             anchors.left: parent.left
                             anchors.right: parent.right
                             anchors.top: parent.top
                             anchors.bottom: inputRow.top
-                            contentWidth: width
-                            clip: true
-                            Column {
-                                id: chatColumn
-                                width: chatView.width
-                                spacing: 10
-                                ChatBubble { text: "Quali sono gli orari di apertura?"; fromUser: true }
-                                ChatBubble { text: "Certamente. Gli orari di apertura del museo sono dal martedì alla domenica, dalle 9:00 alle 19:00, il lunedì siamo chiusi."; fromUser: false }
-                            }
+                            historyModel: Bridge.historyModel
                         }
 
                         Row {
                             id: inputRow
-                            width: parent.width
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            anchors.bottom: logArea.top
                             spacing: 8
                             TextField {
                                 id: inputField
-                                width: parent.width - sendButton.width - 8
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: parent.width - sendButton.width - micButton.width - 16
                                 color: Theme.text
                                 placeholderText: "Scrivi..."
                                 placeholderTextColor: Theme.textSoft
@@ -125,11 +107,37 @@ Window {
                                 }
                             }
                             NeonIconButton {
+                                id: micButton
+                                width: 56
+                                height: 56
+                                iconText: "\uD83C\uDFA4"
+                                onClicked: Bridge.onMicTapped()
+                            }
+                            NeonIconButton {
                                 id: sendButton
                                 width: 56
                                 height: 56
                                 iconText: "\u27A4"
-                                onClicked: Bridge.onSendPressed()
+                                onClicked: { Bridge.sendText(inputField.text); inputField.text = "" }
+                            }
+                        }
+
+                        TextArea {
+                            id: logArea
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            anchors.bottom: parent.bottom
+                            height: 120
+                            readOnly: true
+                            wrapMode: TextArea.Wrap
+                            text: Bridge.logText
+                            color: Theme.text
+                            font.family: Theme.font
+                            background: Rectangle {
+                                color: Theme.panel
+                                radius: Theme.radius
+                                border.color: Theme.border
+                                border.width: Theme.borderW
                             }
                         }
                     }

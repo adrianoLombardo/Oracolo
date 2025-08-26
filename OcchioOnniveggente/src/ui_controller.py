@@ -5,6 +5,7 @@ from typing import Any
 
 from src.conversation import ConversationManager
 from src.ui_state import UIState
+from src.chat import ChatState
 
 
 class UIController:
@@ -37,6 +38,25 @@ class UIController:
     def set_conversation(self, conv: ConversationManager) -> None:
         self.state.conversation = conv
 
+    # convenience access to ChatState
+    @property
+    def chat_state(self) -> ChatState:
+        """Return the active :class:`ChatState`, creating one if needed."""
+        if self.state.conversation is None:
+            self.state.conversation = ConversationManager()
+        return self.state.conversation.chat
+
+    def submit_user_input(self, text: str) -> None:
+        """Append ``text`` to the chat history.
+
+        Both textual and transcribed vocal inputs should flow through this
+        single entry point so the rest of the application deals with a
+        unified conversation history.
+        """
+        if not text:
+            return
+        self.chat_state.push_user(text)
+
     # ------------------------------------------------------------------
     # audio reference
     @property
@@ -54,8 +74,6 @@ from typing import Any, Callable
 import yaml
 from openai import AsyncOpenAI
 
-from src.chat import ChatState
-from src.conversation import ConversationManager
 from src.config import get_openai_api_key
 from src.domain import validate_question
 from src.oracle import oracle_answer
