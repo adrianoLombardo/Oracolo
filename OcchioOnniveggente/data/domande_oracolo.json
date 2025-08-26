@@ -1,4 +1,12 @@
-[
+[{
+    "domanda": "Quale messaggio ti trasmette l'opera CryptoMadonne?",
+    "type": "poetica",
+    "follow_up": "In che modo ti ispira?",
+    "opera": "CryptoMadonne",
+    "artista": "Artista Sconosciuto",
+    "location": "museo",
+    "tag": ["CryptoMadonne"]
+  },
   {
     "domanda": "Quale metafora descrive il tuo percorso di vita?",
     "type": "poetica"

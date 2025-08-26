@@ -569,12 +569,26 @@ def random_question(category: str) -> Question | None:
 
 
 def answer_with_followup(
+
+    question_data: Question | dict[str, Any],
+
     question_data: Question | dict[str, str],
+
     client: Any,
     llm_model: str,
     *,
     lang_hint: str = "it",
 ) -> tuple[str, str]:
+
+    """Generate an answer for ``question_data`` and return its follow-up."""
+    if isinstance(question_data, dict):
+        question = question_data.get("domanda", "")
+        follow_up = question_data.get("follow_up") or ""
+    else:
+        question = question_data.domanda
+        follow_up = question_data.follow_up or ""
+    answer, _ = oracle_answer(question, lang_hint, client, llm_model, "")
+
     """Generate an answer for ``question_data`` and return its follow-up.
 
 
@@ -618,6 +632,7 @@ def answer_with_followup(
         follow_up = question_data.get("follow_up") or ""
 
     answer, _ = oracle_answer(question, lang_hint, client, llm_model, "")
+
 
     return answer, follow_up
 
