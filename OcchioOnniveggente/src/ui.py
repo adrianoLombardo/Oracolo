@@ -2765,6 +2765,18 @@ UILogHandler = OracoloUI.UILogHandler
 
 # ----------------------------- entry point -------------------------------- #
 def main() -> None:
+    """Avvia l'interfaccia grafica e configura il logging di base."""
+
+    # In assenza di configurazione, l'aggiunta del gestore UILogHandler
+    # sopprime l'handler di fallback della libreria ``logging`` e niente viene
+    # mostrato in console.  Qui impostiamo esplicitamente un ``StreamHandler``
+    # in modo che i messaggi vengano stampati anche nel terminale mentre la
+    # finestra grafica resta responsabile di mostrarli nella viewport dei log.
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    )
+
     state = UIState()
     controller = UIController(state)
     app = OracoloUI(state=state, controller=controller)
