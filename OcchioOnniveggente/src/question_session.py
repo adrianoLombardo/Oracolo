@@ -8,6 +8,7 @@ import json
 import os
 import pickle
 import random
+from random import Random
 from typing import Dict, List, Optional
 
 from .oracle import get_questions
@@ -24,7 +25,11 @@ class QuestionSession:
     weights: Optional[Dict[str, float]] = None
     answers: List[str] = field(default_factory=list)
     replies: List[str] = field(default_factory=list)
+
+    rng: Random | None = None
+
     state_path: str | os.PathLike[str] | None = None
+
 
     def __post_init__(self) -> None:
         if self.questions is None:
@@ -34,11 +39,15 @@ class QuestionSession:
         self._categories = list(self.questions.keys())
         self._index = 0
         self._used: Dict[str, set[int]] = {cat: set() for cat in self._categories}
+
+        self._rng = self.rng or random
+
         if self.state_path:
             path = os.fspath(self.state_path)
             if os.path.exists(path):
                 self.load(path)
             atexit.register(self.save, path)
+
 
     def next_question(self, category: str | None = None) -> Question | None:
         """Return a question, cycling categories and avoiding repeats."""
@@ -49,7 +58,7 @@ class QuestionSession:
                 weights = [self.weights.get(c, 0) for c in cats]
                 if not cats:
                     return None
-                category = random.choices(cats, weights=weights, k=1)[0]
+                category = self._rng.choices(cats, weights=weights, k=1)[0]
             else:
                 category = self._categories[self._index]
                 self._index = (self._index + 1) % len(self._categories)
@@ -62,7 +71,7 @@ class QuestionSession:
         if not remaining:
             used.clear()
             remaining = list(range(len(qs)))
-        idx = random.choice(remaining)
+        idx = self._rng.choice(remaining)
         used.add(idx)
         return qs[idx]
 
