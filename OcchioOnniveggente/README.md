@@ -70,6 +70,36 @@ numero, Pydantic segnalerà `Input should be a valid integer` e userà `24000`.
 ## Dataset delle domande
 
 Le domande che l'Oracolo può proporre sono raccolte nel file
+
+`data/domande_oracolo.json`.  Ogni elemento del file è una struttura con i
+campi `domanda`, `type` e un eventuale `follow_up`.  È inoltre possibile
+aggiungere metadati opzionali `opera`, `artista`, `location` e `tag`:
+
+```json
+{
+  "domanda": "Quale messaggio ti trasmette l'opera CryptoMadonne?",
+  "type": "poetica",
+  "follow_up": "In che modo ti ispira?",
+  "opera": "CryptoMadonne",
+  "artista": "Artista Sconosciuto",
+  "location": "museo",
+  "tag": ["CryptoMadonne"]
+}
+```
+
+Le tipologie disponibili sono `poetica`, `didattica`, `evocativa` e
+`orientamento`.  La funzione `load_questions()` in `src/retrieval.py` carica il
+dataset restituendo un dizionario che mappa ogni categoria alla relativa lista
+di domande. I metadati sono accessibili come attributi dell'oggetto
+`Question` e possono essere usati per ricerche mirate. Esempio di filtro per
+tag:
+
+```python
+from OcchioOnniveggente.src.retrieval import load_questions
+
+qs = load_questions()
+crypto = [q.domanda for qq in qs.values() for q in qq if q.tag and "CryptoMadonne" in q.tag]
+
 `data/domande_oracolo.json`.  Ogni elemento del file contiene almeno i campi
 `domanda` e `type`; il campo facoltativo `follow_up` permette di definire un
 messaggio personalizzato da proporre dopo la risposta.
@@ -102,6 +132,7 @@ aggiungere il campo `follow_up` all'oggetto corrispondente:
   "type": "evocativa",
   "follow_up": "Vuoi continuare?"
 }
+
 ```
 
 La funzione `load_questions()` in `src/retrieval.py` carica il dataset

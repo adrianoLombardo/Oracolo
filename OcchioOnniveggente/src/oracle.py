@@ -61,6 +61,9 @@ QUESTIONS_BY_TYPE: dict[str, List[Question]] = get_questions()
 # set is cleared to start a new cycle.
 _USED_QUESTIONS: dict[str, set[int]] = {}
 
+# Counter for user interactions logged via :func:`log_interaction`.
+_INTERACTION_COUNTER = 0
+
 
 
 # ---------------------------------------------------------------------------
@@ -523,6 +526,9 @@ def stream_generate(
                     yield delta
 
 
+
+"""Questions handling utilities."""
+
 # ---------------------------------------------------------------------------
 # Questions handling
 # ---------------------------------------------------------------------------
@@ -547,6 +553,18 @@ def random_question(category: str) -> dict[str, str] | None:
 
 
 
+def random_question(category: str) -> Question | None:
+    """Return a random question from ``category`` without immediate repeats.
+
+    A set of already served indexes is maintained for each category in
+    ``_USED_QUESTIONS``.  When all questions in the category have been served the
+    tracking set is cleared so that a new cycle can begin.
+    """
+
+    cat = category.lower()
+    qs = QUESTIONS_BY_TYPE.get(cat)
+
+
 # Default follow-up messages per question category.  When a question does not
 # specify its own ``follow_up`` field the message for its category is used.
 DEFAULT_FOLLOW_UPS: dict[str, str] = {
@@ -558,6 +576,19 @@ DEFAULT_FOLLOW_UPS: dict[str, str] = {
 
 
 def random_question(category: str) -> Question | None:
+
+
+def random_question(category: str) -> dict[str, str] | None:
+    """Return a random question from ``category`` without immediate repeats.
+
+    Questions are loaded as :class:`Question` dataclasses but this helper returns
+    a plain dictionary for ease of use by higher level components and tests.
+    Already served questions are tracked and the cycle restarts once all
+    questions in a category have been used.
+    """
+
+    cat = category.lower()
+    qs = QUESTIONS_BY_TYPE.get(cat)
 
 
     """Return a random question from ``category`` without immediate repeats.
@@ -584,17 +615,31 @@ def random_question(category: str) -> Question | None:
     qs = get_questions().get(cat)
 
 
+
     if not qs:
         return None
 
     key = f"{context}:{cat}" if context else cat
     used = _USED_QUESTIONS.setdefault(key, set())
     if len(used) == len(qs):
+        # all questions served -> start a new cycle
         used.clear()
 
     available = [i for i in range(len(qs)) if i not in used]
     idx = random.choice(available)
     used.add(idx)
+
+
+    q = qs[idx]
+    return {"domanda": q.domanda, "type": q.type, "follow_up": q.follow_up}
+
+
+def answer_with_followup(
+
+    question_data: Question | dict[str, str] | str,
+
+    question_data: Question | dict[str, str],
+
     q = qs[idx]
 
     return asdict(q) if not isinstance(q, dict) else q
@@ -609,12 +654,48 @@ def random_question(category: str) -> Question | None:
 
 
 def answer_with_followup(
+
+    question_data: Question | dict[str, Any],
+
     question_data: Question | dict[str, str],
+
+
+
     client: Any,
     llm_model: str,
     *,
     lang_hint: str = "it",
 ) -> tuple[str, str]:
+
+    """Generate an answer for ``question_data`` and return its follow-up.
+
+    ``question_data`` can be either a :class:`Question` object, a mapping with
+    ``domanda``/``follow_up`` keys or a plain string containing just the
+    question text.
+    """
+
+    if isinstance(question_data, Question):
+        question = question_data.domanda
+        follow_up = question_data.follow_up or ""
+    elif isinstance(question_data, dict):
+        question = question_data.get("domanda", "")
+        follow_up = question_data.get("follow_up") or ""
+    else:
+        question = str(question_data)
+        follow_up = ""
+
+    answer, _ = oracle_answer(question, lang_hint, client, llm_model, "")
+
+
+    """Generate an answer for ``question_data`` and return its follow-up."""
+    if isinstance(question_data, dict):
+        question = question_data.get("domanda", "")
+        follow_up = question_data.get("follow_up") or ""
+    else:
+        question = question_data.domanda
+        follow_up = question_data.follow_up or ""
+    answer, _ = oracle_answer(question, lang_hint, client, llm_model, "")
+
     """Generate an answer for ``question_data`` and return its follow-up.
 
 
@@ -646,6 +727,15 @@ def answer_with_followup(
         follow_up = question_data.follow_up
 
 
+
+    if isinstance(question_data, dict):
+        question = question_data.get("domanda", "")
+        follow_up = question_data.get("follow_up") or ""
+    else:
+        question = question_data.domanda
+        follow_up = question_data.follow_up or ""
+    answer, _ = oracle_answer(question, lang_hint, client, llm_model, "")
+
     answer, _ = oracle_answer(question, lang_hint, client, llm_model, "")
     if not follow_up:
         follow_up = DEFAULT_FOLLOW_UPS.get(qtype, "")
@@ -669,6 +759,7 @@ def answer_with_followup(
     answer, _ = oracle_answer(question, lang_hint, client, llm_model, "")
 
 
+
     return answer, follow_up
 
 
@@ -676,7 +767,11 @@ def answer_and_log_followup(
 
     question_data: Question | dict[str, str],
 
+
+    question_data: Question | dict[str, str],
+
     question_data: Question,
+
 
     client: Any,
     llm_model: str,
@@ -697,6 +792,16 @@ def answer_and_log_followup(
     answer, follow_up = answer_with_followup(
         question_data, client, llm_model, lang_hint=lang_hint
     )
+
+
+    if isinstance(question_data, Question):
+        question_text = question_data.domanda
+    else:
+        question_text = question_data.get("domanda", "")
+
+    append_log(
+        question_text,
+
     question = (
         question_data.domanda
         if isinstance(question_data, Question)
@@ -707,6 +812,7 @@ def answer_and_log_followup(
         question,
 
         question_data.domanda,
+
 
         answer,
         log_path,
@@ -792,6 +898,65 @@ def append_log(
             f.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
     return session_id
+
+
+# ---------------------------------------------------------------------------
+# Interaction logging
+# ---------------------------------------------------------------------------
+
+def log_interaction(
+    *,
+    context: Any | None = None,
+    category: str | None = None,
+    question: str | None = None,
+    follow_up: str | None = None,
+    user_response: str | None = None,
+    path: Path | None = None,
+    endpoint: str | None = None,
+) -> int:
+    """Log a user interaction and return its sequential counter.
+
+    The interaction is appended to ``path`` as JSON lines when provided or
+    sent via HTTP POST to ``endpoint``.  Both destinations may be used at the
+    same time.  The entry records the provided ``context``, ``category``,
+    ``question`` and ``follow_up`` along with the ``user_response`` and a
+    monotonically increasing ``interaction`` counter.
+    """
+
+    global _INTERACTION_COUNTER
+    _INTERACTION_COUNTER += 1
+    entry = {
+        "timestamp": datetime.utcnow().isoformat(),
+        "interaction": _INTERACTION_COUNTER,
+        "context": context,
+        "category": category,
+        "question": question,
+        "follow_up": follow_up,
+        "user_response": user_response,
+    }
+
+    data = json.dumps(entry, ensure_ascii=False)
+
+    if endpoint:
+        try:
+            import urllib.request
+
+            req = urllib.request.Request(
+                endpoint,
+                data=data.encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            urllib.request.urlopen(req, timeout=5)
+        except Exception:
+            pass
+
+    if path:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as f:
+            f.write(data + "\n")
+
+    return _INTERACTION_COUNTER
 
 
 # ---------------------------------------------------------------------------
