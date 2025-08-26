@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 
-from typing import Any
+from typing import Any, Callable
+
+import logging
 
 from src.conversation import ConversationManager
 from src.ui_state import UIState
@@ -19,6 +21,9 @@ class UIController:
 
     def __init__(self, state: UIState | None = None) -> None:
         self.state = state or UIState()
+        self.logger = logging.getLogger("backend")
+        self._log_handler: logging.Handler | None = None
+        self._apply_log_level()
 
     # ------------------------------------------------------------------
     # configuration
@@ -28,6 +33,7 @@ class UIController:
 
     def update_settings(self, new_settings: dict[str, Any]) -> None:
         self.state.settings = new_settings
+        self._apply_log_level()
 
     # ------------------------------------------------------------------
     # conversation
@@ -66,6 +72,16 @@ class UIController:
     def set_audio(self, audio: Any | None) -> None:
         self.state.audio = audio
 
+    def attach_log_console(self, append: Callable[[str], None]) -> None:
+        handler = _WidgetLogHandler(append)
+        self.logger.addHandler(handler)
+        self._log_handler = handler
+
+    def _apply_log_level(self) -> None:
+        level_name = str(self.state.settings.get("logging", {}).get("level", "INFO")).upper()
+        level = logging.DEBUG if level_name == "DEBUG" else logging.INFO
+        self.logger.setLevel(level)
+
 import copy
 import re
 from pathlib import Path
@@ -83,6 +99,18 @@ from src.retrieval import retrieve
 _REASON_RE = re.compile(
     r"kw=(?P<kw>[-0-9.]+) emb=(?P<emb>[-0-9.]+) rag=(?P<rag>[-0-9.]+) score=(?P<score>[-0-9.]+) thr=(?P<thr>[-0-9.]+)"
 )
+
+
+class _WidgetLogHandler(logging.Handler):
+    """Simple handler forwarding records to a UI log widget."""
+
+    def __init__(self, append: Callable[[str], None]) -> None:
+        super().__init__()
+        self._append = append
+
+    def emit(self, record: logging.LogRecord) -> None:  # pragma: no cover - UI side effect
+        msg = self.format(record)
+        self._append(msg)
 
 
 def deep_update(base: dict, upd: dict) -> dict:
@@ -163,10 +191,13 @@ class UiController:
 
     def __init__(self, root_dir: Path) -> None:
         self.root_dir = root_dir
+        self.logger = logging.getLogger("backend")
+        self._log_handler: logging.Handler | None = None
         self.reload_settings()
 
     def reload_settings(self) -> None:
         self.base_settings, self.local_settings, self.settings = load_settings_pair(self.root_dir)
+        self._apply_log_level()
         chat_conf = self.settings.get("chat", {})
         self.conv = ConversationManager()
         self.chat_state: ChatState = self.conv.chat
@@ -188,6 +219,19 @@ class UiController:
         )
         # refresh references
         self.base_settings, self.local_settings, self.settings = load_settings_pair(self.root_dir)
+        self._apply_log_level()
+
+    def _apply_log_level(self) -> None:
+        level_name = str(self.settings.get("logging", {}).get("level", "INFO")).upper()
+        level = logging.DEBUG if level_name == "DEBUG" else logging.INFO
+        self.logger.setLevel(level)
+
+    def attach_log_console(self, append: Callable[[str], None]) -> None:
+        if self._log_handler is not None:
+            self.logger.removeHandler(self._log_handler)
+        handler = _WidgetLogHandler(append)
+        self.logger.addHandler(handler)
+        self._log_handler = handler
 
     def send_chat(
         self,

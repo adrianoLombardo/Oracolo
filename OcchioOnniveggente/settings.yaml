@@ -1,5 +1,8 @@
 # settings.yaml
 
+logging:
+  level: INFO
+
 # Log di debug (mostra device audio e info VAD)
 
 debug: false
