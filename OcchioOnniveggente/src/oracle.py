@@ -25,11 +25,11 @@ from .utils.error_handler import handle_error
 from .retrieval import Question, load_questions
 
 
-_QUESTIONS_CACHE: dict[str, List[dict[str, Any]]] | None = None
+_QUESTIONS_CACHE: dict[str, List[Question]] | None = None
 _QUESTIONS_MTIME: float | None = None
 
 
-def get_questions() -> dict[str, List[dict[str, Any]]]:
+def get_questions() -> dict[str, List[Question]]:
     """Return the questions dataset reloading it when the file changes."""
 
     global _QUESTIONS_CACHE, _QUESTIONS_MTIME
@@ -41,8 +41,6 @@ def get_questions() -> dict[str, List[dict[str, Any]]]:
         _QUESTIONS_MTIME = mtime
 
     return _QUESTIONS_CACHE or {}
-
-QUESTIONS_BY_TYPE: dict[str, List[Question]] = load_questions()
 
 # Track questions already asked for each category during the current session.
 # Keys are category names (lowercase) and values are the indexes of questions
@@ -461,12 +459,7 @@ DEFAULT_FOLLOW_UPS: dict[str, str] = {
 
 
 def random_question(category: str) -> Question | None:
-    """Return a random question object from the desired ``category``."""
 
-
-    qs = get_questions().get(category.lower())
-
-def random_question(category: str) -> dict[str, str] | None:
     """Return a random question from ``category`` without immediate repeats.
 
     Questions already returned are tracked per category.  Once all questions in
@@ -476,8 +469,14 @@ def random_question(category: str) -> dict[str, str] | None:
     absent).
     """
 
+
+
+    """Return a random question from ``category`` without immediate repeats."""
+
+
+
     cat = category.lower()
-    qs = QUESTIONS_BY_TYPE.get(cat)
+    qs = get_questions().get(cat)
 
     if not qs:
         return None
@@ -517,14 +516,29 @@ def answer_with_followup(
         qtype = question_data.type.lower()
         follow_up = question_data.follow_up
 
+
     answer, _ = oracle_answer(question, lang_hint, client, llm_model, "")
     if not follow_up:
         follow_up = DEFAULT_FOLLOW_UPS.get(qtype, "")
+
+    if isinstance(question_data, Question):
+        question = question_data.domanda
+        follow_up = question_data.follow_up or ""
+    else:
+        question = question_data.get("domanda", "")
+        follow_up = question_data.get("follow_up") or ""
+
+    answer, _ = oracle_answer(question, lang_hint, client, llm_model, "")
+
     return answer, follow_up
 
 
 def answer_and_log_followup(
-    question_data: dict[str, str],
+
+    question_data: Question | dict[str, str],
+=======
+    question_data: Question,
+
     client: Any,
     llm_model: str,
     log_path: Path,
@@ -544,8 +558,17 @@ def answer_and_log_followup(
     answer, follow_up = answer_with_followup(
         question_data, client, llm_model, lang_hint=lang_hint
     )
+    question = (
+        question_data.domanda
+        if isinstance(question_data, Question)
+        else question_data.get("domanda", "")
+    )
     append_log(
-        question_data.get("domanda", ""),
+
+        question,
+
+        question_data.domanda,
+
         answer,
         log_path,
         session_id=session_id,
