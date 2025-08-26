@@ -25,11 +25,11 @@ from .utils.error_handler import handle_error
 from .retrieval import Question, load_questions
 
 
-_QUESTIONS_CACHE: dict[str, List[dict[str, Any]]] | None = None
+_QUESTIONS_CACHE: dict[str, List[Question]] | None = None
 _QUESTIONS_MTIME: float | None = None
 
 
-def get_questions() -> dict[str, List[dict[str, Any]]]:
+def get_questions() -> dict[str, List[Question]]:
     """Return the questions dataset reloading it when the file changes."""
 
     global _QUESTIONS_CACHE, _QUESTIONS_MTIME
@@ -452,19 +452,7 @@ def stream_generate(
 
 
 def random_question(category: str) -> Question | None:
-    """Return a random question object from the desired ``category``."""
-
-
-    qs = get_questions().get(category.lower())
-
-def random_question(category: str) -> dict[str, str] | None:
-    """Return a random question from ``category`` without immediate repeats.
-
-    Questions already returned are tracked per category.  Once all questions in
-    a category have been used the tracking set is cleared, allowing the cycle to
-    restart.
-    """
-
+    """Return a random question from ``category`` without immediate repeats."""
 
     cat = category.lower()
     qs = QUESTIONS_BY_TYPE.get(cat)
@@ -498,7 +486,7 @@ def answer_with_followup(
 
 
 def answer_and_log_followup(
-    question_data: dict[str, str],
+    question_data: Question,
     client: Any,
     llm_model: str,
     log_path: Path,
@@ -519,7 +507,7 @@ def answer_and_log_followup(
         question_data, client, llm_model, lang_hint=lang_hint
     )
     append_log(
-        question_data.get("domanda", ""),
+        question_data.domanda,
         answer,
         log_path,
         session_id=session_id,
