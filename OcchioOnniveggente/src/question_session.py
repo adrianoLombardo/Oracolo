@@ -3,7 +3,12 @@ from __future__ import annotations
 """Session helper combining question rotation and answer tracking."""
 
 from dataclasses import dataclass, field
+import atexit
+import json
+import os
+import pickle
 import random
+from random import Random
 from typing import Dict, List, Optional
 
 from .oracle import get_questions
@@ -21,6 +26,11 @@ class QuestionSession:
     answers: List[str] = field(default_factory=list)
     replies: List[str] = field(default_factory=list)
 
+    rng: Random | None = None
+
+    state_path: str | os.PathLike[str] | None = None
+
+
     def __post_init__(self) -> None:
         if self.questions is None:
             self.questions = get_questions()
@@ -29,6 +39,7 @@ class QuestionSession:
         self._categories = list(self.questions.keys())
         self._index = 0
         self._used: Dict[str, set[int]] = {cat: set() for cat in self._categories}
+
 
     def next_question(
         self, category: str | None = None, tags: set[str] | None = None
@@ -80,9 +91,77 @@ class QuestionSession:
             category = None
         return None
 
+        self._rng = self.rng or random
+
+        if self.state_path:
+            path = os.fspath(self.state_path)
+            if os.path.exists(path):
+                self.load(path)
+            atexit.register(self.save, path)
+
+
+    def next_question(self, category: str | None = None) -> Question | None:
+        """Return a question, cycling categories and avoiding repeats."""
+
+        if category is None:
+            if self.weights:
+                cats = [c for c in self._categories if self.weights.get(c, 0) > 0]
+                weights = [self.weights.get(c, 0) for c in cats]
+                if not cats:
+                    return None
+                category = self._rng.choices(cats, weights=weights, k=1)[0]
+            else:
+                category = self._categories[self._index]
+                self._index = (self._index + 1) % len(self._categories)
+        cat = category.lower()
+        qs = self.questions.get(cat, [])
+        if not qs:
+            return None
+        used = self._used.setdefault(cat, set())
+        remaining = [i for i in range(len(qs)) if i not in used]
+        if not remaining:
+            used.clear()
+            remaining = list(range(len(qs)))
+        idx = self._rng.choice(remaining)
+        used.add(idx)
+        return qs[idx]
+
+
     def record_answer(self, answer: str, reply: str | None = None) -> None:
         """Store ``answer`` and optional user ``reply``."""
 
         self.answers.append(answer)
         if reply is not None:
             self.replies.append(reply)
+
+    def save(self, path: str | os.PathLike[str]) -> None:
+        """Persist session state to ``path`` in JSON or pickle format."""
+
+        path = os.fspath(path)
+        data = {
+            "used": {k: list(v) for k, v in self._used.items()},
+            "answers": self.answers,
+            "replies": self.replies,
+            "index": self._index,
+        }
+        if path.endswith(".json"):
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(data, f)
+        else:
+            with open(path, "wb") as f:
+                pickle.dump(data, f)
+
+    def load(self, path: str | os.PathLike[str]) -> None:
+        """Load session state from ``path``."""
+
+        path = os.fspath(path)
+        if path.endswith(".json"):
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        else:
+            with open(path, "rb") as f:
+                data = pickle.load(f)
+        self._used = {k: set(v) for k, v in data.get("used", {}).items()}
+        self.answers = data.get("answers", [])
+        self.replies = data.get("replies", [])
+        self._index = data.get("index", 0)
