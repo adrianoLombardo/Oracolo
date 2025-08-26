@@ -21,9 +21,11 @@ from typing import Any, AsyncGenerator, Callable, ClassVar, Dict, Iterable, Iter
 
 from langdetect import LangDetectException, detect  # type: ignore
 
-from .conversation import ChatState
+from .conversation import ConversationManager
 from .retrieval import Question, load_questions, Context
 from .event_bus import event_bus
+from .service_container import container
+
 
 logger = logging.getLogger(__name__)
 
@@ -240,12 +242,12 @@ def _build_instructions(
 def oracle_answer(
     question: str,
     lang_hint: str,
-    client: Any,
-    llm_model: str,
-    style_prompt: str,
+    client: Any | None = None,
+    llm_model: str | None = None,
+    style_prompt: str = "",
     *,
     context: list[dict[str, Any]] | None = None,
-    history: list[dict[str, str]] | None = None,
+    conv: ConversationManager | None = None,
     mode: str | None = None,
     policy_prompt: str | None = None,
     stream: bool = False,
@@ -253,9 +255,11 @@ def oracle_answer(
     question_type: str | None = None,
     categoria: str | None = None,
     off_topic_category: str | None = None,
-    chat: ChatState | None = None,
 ) -> Tuple[str, List[dict[str, Any]]]:
     """Return an answer from ``client`` and the context used."""
+
+    client = client or container.llm_client()
+    llm_model = llm_model or container.settings.openai.llm_model
 
     if question_type == "off_topic":
         ans = off_topic_reply(categoria)
@@ -268,7 +272,10 @@ def oracle_answer(
         event_bus.publish("response_ready", msg)
         return msg, []
 
+    history = conv.messages_for_llm() if conv else None
     msgs = _build_messages(question, context, history)
+    if conv:
+        conv.push_user(question)
     instr = _build_instructions(lang_hint, context, style_prompt, mode, policy_prompt)
 
     if stream and hasattr(client.responses, "with_streaming_response"):
@@ -282,28 +289,38 @@ def oracle_answer(
                 text += delta
                 if on_token:
                     on_token(delta)
+
         if chat:
             chat.push_assistant(text)
         event_bus.publish("response_ready", text)
+
+        if conv:
+            conv.push_assistant(text)
+
         return text, context or []
 
     resp = client.responses.create(model=llm_model, instructions=instr, input=msgs)
     ans = getattr(resp, "output_text", "")
+
     if chat:
         chat.push_assistant(ans)
     event_bus.publish("response_ready", ans)
+
+    if conv:
+        conv.push_assistant(ans)
+
     return ans, context or []
 
 
 async def oracle_answer_async(
     question: str,
     lang_hint: str,
-    client: Any,
-    llm_model: str,
-    style_prompt: str,
+    client: Any | None = None,
+    llm_model: str | None = None,
+    style_prompt: str = "",
     *,
     context: list[dict[str, Any]] | None = None,
-    history: list[dict[str, str]] | None = None,
+    conv: ConversationManager | None = None,
     mode: str | None = None,
     policy_prompt: str | None = None,
     stream: bool = False,
@@ -311,9 +328,10 @@ async def oracle_answer_async(
     question_type: str | None = None,
     categoria: str | None = None,
     off_topic_category: str | None = None,
-    chat: ChatState | None = None,
 ) -> Tuple[str, List[dict[str, Any]]]:
     """Async wrapper around :func:`oracle_answer` using ``asyncio.to_thread``."""
+    client = client or container.llm_client()
+    llm_model = llm_model or container.settings.openai.llm_model
 
     return await asyncio.to_thread(
         oracle_answer,
@@ -323,7 +341,7 @@ async def oracle_answer_async(
         llm_model,
         style_prompt,
         context=context,
-        history=history,
+        conv=conv,
         mode=mode,
         policy_prompt=policy_prompt,
         stream=stream,
@@ -331,25 +349,29 @@ async def oracle_answer_async(
         question_type=question_type,
         categoria=categoria,
         off_topic_category=off_topic_category,
-        chat=chat,
     )
 
 
 async def oracle_answer_stream(
     question: str,
     lang_hint: str,
-    client: Any,
-    llm_model: str,
-    style_prompt: str,
+    client: Any | None = None,
+    llm_model: str | None = None,
+    style_prompt: str = "",
     *,
     context: list[dict[str, Any]] | None = None,
     mode: str | None = None,
     policy_prompt: str | None = None,
-    chat: ChatState | None = None,
+    conv: ConversationManager | None = None,
 ) -> AsyncGenerator[Tuple[str, bool], None]:
     """Async generator yielding response chunks and completion flag."""
+    client = client or container.llm_client()
+    llm_model = llm_model or container.settings.openai.llm_model
 
-    msgs = _build_messages(question, context, None)
+    history = conv.messages_for_llm() if conv else None
+    msgs = _build_messages(question, context, history)
+    if conv:
+        conv.push_user(question)
     instr = _build_instructions(lang_hint, context, style_prompt, mode, policy_prompt)
     stream = client.responses.with_streaming_response.create(
         model=llm_model, instructions=instr, input=msgs
@@ -360,25 +382,35 @@ async def oracle_answer_stream(
             delta = getattr(evt, "delta", "")
             text += delta
             yield delta, False
+
     if chat:
         chat.push_assistant(text)
     event_bus.publish("response_ready", text)
+
+    if conv:
+        conv.push_assistant(text)
+
     yield text, True
 
 
 def stream_generate(
     question: str,
     lang_hint: str,
-    client: Any,
-    llm_model: str,
-    style_prompt: str,
+    client: Any | None = None,
+    llm_model: str | None = None,
+    style_prompt: str = "",
     *,
     stop_event: Event | None = None,
-    chat: ChatState | None = None,
+    conv: ConversationManager | None = None,
 ) -> Iterator[str]:
     """Return a generator producing chunks from the streaming response."""
+    client = client or container.llm_client()
+    llm_model = llm_model or container.settings.openai.llm_model
 
-    msgs = _build_messages(question, None, None)
+    history = conv.messages_for_llm() if conv else None
+    msgs = _build_messages(question, None, history)
+    if conv:
+        conv.push_user(question)
     instr = _build_instructions(lang_hint, None, style_prompt, None, None)
 
     def _gen() -> Iterator[str]:
@@ -393,9 +425,14 @@ def stream_generate(
                 delta = getattr(evt, "delta", "")
                 text += delta
                 yield delta
+
         if chat:
             chat.push_assistant(text)
         event_bus.publish("response_ready", text)
+
+        if conv:
+            conv.push_assistant(text)
+
 
     return _gen()
 
@@ -465,29 +502,24 @@ def export_audio_answer(
 
 
 def synthesize(text: str, *_, **__) -> bytes:
-    """Placeholder text-to-speech function returning dummy bytes.
+    """Synthesize ``text`` using the configured TTS provider."""
 
-    The real project exposes a much richer audio synthesis pipeline.  The
-    tests only require the function to exist so that other modules can import
-    it.  The returned value is therefore an empty byte string.
-    """
-
-    return b""
+    tts = container.text_to_speech()
+    return tts.synthesize(text)
 
 
 async def synthesize_async(
     text: str,
     path: Path,
-    client: Any,
-    model: str,
-    voice: str,
+    client: Any | None = None,
+    model: str = "",
+    voice: str = "",
     **kwargs: Any,
 ) -> bytes:
     """Async wrapper around :func:`synthesize` using ``asyncio.to_thread``."""
 
-    return await asyncio.to_thread(
-        synthesize, text, path, client, model, voice, **kwargs
-    )
+    tts = container.text_to_speech()
+    return await asyncio.to_thread(tts.synthesize, text)
 
 
 # ---------------------------------------------------------------------------
@@ -495,16 +527,33 @@ async def synthesize_async(
 # ---------------------------------------------------------------------------
 
 async def transcribe(
-    audio_path: Path, client: Any, model: str, *, chat: ChatState | None = None
+
+    audio_path: Path,
+    client: Any | None = None,
+    model: str | None = None,
+    *,
+    chat: ChatState | None = None,
+
+    audio_path: Path, client: Any, model: str, *, conv: ConversationManager | None = None
+
 ) -> str:
-    """Best effort transcription with coarse error handling.
+    """Best effort transcription with coarse error handling."""
+
+
+    if client is None:
+        stt = container.speech_to_text()
+        text = await asyncio.to_thread(stt.transcribe, audio_path)
+        if chat:
+            chat.push_user(text)
+        return text
 
     ``AsyncOpenAI`` removed the ``client.transcribe`` shortcut in favour of the
     ``audio.transcriptions.create`` endpoint.  The helper now supports both
     calling conventions for compatibility with older clients used in the tests.
-    When ``chat`` is provided the transcribed text is appended to it as a user
+    When ``conv`` is provided the transcribed text is appended to it as a user
     message.
     """
+
 
     try:
         result: Any
@@ -528,35 +577,43 @@ async def transcribe(
             text = str(getattr(result, "text"))
         else:
             text = str(result)
-        if chat:
-            chat.push_user(text)
+        if conv:
+            conv.push_user(text)
         return text
     except ConnectionError:
         msg = "Errore di rete, controlla la connessione"
         logger.warning("Errore di rete, controlla la connessione (context: transcribe)")
-        if chat:
-            chat.push_user(msg)
+        if conv:
+            conv.push_user(msg)
         return msg
     except ValueError:
         msg = "Errore dell'API"
         logger.error("Errore dell'API (context: transcribe)")
-        if chat:
-            chat.push_user(msg)
+        if conv:
+            conv.push_user(msg)
         return msg
     except OSError:
         msg = "Errore audio"
         logger.error("Errore audio (context: transcribe)")
-        if chat:
-            chat.push_user(msg)
+        if conv:
+            conv.push_user(msg)
         return msg
 
 
 async def fast_transcribe(
-    audio_path: Path, client: Any, model: str, *, chat: ChatState | None = None
+
+    audio_path: Path,
+    client: Any | None = None,
+    model: str | None = None,
+    *,
+    chat: ChatState | None = None,
+
+    audio_path: Path, client: Any, model: str, *, conv: ConversationManager | None = None
+
 ) -> str:
     """Alias of :func:`transcribe` maintained for backwards compatibility."""
 
-    return await transcribe(audio_path, client, model, chat=chat)
+    return await transcribe(audio_path, client, model, conv=conv)
 
 
 # ---------------------------------------------------------------------------

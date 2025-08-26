@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from src.conversation import ConversationManager
+from .conversation import ConversationManager
 
 
 @dataclass
