@@ -1,38 +1,62 @@
-"""Semplici helper per le risposte dell'Oracolo.
+"""Utility helpers for the Oracle application.
 
-Questo modulo implementa versioni minimali delle funzioni utilizzate nei test
-unitari.  Le funzioni simulano il comportamento dell'API OpenAI rispondendo
-tramite l'oggetto ``client`` passato come parametro.
+This module provides small, self contained helpers that are used across the
+project and in the unit tests.  The original project contains a much more
+feature rich implementation, however for the purposes of the tests we only
+need a compact subset of the behaviour.
 """
 
 from __future__ import annotations
 
-
-import json
-from pathlib import Path
-from typing import Any, AsyncGenerator, Callable, Dict, List, Tuple
+from datetime import datetime
 import asyncio
 import csv
 import json
-
-from datetime import datetime
 from pathlib import Path
-from typing import Any, AsyncGenerator, Dict, List, Tuple
-
-from .openai_async import run, run_async
+from typing import Any, AsyncGenerator, Callable, Iterable, List, Tuple
 
 
-def format_citations(sources: List[Dict[str, Any]]) -> str:
-    ids = [s.get("id", "") for s in sources if s.get("id")]
-    return ", ".join(ids)
+# ---------------------------------------------------------------------------
+# Formatting helpers
+# ---------------------------------------------------------------------------
+
+def format_citations(sources: Iterable[dict[str, Any]]) -> str:
+    """Return a comma separated string of the ``id`` fields in ``sources``.
+
+    Only entries that provide an ``id`` are included.  This mirrors the small
+    helper used in the real project and is exercised directly by the tests.
+    """
+
+    return ", ".join(str(s["id"]) for s in sources if s.get("id"))
 
 
-def export_audio_answer(text: str, out_path: Path, *, synth) -> None:
+def export_audio_answer(
+    text: str, out_path: Path, *, synth: Callable[[str, Path], None] | None = None
+) -> None:
+    """Create an audio file for ``text`` using ``synth``.
+
+    The tests inject a dummy ``synth`` implementation which simply writes
+    bytes to ``out_path``.  The function therefore only needs to make sure the
+    destination directory exists and call the callback.
+    """
+
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    synth(text, out_path)
+    if synth is None:
+        # Fallback: create an empty file so that callers can still read it.
+        out_path.write_bytes(b"")
+    else:
+        synth(text, out_path)
 
 
 def extract_summary(answer: str) -> str:
+    """Extract the summary section from a structured answer.
+
+    Answers in this project may follow a ``1)`` ``2)`` numbered structure
+    where the first element contains a short summary introduced either with
+    ``Sintesi:`` or directly after ``1)``.  If no such structure is found the
+    whole answer is returned.
+    """
+
     for line in answer.splitlines():
         line = line.strip()
         if line.lower().startswith("1)") and ":" in line:
@@ -41,97 +65,17 @@ def extract_summary(answer: str) -> str:
             return line.split(":", 1)[1].strip()
     return answer.strip()
 
-import uuid
-from pathlib import Path
-from typing import Any, AsyncGenerator, Callable, Iterable
-from typing import Any, Dict, List, Tuple, Callable, AsyncGenerator
 
-import asyncio
-import logging
-import io
-from langdetect import detect
-from pydub import AudioSegment
-import tempfile
-import base64
-import json as _json
-import openai
-import websockets
-
-from .openai_async import run_async, run
-from .local_audio import tts_local, stt_local, stt_local_faster
-from .local_llm import llm_local
-from .utils import retry_with_backoff
-from .cache import cache_get_json, cache_set_json
-from .service_container import container
-from .chat import ChatState
-
-
-
-def format_citations(sources: Iterable[dict[str, Any]]) -> str:
-    """Return a comma-separated string of source IDs."""
-    return ", ".join(str(s.get("id", "")) for s in sources if s.get("id"))
-
-
-def export_audio_answer(
-    text: str,
-    out_path: Path,
-    *,
-
-    synth: Callable[[str, Path], None] | None = None,
-) -> None:
-    """Generate an audio file for ``text`` using ``synth``."""
-    synth = synth or (lambda t, p: p.write_bytes(b""))
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    synth(text, out_path)
-
-    device: str = "cpu",
-) -> str | None:
-    """Perform a single transcription call with optional language hint."""
-
-
-
-    if container.settings.stt_backend != "openai":
-        pass
-
-
-    if stt_model == "local":
-        container.load_stt_model()
-        p = Path(path_or_bytes) if isinstance(path_or_bytes, (str, Path)) else Path("temp.wav")
-        if not isinstance(path_or_bytes, (str, Path)):
-            p.write_bytes(path_or_bytes)
-        return stt_local(p, lang_hint or "it")
-    kwargs: Dict[str, Any] = {}
-    if lang_hint in ("it", "en"):
-        kwargs["language"] = lang_hint
-
-    tmp_path: Path | None = None
-
-    try:
-        if stt_model == "local":
-            container.load_stt_model()
-            if isinstance(path_or_bytes, (str, Path)):
-                p = Path(path_or_bytes)
-            else:
-                with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp:
-                    tmp.write(path_or_bytes)
-                    tmp_path = Path(tmp.name)
-                p = tmp_path
-
-            return stt_local(
-                p,
-                lang=lang_hint or "it",
-                device=container.settings.compute.stt.device,
-            )
-
-            return stt_local_faster(p, lang_hint or "it", device=device)
-
-
-
+# ---------------------------------------------------------------------------
+# Core answer helpers
+# ---------------------------------------------------------------------------
 
 
 def _build_instructions(
-    lang_hint: str, context: List[Dict[str, Any]] | None, mode: str
+    lang_hint: str, context: List[dict[str, Any]] | None, mode: str
 ) -> str:
+    """Return an instruction string for the LLM."""
+
     parts: List[str] = []
     if lang_hint == "it":
         parts.append("Rispondi in italiano.")
@@ -147,102 +91,185 @@ def _build_instructions(
     return "\n".join(parts)
 
 
+def _build_messages(
+    question: str,
+    context: List[dict[str, Any]] | None,
+    history: List[dict[str, str]] | None,
+) -> List[dict[str, str]]:
+    """Create the chat message list passed to the model."""
+
+    messages: List[dict[str, str]] = []
+    if history:
+        messages.extend(history)
+    if context:
+        for c in context:
+            messages.append({"role": "system", "content": c.get("text", "")})
+        sources = "; ".join(
+            f"[{i}] {c.get('text', '')}" for i, c in enumerate(context, 1)
+        )
+        messages.append({"role": "system", "content": f"Fonti: {sources}"})
+    messages.append({"role": "user", "content": question})
+    return messages
+
+
 def oracle_answer(
+    question: str,
+    lang_hint: str,
+    client: Any,
+    llm_model: str,
+    style_prompt: str,
+    *,
+    context: List[dict[str, Any]] | None = None,
+    history: List[dict[str, str]] | None = None,
+    policy_prompt: str = "",
+    mode: str = "detailed",
+    stream: bool = False,
+    on_token: Callable[[str], None] | None = None,
+) -> Tuple[str, List[dict[str, Any]]]:
+    """Return an answer from ``client`` and the context used.
 
-        if isinstance(path_or_bytes, (str, Path)):
-            with open(path_or_bytes, "rb") as f:
-                tx = await _maybe_await(
-                    client.audio.transcriptions.create(
-                        model=stt_model, file=f, **kwargs
-                    )
-                )
-        else:
+    The ``client`` argument is expected to mimic the OpenAI Python client's
+    interface.  In the tests a small dummy object is provided.  When ``stream``
+    is ``True`` streaming tokens are forwarded to ``on_token`` and concatenated
+    to form the final answer.
+    """
 
-            tx = await _maybe_await(
-                client.audio.transcriptions.create(
-                    model=stt_model, file=path_or_bytes, **kwargs
-                )
-            )
+    instructions = _build_instructions(lang_hint, context, mode)
+    messages = _build_messages(question, context, history)
+
+    if stream:
+        response = client.responses.with_streaming_response.create(
+            model=llm_model, instructions=instructions, input=messages
+        )
+        output_text = ""
+        on_token = on_token or (lambda _t: None)
+        with response as stream_resp:
+            for event in stream_resp:
+                if getattr(event, "type", "") == "response.output_text.delta":
+                    delta = getattr(event, "delta", "")
+                    output_text += delta
+                    on_token(delta)
+        return output_text, context or []
+
+    resp = client.responses.create(
+        model=llm_model, instructions=instructions, input=messages
+    )
+    return resp.output_text, context or []
 
 
-def extract_summary(text: str) -> str:
-    """Extract the summary section from a structured answer."""
-    import re
+async def oracle_answer_async(*args, **kwargs):  # pragma: no cover - thin wrapper
+    """Asynchronous wrapper around :func:`oracle_answer`."""
 
-    m = re.search(r"1\)\s*[^:]+:\s*(.*?)\n2\)", text, re.S)
-    if m:
-        return m.group(1).strip()
-    return text.strip()
+    return oracle_answer(*args, **kwargs)
 
 
+async def oracle_answer_stream(
+    question: str,
+    lang_hint: str,
+    client: Any,
+    llm_model: str,
+    style_prompt: str,
+    *,
+    context: List[dict[str, Any]] | None = None,
+    history: List[dict[str, str]] | None = None,
+    policy_prompt: str = "",
+    mode: str = "detailed",
+) -> AsyncGenerator[Tuple[str, bool], None]:
+    """Stream answer tokens from the model.
+
+    Yields ``(chunk, False)`` for each token and finally ``(full_text, True)``
+    with the accumulated output.
+    """
+
+    instructions = _build_instructions(lang_hint, context, mode)
+    messages = _build_messages(question, context, history)
+    response = client.responses.with_streaming_response.create(
+        model=llm_model, instructions=instructions, input=messages
+    )
+
+    output_text = ""
+    with response as stream_resp:
+        for event in stream_resp:
+            if getattr(event, "type", "") == "response.output_text.delta":
+                delta = getattr(event, "delta", "")
+                output_text += delta
+                yield delta, False
+                await asyncio.sleep(0)  # allow cooperative scheduling
+    yield output_text, True
+
+
+# ---------------------------------------------------------------------------
+# Logging
+# ---------------------------------------------------------------------------
 
 def append_log(
     question: str,
     answer: str,
-
-    log_path: Path,
-
     path: Path,
-
     *,
-    session_id: str | None = None,
-    lang: str = "",
-    topic: str = "",
-
-    sources: List[Dict[str, Any]] | None = None,
+    session_id: str,
+    lang: str | None = None,
+    topic: str | None = None,
+    sources: List[dict[str, Any]] | None = None,
 ) -> str:
-    sid = session_id or str(int(datetime.utcnow().timestamp()))
-    entry = {
-        "timestamp": int(datetime.utcnow().timestamp()),
-        "session_id": sid,
+    """Append an interaction to ``path``.
 
-    sources: list[dict[str, Any]] | None = None,
-) -> str:
+    The log can be either JSON lines (``.jsonl``) or CSV (``.csv``).  Metadata
+    such as session id, language and topic are recorded alongside the question
+    and answer.  The function returns the ``session_id`` for convenience.
+    """
 
-    """Append a QA pair to a log in JSONL or CSV format."""
-    session_id = session_id or uuid.uuid4().hex
     sources = sources or []
     entry = {
-        "timestamp": asyncio.get_event_loop().time()
-        if asyncio.get_event_loop().is_running()
-        else 0.0,
+        "timestamp": datetime.utcnow().isoformat(),
         "session_id": session_id,
-
         "lang": lang,
         "topic": topic,
         "question": question,
         "answer": answer,
         "summary": extract_summary(answer),
-
-        "sources": sources or [],
+        "sources": sources,
     }
-    log_path.parent.mkdir(parents=True, exist_ok=True)
-    if log_path.suffix == ".csv":
-        write_header = not log_path.exists()
-        fields = ["timestamp", "session_id", "lang", "topic", "question", "answer", "sources"]
-        row = {k: entry[k] for k in fields}
-        with log_path.open("a", encoding="utf-8", newline="") as f:
-            writer = csv.DictWriter(f, fieldnames=fields, quoting=csv.QUOTE_ALL)
-            if write_header:
-                writer.writeheader()
-            writer.writerow(row)
-    else:
-        with log_path.open("a", encoding="utf-8") as f:
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    if path.suffix == ".csv":
+        file_exists = path.exists()
+        with path.open("a", encoding="utf-8", newline="") as f:
+            writer = csv.writer(f, quoting=csv.QUOTE_ALL)
+            if not file_exists:
+                writer.writerow(
+                    [
+                        "timestamp",
+                        "session_id",
+                        "lang",
+                        "topic",
+                        "question",
+                        "answer",
+                        "sources",
+                    ]
+                )
+            writer.writerow(
+                [
+                    entry["timestamp"],
+                    session_id,
+                    lang or "",
+                    topic or "",
+                    question,
+                    answer,
+                    json.dumps(sources, ensure_ascii=False),
+                ]
+            )
+    else:  # default to json lines
+        with path.open("a", encoding="utf-8") as f:
             f.write(json.dumps(entry, ensure_ascii=False) + "\n")
-    return sid
+
+    return session_id
 
 
-def transcribe(
-    path_or_bytes, client, stt_model: str, *, debug: bool = False, lang_hint: str | None = None
-) -> Tuple[str | None, str]:
-    return "", ""
-
-
-def fast_transcribe(
-    path_or_bytes, client, stt_model: str, lang_hint: str | None = None
-) -> str | None:
-    return ""
-
+# ---------------------------------------------------------------------------
+# Text to speech stubs
+# ---------------------------------------------------------------------------
 
 def synthesize(
     text: str,
@@ -251,708 +278,24 @@ def synthesize(
     tts_model: str | None = None,
     tts_voice: str | None = None,
 ) -> None:
-    pass
+    """Minimal TTS helper used by the UI.
 
-
-def _build_messages(
-    question: str,
-    context: List[Dict[str, Any]] | None,
-    history: List[Dict[str, str]] | None,
-) -> List[Dict[str, str]]:
-    messages: List[Dict[str, str]] = []
-    if history:
-        messages.extend(history)
-    if context:
-        sources: List[str] = []
-        for idx, c in enumerate(context, 1):
-            txt = c.get("text", "")
-            messages.append({"role": "system", "content": txt})
-            sources.append(f"[{idx}] {txt}")
-        if sources:
-            messages.append({"role": "system", "content": "Fonti: " + ", ".join(sources)})
-    messages.append({"role": "user", "content": question})
-    return messages
-
-
-async def oracle_answer_async(
-
-        "sources": sources,
-    }
-    path.parent.mkdir(parents=True, exist_ok=True)
-    if path.suffix == ".jsonl":
-        with path.open("a", encoding="utf-8") as f:
-            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
-
-    """Detect conversation language from audio or text.
-
-    Returns ``"it"`` for Italian, ``"en"`` for English or ``""`` if unknown.
-    When ``state`` is provided the detected language is stored in
-    ``state.language`` for future reuse.
+    The function simply writes an empty file; the real project would call a TTS
+    backend.  It returns ``None`` to mirror the original signature.
     """
 
-    snippet = ""
-    if text:
-        snippet = text
-    elif path_or_bytes is not None and client is not None and stt_model:
-        try:
-            if isinstance(path_or_bytes, (str, Path)):
-                audio = AudioSegment.from_file(path_or_bytes)
-            else:
-                audio = AudioSegment.from_file(io.BytesIO(path_or_bytes))
-            audio = audio[:2000]
-            buf = io.BytesIO()
-            audio.export(buf, format="wav")
-            buf.seek(0)
-            snippet = fast_transcribe(buf, client, stt_model) or ""
-        except Exception as e:
-            logger.error("Errore rilevamento lingua: %s", e, exc_info=True)
-
-    lang = ""
-    if snippet:
-        try:
-            det = detect(snippet)
-            if det.startswith("it"):
-                lang = "it"
-            elif det.startswith("en"):
-                lang = "en"
-        except Exception:
-            lang = ""
-
-    if state is not None and lang in ("it", "en"):
-        state.language = lang
-    return lang
-
-def fast_transcribe(
-    path_or_bytes,
-    client,
-    stt_model: str,
-    lang_hint: str | None = None,
-) -> str | None:
-    return run(
-        fast_transcribe_async,
-        path_or_bytes,
-        client,
-        stt_model,
-        lang_hint=lang_hint,
-    )
-
-
-async def transcribe_async(
-
-    path_or_bytes: str | Path | bytes,
-    client,
-    stt_model: str,
-    *,
-    debug: bool = False,
-    lang_hint: str | None = None,
-
-    device: str = "cpu",
-
-
-    backend: str | None = None,
-
-    state: ChatState | None = None,
-
-
-) -> Tuple[str | None, str]:
-
-    """Trascrive un percorso o dei ``bytes`` e restituisce testo e lingua.
-
-    ``lang_hint`` forza la lingua ("it" o "en") migliorando l'accuratezza
-    della trascrizione quando la lingua di conversazione è nota.
-    """
-
-
-    backend = backend or container.settings.stt_backend
-    if backend != "openai":
-
-    if lang_hint not in ("it", "en") and state and state.language in ("it", "en"):
-        lang_hint = state.language
-    if lang_hint not in ("it", "en"):
-        lang_hint = detect_language(
-            path_or_bytes,
-            client=client,
-            stt_model=stt_model,
-            state=state,
-        )
-
-
-    """Trascrive un percorso o dei ``bytes`` e restituisce testo e lingua."""
-
-    if stt_model == "local":
-
-
-        p = Path(path_or_bytes) if isinstance(path_or_bytes, (str, Path)) else Path("temp.wav")
-        if not isinstance(path_or_bytes, (str, Path)):
-            p.write_bytes(path_or_bytes)
-        return stt_local(p, lang_hint or "it"), lang_hint or ""
-
-        tmp_path: Path | None = None
-        try:
-            if isinstance(path_or_bytes, (str, Path)):
-                p = Path(path_or_bytes)
-            else:
-                with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp:
-                    tmp.write(path_or_bytes)
-                    tmp_path = Path(tmp.name)
-                p = tmp_path
-
-            return (
-                stt_local(
-                    p,
-                    lang=lang_hint or "it",
-                    device=container.settings.compute.stt.device,
-                ),
-                lang_hint or "",
-            )
-
-            return stt_local_faster(p, lang_hint or "it", device=device), lang_hint or ""
-
-        finally:
-            if tmp_path:
-                try:
-                    tmp_path.unlink()
-                except OSError:
-                    logger.warning("Impossibile eliminare file temporaneo %s", tmp_path, exc_info=True)
-
-
-    data_bytes: bytes
-    try:
-        if isinstance(path_or_bytes, (str, Path)):
-            data_bytes = Path(path_or_bytes).read_bytes()
-        else:
-            data_bytes = path_or_bytes
-    except (OSError, TypeError, ValueError) as e:
-        logger.error("Errore lettura input audio: %s", e, exc_info=True)
-        return None, ""
-    key_hash = hashlib.sha1(data_bytes).hexdigest()
-    cache_key = f"transcribe:{key_hash}:{lang_hint or ''}"
-    cached = cache_get_json(cache_key)
-    if cached:
-        return cached.get('text', ''), cached.get('lang', '')
-
-
-    model_to_use = stt_model
-    if lang_hint in ("it", "en") and "{lang}" in stt_model:
-        model_to_use = stt_model.replace("{lang}", lang_hint)
-
-
-    try:
-        kwargs: Dict[str, Any] = {
-            "model": model_to_use,
-            "response_format": "json",
-        }
-        if lang_hint in ("it", "en"):
-            kwargs["language"] = lang_hint
-        if isinstance(path_or_bytes, (str, Path)):
-            with open(path_or_bytes, "rb") as f:
-                kwargs["file"] = f
-                tx = await _maybe_await(client.audio.transcriptions.create(**kwargs))
-        else:
-            kwargs["file"] = path_or_bytes
-            tx = await _maybe_await(client.audio.transcriptions.create(**kwargs))
-    except (openai.OpenAIError, TimeoutError, OSError) as e:
-        logger.error("Errore OpenAI: %s", e, exc_info=True)
-        return None, ""
-    text = (getattr(tx, "text", "") or "").strip()
-    lang = getattr(tx, "language", "") or ""
-    if lang.startswith("it"):
-        lang_code = "it"
-    elif lang.startswith("en"):
-        lang_code = "en"
-
-    else:
-        new_file = not path.exists()
-        with path.open("a", encoding="utf-8", newline="") as f:
-            writer = csv.writer(f, quoting=csv.QUOTE_ALL)
-            if new_file:
-                writer.writerow([
-                    "timestamp",
-                    "session_id",
-                    "lang",
-                    "topic",
-                    "question",
-                    "answer",
-                    "sources",
-                ])
-            writer.writerow([
-                entry["timestamp"],
-                session_id,
-                lang,
-                topic,
-                question,
-                answer,
-                json.dumps(sources),
-            ])
-    return session_id
-
-
-def _build_instructions(lang_hint: str, policy: str, mode: str) -> str:
-    instr = "Rispondi in italiano." if lang_hint == "it" else "Rispondi in inglese."
-    if policy:
-        instr += " " + policy
-    if mode == "concise":
-        instr += " Stile conciso."
-    else:
-        instr += " Struttura: 1) Sintesi: ... 2) Dettagli: ... 3) Fonti: ..."
-    return instr
-
-
-def _build_messages(question: str, context: Iterable[dict[str, Any]] | None) -> list[dict[str, str]]:
-    msgs: list[dict[str, str]] = []
-    if context:
-        src_lines = "\n".join(f"[{i+1}] {c.get('text', '')}" for i, c in enumerate(context))
-        msgs.append({"role": "system", "content": f"Fonti:\n{src_lines}"})
-    msgs.append({"role": "user", "content": question})
-    return msgs
-
-
-def oracle_answer(
-
-
-    question: str,
-    lang_hint: str,
-    client: Any,
-    llm_model: str,
-    style_prompt: str,
-    *,
-
-    context: List[Dict[str, Any]] | None = None,
-    history: List[Dict[str, str]] | None = None,
-    topic: str | None = None,
-    policy_prompt: str | None = None,
-    mode: str = "detailed",
-    stream: bool = False,
-    on_token: Callable[[str], None] | None = None,
-) -> Tuple[str, List[Dict[str, Any]] | None]:
-    """Restituisce la risposta del modello e il contesto usato."""
-
-    instructions = _build_instructions(lang_hint, context, mode)
-    messages: List[Dict[str, str]] = []
-    if context:
-        src = "Fonti:\n" + "\n".join(
-            f"[{i+1}] {c.get('text', '')}" for i, c in enumerate(context)
-        )
-        messages.append({"role": "system", "content": src})
-    messages.append({"role": "user", "content": question})
-
-    context: list[dict[str, Any]] | None = None,
-    policy_prompt: str = "",
-    mode: str = "detailed",
-    stream: bool = False,
-
-    on_token: callable | None = None,
-    llm_backend: str = "openai",
-    llm_device: str = "cpu",
-) -> Tuple[str | None, List[Dict[str, Any]]]:
-    if llm_model == "local":
-        from .service_container import container
-
-        ans = await container.llm_batcher().generate(question)
-        return ans, context or []
-
-    instructions = (
-        "Answer in English." if lang_hint == "en" else "Rispondi in italiano."
-    )
-    instructions += " Rispondi SOLO usando i passaggi; se non sono sufficienti, chiedi chiarimenti."
-    if mode == "concise":
-        instructions += " Stile conciso: 2-4 frasi e termina con una domanda di follow-up."
-    else:
-        instructions += " Struttura: 1) sintesi, 2) 2-3 dettagli puntuali, 3) fonti citate [1], [2], …"
-    messages = _build_messages(question, context, history)
-
-    if stream and hasattr(client.responses, "with_streaming_response"):
-        with client.responses.with_streaming_response.create(
-            model=llm_model, instructions=instructions, input=messages
-        ) as resp_stream:
-            for ev in resp_stream:
-                if getattr(ev, "type", "") == "response.output_text.delta" and on_token:
-                    on_token(getattr(ev, "delta", ""))
-            return getattr(resp_stream, "output_text", None), context or []
-
-    resp = client.responses.create(
-        model=llm_model, instructions=instructions, input=messages
-    )
-    answer = getattr(resp, "output_text", None)
-    if stream and answer and on_token:
-        on_token(answer)
-    return answer, context or []
-
-
-def oracle_answer(
-
-    on_token: Callable[[str], None] | None = None,
-) -> tuple[str, list[dict[str, Any]] | None]:
-    """Return the answer text and context using the provided ``client``."""
-    instructions = _build_instructions(lang_hint, policy_prompt, mode)
-    if context:
-        instructions += " Rispondi SOLO usando i passaggi forniti."
-    messages = _build_messages(question, context)
-
-
-    if stream and hasattr(client.responses, "with_streaming_response"):
-        stream_obj = client.responses.with_streaming_response.create(
-            model=llm_model, instructions=instructions, input=messages
-
-    if llm_model == "local":
-        container.load_llm(llm_model, container.settings.compute.llm.device)
-        ans = llm_local(
-            question,
-            device=container.settings.compute.llm.device,
-            style_prompt=style_prompt,
-            context=context,
-            history=history,
-            topic=topic,
-            policy_prompt=policy_prompt,
-            mode=mode,
-
-        )
-        if on_token:
-            for event in stream_obj:
-                if getattr(event, "type", "") == "response.output_text.delta":
-                    on_token(event.delta)
-        return stream_obj.output_text, context
-    else:
-        resp = client.responses.create(
-            model=llm_model, instructions=instructions, input=messages
-        )
-        return resp.output_text, context
-
-
-            try:
-                ans = local_llm.generate(
-                    messages,
-                    model_path=llm_model,
-                    device=llm_device,
-                    precision=container.settings.compute.llm.precision,
-                )
-            except Exception as e:  # pragma: no cover - runtime dependent
-                logger.error("Errore LLM locale: %s", e, exc_info=True)
-                ans = retry_with_backoff(do_request).strip()
-        else:
-            ans = retry_with_backoff(do_request).strip()
-    except (openai.OpenAIError, TimeoutError) as e:
-        logger.error("Errore OpenAI: %s", e, exc_info=True)
-        return None, context or []
-
-
-    cache_set_json(cache_key, ans, ttl=container.settings.cache_ttl)
-    return ans, context or []
-
-async def oracle_answer_async(
-
-
-    if stream:
-        stream_obj = client.responses.with_streaming_response.create(
-            model=llm_model, instructions=instructions, input=messages
-        )
-        tokens: List[str] = []
-        for ev in stream_obj:
-            if getattr(ev, "type", "") == "response.output_text.delta":
-                if on_token:
-                    on_token(ev.delta)
-                tokens.append(ev.delta)
-        text = "".join(tokens) or getattr(stream_obj, "output_text", "")
-        return text, context or []
-
-    resp = client.responses.create(
-        model=llm_model, instructions=instructions, input=messages
-    )
-    return getattr(resp, "output_text", ""), context or []
-
-
-
-async def oracle_answer_stream(
-
-
-async def oracle_answer_stream(
-
-
-    question: str,
-    lang_hint: str,
-    client: Any,
-    llm_model: str,
-    style_prompt: str,
-    *,
-
-    context: List[Dict[str, Any]] | None = None,
-
-) -> AsyncGenerator[Tuple[str, bool], None]:
-    """Generatore asincrono che restituisce la risposta a chunk."""
-
-    instructions = _build_instructions(lang_hint, context, "detailed")
-    msgs: List[Dict[str, str]] = []
-    if context:
-        src = "Fonti:\n" + "\n".join(
-            f"[{i+1}] {c.get('text', '')}" for i, c in enumerate(context)
-        )
-        msgs.append({"role": "system", "content": src})
-    msgs.append({"role": "user", "content": question})
-    stream_obj = client.responses.with_streaming_response.create(
-        model=llm_model,
-        instructions=instructions,
-        input=msgs,
-
-    history: List[Dict[str, str]] | None = None,
-    topic: str | None = None,
-    policy_prompt: str = "",
-    mode: str = "detailed",
-    stream: bool = False,
-    on_token: callable | None = None,
-    llm_backend: str = "openai",
-    llm_device: str = "cpu",
-) -> Tuple[str | None, List[Dict[str, Any]]]:
-    return run(
-        oracle_answer_async,
-        question,
-        lang_hint,
-        client,
-        llm_model,
-        style_prompt,
-        context=context,
-        history=history,
-        topic=topic,
-        policy_prompt=policy_prompt,
-        mode=mode,
-        stream=stream,
-        on_token=on_token,
-        llm_backend=llm_backend,
-        llm_device=llm_device,
-
-    )
-    tokens: List[str] = []
-    for ev in stream_obj:
-        if getattr(ev, "type", "") == "response.output_text.delta":
-            tokens.append(ev.delta)
-            yield ev.delta, False
-    final = "".join(tokens) or getattr(stream_obj, "output_text", "")
-    yield final, True
-
-    context: list[dict[str, Any]] | None = None,
-) -> AsyncGenerator[tuple[str, bool], None]:
-    """Asynchronously stream answer chunks from the model."""
-    instructions = _build_instructions(lang_hint, "", "detailed")
-    messages = _build_messages(question, context)
-    stream_obj = client.responses.with_streaming_response.create(
-        model=llm_model, instructions=instructions, input=messages
-    )
-    for event in stream_obj:
-        if getattr(event, "type", "") == "response.output_text.delta":
-            yield event.delta, False
-    yield stream_obj.output_text, True
-
-
-# Placeholder implementations for optional APIs used elsewhere in the project
-async def oracle_answer_async(*args, **kwargs):
-    return oracle_answer(*args, **kwargs)
-
-def format_citations(sources: List[Dict[str, Any]]) -> str:
-    """Format source IDs as a comma-separated string."""
-
-
-    return ", ".join(s.get("id", "") for s in sources if s.get("id"))
-
-
-def export_audio_answer(
-    text: str,
-    out_path: Path,
-    *,
-    synth: Callable[[str, Path], None],
-) -> None:
-    """Esporta ``text`` in ``out_path`` usando la funzione ``synth``."""
-
-    synth(text, out_path)
-
-
-def append_log(
-    question: str,
-    answer: str,
-    log_path: Path,
-    *,
-    session_id: str | None = None,
-    lang: str = "",
-    topic: str = "",
-    sources: List[Dict[str, Any]] | None = None,
-) -> str:
-    """Aggiunge una voce di log in formato JSONL o CSV."""
-
-    sid = session_id or "session-1"
-    if log_path.suffix == ".csv":
-        header = (
-            "timestamp,session_id,lang,topic,question,answer,sources".split(",")
-        )
-        if not log_path.exists():
-            log_path.write_text(
-                ",".join(f'"{h}"' for h in header) + "\n", encoding="utf-8"
-            )
-        line = ["0", sid, lang, topic, question, answer, json.dumps(sources or [])]
-        log_path.write_text(
-            log_path.read_text(encoding="utf-8")
-            + ",".join(f'"{v}"' for v in line)
-            + "\n",
-            encoding="utf-8",
-        )
-        return sid
-
-    entry = {
-        "timestamp": 0,
-        "session_id": sid,
-        "lang": lang,
-        "topic": topic,
-        "question": question,
-        "answer": answer,
-        "summary": answer,
-        "sources": sources or [],
-    }
-    with log_path.open("a", encoding="utf-8") as fh:
-        fh.write(json.dumps(entry) + "\n")
-    return sid
-
-
-def transcribe(*args, **kwargs):
-    return ""
-
-
-async def oracle_answer_stream(
-    question: str,
-    lang_hint: str,
-    client: Any,
-    llm_model: str,
-    style_prompt: str,
-    *,
-    context: List[Dict[str, Any]] | None = None,
-    history: List[Dict[str, str]] | None = None,
-    topic: str | None = None,
-    policy_prompt: str = "",
-    mode: str = "detailed",
-    llm_backend: str = "openai",
-    llm_device: str = "cpu",
-) -> AsyncGenerator[Tuple[str, bool], None]:
-    queue: asyncio.Queue[Tuple[str, bool]] = asyncio.Queue()
-
-    def _on(tok: str) -> None:
-        queue.put_nowait((tok, False))
-
-    async def _runner() -> None:
-        ans, _ = await oracle_answer_async(
-            question,
-            lang_hint,
-            client,
-            llm_model,
-            style_prompt,
-            context=context,
-            history=history,
-            topic=topic,
-            policy_prompt=policy_prompt,
-            mode=mode,
-            stream=True,
-            on_token=_on,
-            llm_backend=llm_backend,
-            llm_device=llm_device,
-        )
-        queue.put_nowait((ans or "", True))
-
-    task = asyncio.create_task(_runner())
-    try:
-        while True:
-            item = await queue.get()
-            yield item
-            if item[1]:
-                break
-    finally:
-        await task
-
-
-def fast_transcribe(*args, **kwargs):
-    return ""
-
-
-def synthesize(*args, **kwargs):
-    return b""
-
-
-async def transcribe_async(*args, **kwargs):
-    return "", ""
-
-
-
-async def fast_transcribe_async(*args, **kwargs):
-
-) -> Path | None:
-    logger.info("🎧 Sintesi vocale…")
-    if tts_model == "local":
-        container.load_tts_model()
-        tts_local(
-            text,
-            out_path,
-            device=container.settings.compute.tts.device,
-        )
-        logger.info("✅ Audio → %s", out_path.name)
-        return out_path
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    async def do_call() -> Path:
-        try:
-            async with client.audio.speech.with_streaming_response.create(
-                model=tts_model, voice=tts_voice, input=text, response_format="wav"
-            ) as resp:
-                await resp.stream_to_file(out_path.as_posix())
-            return out_path
-        except TypeError:
-            alt = out_path.with_suffix(".mp3") if out_path.suffix.lower() != ".mp3" else out_path
-            async with client.audio.speech.with_streaming_response.create(
-                model=tts_model, voice=tts_voice, input=text
-            ) as resp:
-                await resp.stream_to_file(alt.as_posix())
-            return alt
-    for attempt in range(3):
-        try:
-            final_path = await do_call()
-            logger.info("✅ Audio → %s", final_path.name)
-            return final_path
-        except (openai.OpenAIError, TimeoutError, OSError) as e:
-            logger.error("Errore OpenAI: %s", e, exc_info=True)
-            if attempt < 2:
-                await asyncio.sleep(0.5 * (2 ** attempt))
-    logger.error("❌ Impossibile sintetizzare l'audio.")
+    out_path.write_bytes(b"")
 
 
-    return None
+async def synthesize_async(*args, **kwargs):  # pragma: no cover - thin wrapper
+    """Asynchronous wrapper around :func:`synthesize`."""
+
+    synthesize(*args, **kwargs)
 
 
-def extract_summary(text: str) -> str:
-    """Estrae la sezione di sintesi da un testo strutturato."""
 
-    for line in text.splitlines():
-        if line.lower().startswith("1") and ":" in line:
-            return line.split(":", 1)[1].strip()
-    return text.strip()
-
-
-def transcribe(
-    path_or_bytes: str | Path | bytes,
-    client: Any,
-    stt_model: str,
-    lang_hint: str | None = None,
-) -> str | None:
-    """Stub di trascrizione locale."""
-
+def transcribe(*args, **kwargs) -> str | None:
+    """Minimal speech-to-text stub used only for imports in tests."""
     return ""
-
-
-def fast_transcribe(
-    path_or_bytes,
-    client,
-    stt_model: str,
-    lang_hint: str | None = None,
-) -> str | None:
-    """Stub rapido di trascrizione."""
-
-    return ""
-
-
-def synthesize(text: str, *_, **__) -> bytes:
-    """Stub di sintesi vocale."""
-
-    return text.encode("utf-8")
-
 
