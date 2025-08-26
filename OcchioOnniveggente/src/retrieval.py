@@ -54,12 +54,22 @@ class Chunk:
 
 @dataclass
 class Question:
-    """Representation of a single question entry."""
+    """Representation of a single question entry.
 
-    id: str
-    domanda: str
-    type: str
+    The real project tracks additional metadata for each question.  The tests
+    only exercise a subset of these fields, therefore most of them are optional
+    here.  ``id`` itself is optional because some of the bundled fixtures do not
+    provide one.
+    """
+
+    id: str | None = None
+    domanda: str = ""
+    type: str = ""
     follow_up: str | None = None
+    opera: str | None = None
+    artista: str | None = None
+    location: str | None = None
+    tag: List[str] | None = None
 
     def __getitem__(self, key: str) -> Any:
         return getattr(self, key)
@@ -702,7 +712,10 @@ def load_questions(path: str | Path | None = None) -> Dict[str, List[Question]]:
     def _add_item(item: dict) -> None:
         domanda = item.get("domanda")
         qtype = item.get("type")
-        if not isinstance(domanda, str) or not isinstance(qtype, str):
+        qid = item.get("id")
+        if not isinstance(domanda, str) or not isinstance(qtype, str) or not isinstance(
+            qid, (int, str)
+        ):
             return
         follow_up = item.get("follow_up")
         opera = item.get("opera")
@@ -714,6 +727,7 @@ def load_questions(path: str | Path | None = None) -> Dict[str, List[Question]]:
         elif tags is not None:
             tags = [str(tags)]
         q = Question(
+            id=str(qid),
             domanda=domanda,
             type=qtype.lower(),
             follow_up=follow_up,
