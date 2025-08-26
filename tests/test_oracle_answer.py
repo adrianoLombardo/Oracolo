@@ -57,7 +57,7 @@ def test_oracle_answer_returns_response_and_context():
 
 def test_answer_and_log_followup(tmp_path: Path):
     client = DummyClient()
-    qdata = Question(domanda="Chi sei?", type="poetica", follow_up="Vuoi continuare?")
+    qdata = Question(id="1", domanda="Chi sei?", type="poetica", follow_up="Vuoi continuare?")
     log = tmp_path / "log.jsonl"
     answer, follow_up = answer_and_log_followup(
         qdata, client, "test-model", log, session_id="sess-1"
