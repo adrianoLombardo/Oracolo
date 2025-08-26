@@ -2492,6 +2492,7 @@ class OracoloUI(tk.Tk):
                 time.sleep(0.05)
                 continue
             raw = line.rstrip("\n")
+            text = raw
             try:
                 data = json.loads(raw)
                 typ = data.get("type")
@@ -2509,7 +2510,7 @@ class OracoloUI(tk.Tk):
             except Exception:
                 self.after(
                     0,
-                    lambda t=raw: self._append_log(
+                    lambda t=text: self._append_log(
                         t + ("\n" if not t.endswith("\n") else ""), "LLM"
                     ),
                 )
