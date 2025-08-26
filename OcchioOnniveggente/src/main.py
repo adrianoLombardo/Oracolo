@@ -33,6 +33,7 @@ from src.oracle import (
     extract_summary,
 )
 from src.domain import validate_question
+from src.hotword import is_wake, matches_hotword_text, strip_hotword_prefix
 from src.hotword import is_wake
 from src.chat import ChatState
 from src.conversation import ConversationManager, DialogState
@@ -434,6 +435,9 @@ def main() -> None:
                     debug=DEBUG and (not args.quiet),
                     lang_hint=session_lang,
                 )
+                matched, remainder = strip_hotword_prefix(q, WAKE_IT + WAKE_EN)
+                if matched:
+                    q = remainder
                 say(f"📝 Domanda: {q}")
                 if not q:
                     continue
