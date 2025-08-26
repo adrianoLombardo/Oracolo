@@ -8,8 +8,12 @@
     "location": "museo",
     "tag": [
       "CryptoMadonne"
+
+    ]
+
     ],
     "id": 1
+
   },
   {
     "domanda": "Quale metafora descrive il tuo percorso di vita?",
@@ -253,8 +257,12 @@
   },
   {
     "domanda": "Quale domanda vorresti incidere nel vento?",
+
+    "type": "poetica"
+
     "type": "poetica",
     "id": 50
+
   },
   {
     "domanda": "Quali strategie usi per organizzare il tuo tempo?",
