@@ -70,6 +70,7 @@ numero, Pydantic segnalerà `Input should be a valid integer` e userà `24000`.
 ## Dataset delle domande
 
 Le domande che l'Oracolo può proporre sono raccolte nel file
+
 `data/domande_oracolo.json`.  Ogni elemento del file è una struttura con i
 campi `domanda`, `type` e un eventuale `follow_up`.  È inoltre possibile
 aggiungere metadati opzionali `opera`, `artista`, `location` e `tag`:
@@ -98,12 +99,48 @@ from OcchioOnniveggente.src.retrieval import load_questions
 
 qs = load_questions()
 crypto = [q.domanda for qq in qs.values() for q in qq if q.tag and "CryptoMadonne" in q.tag]
+
+`data/domande_oracolo.json`.  Ogni elemento del file contiene almeno i campi
+`domanda` e `type`; il campo facoltativo `follow_up` permette di definire un
+messaggio personalizzato da proporre dopo la risposta.
+
+Quando il campo è omesso, l'Oracolo utilizza automaticamente un follow‑up di
+default in base alla categoria:
+
+```json
+{
+  "domanda": "Quale metafora descrive il tuo percorso di vita?",
+  "type": "poetica"
+}
 ```
 
-Nel modulo `src/oracle.py` è possibile ottenere una domanda casuale tramite
-`random_question("poetica")` e generare una risposta con
+I messaggi di default sono:
+
+| Categoria     | Follow‑up |
+|---------------|-----------|
+| poetica       | Ti va di approfondire questa immagine? |
+| didattica     | Puoi fornire un esempio pratico? |
+| evocativa     | Che altre sensazioni emergono? |
+| orientamento  | Quale sarà il tuo prossimo passo concreto? |
+
+Per assegnare un follow‑up personalizzato a una singola domanda è sufficiente
+aggiungere il campo `follow_up` all'oggetto corrispondente:
+
+```json
+{
+  "domanda": "Chi sei?",
+  "type": "evocativa",
+  "follow_up": "Vuoi continuare?"
+}
+
+```
+
+La funzione `load_questions()` in `src/retrieval.py` carica il dataset
+restituendo un dizionario che mappa ogni categoria alla relativa lista di
+domande. Nel modulo `src/oracle.py` è possibile ottenere una domanda casuale
+tramite `random_question("poetica")` e generare una risposta con
 `answer_with_followup(question_obj, client, modello)`.  Dopo la risposta
-l'Oracolo propone automaticamente il `follow_up` associato alla domanda.
+l'Oracolo propone automaticamente il follow‑up associato o quello di default.
 
 ## DataBase dei documenti
 
