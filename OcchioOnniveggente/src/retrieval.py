@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Dict, Iterable, Optional, Any
 from enum import Enum
+from typing import List, Dict, Iterable, Optional, Any, Protocol
+
 import numpy as np
 
 
@@ -55,6 +57,52 @@ class Question:
     domanda: str
     type: str
     follow_up: str | None = None
+    opera: str | None = None
+    artista: str | None = None
+    location: str | None = None
+    tag: List[str] | None = None
+
+    def __getitem__(self, key: str) -> Any:
+        return getattr(self, key)
+
+
+class QuestionProvider(Protocol):
+    """Interface for pluggable question sources.
+
+    Each provider exposes a ``name`` attribute and a :meth:`load` method
+    returning questions grouped by category.  Providers can retrieve
+    questions from any backend (JSON files, APIs, databases...) allowing the
+    application to be easily extended.
+    """
+
+    name: str
+
+    def load(self) -> Dict[str, List[Question]]:
+        """Return the questions grouped by category."""
+
+
+_QUESTION_PROVIDERS: Dict[str, QuestionProvider] = {}
+
+
+def register_question_provider(provider: QuestionProvider) -> None:
+    """Register ``provider`` in the global provider registry."""
+
+    _QUESTION_PROVIDERS[provider.name.lower()] = provider
+
+
+def get_question_provider(name: str) -> QuestionProvider | None:
+    """Return the provider registered under ``name`` if present."""
+
+    return _QUESTION_PROVIDERS.get(name.lower())
+
+
+def iter_question_providers(context: str | None = None) -> Iterable[QuestionProvider]:
+    """Yield all registered providers or the one matching ``context``."""
+
+    if context:
+        p = get_question_provider(context)
+        return [p] if p is not None else []
+    return list(_QUESTION_PROVIDERS.values())
 
 
 class Context(str, Enum):
@@ -178,9 +226,34 @@ def load_questions(path: str | Path | None = None) -> Dict[Context, Dict[str, Li
             follow_up = item.get("follow_up")
             if follow_up is not None and not isinstance(follow_up, str):
                 follow_up = str(follow_up)
+            opera = item.get("opera")
+            if opera is not None and not isinstance(opera, str):
+                opera = str(opera)
+            artista = item.get("artista")
+            if artista is not None and not isinstance(artista, str):
+                artista = str(artista)
+            location = item.get("location")
+            if location is not None and not isinstance(location, str):
+                location = str(location)
+            tag_field = item.get("tag")
+            tags: List[str] | None
+            if tag_field is None:
+                tags = None
+            elif isinstance(tag_field, list):
+                tags = [str(t) for t in tag_field if isinstance(t, (str, int, float))]
+            else:
+                tags = [str(tag_field)]
             cat = qtype.lower()
             categories.setdefault(cat, []).append(
-                Question(domanda=domanda, type=cat, follow_up=follow_up)
+                Question(
+                    domanda=domanda,
+                    type=cat,
+                    follow_up=follow_up,
+                    opera=opera,
+                    artista=artista,
+                    location=location,
+                    tag=tags,
+                )
             )
         return categories
 
@@ -228,6 +301,78 @@ def load_questions(path: str | Path | None = None) -> Dict[Context, Dict[str, Li
         logger.warning("Unsupported structure in %s", root)
 
     return result
+
+
+def load_questions_from_providers(context: str | None = None) -> Dict[str, List[Question]]:
+    """Load questions from the registered providers.
+
+    Parameters
+    ----------
+    context:
+        Optional name of a specific provider.  When ``None`` all registered
+        providers are queried and their results merged.
+    """
+
+    merged: Dict[str, List[Question]] = {}
+    for provider in iter_question_providers(context):
+        try:
+            data = provider.load() or {}
+        except Exception:
+            logger.exception("Question provider %s failed", provider.name)
+            data = {}
+        for cat, qs in data.items():
+            merged.setdefault(cat, []).extend(qs)
+    # Deduplicate by question text to avoid duplicates when multiple providers
+    # return overlapping entries.
+    for cat, qs in list(merged.items()):
+        seen: set[str] = set()
+        unique: List[Question] = []
+        for q in qs:
+            text = q.domanda if isinstance(q, Question) else q.get("domanda", "")
+            if text in seen:
+                continue
+            seen.add(text)
+            unique.append(q)
+        merged[cat] = unique
+    return merged
+
+
+class JSONQuestionProvider:
+    """Simple provider reading questions from a JSON file."""
+
+    def __init__(self, name: str, path: Path):
+        self.name = name
+        self.path = Path(path)
+
+    def load(self) -> Dict[str, List[Question]]:  # pragma: no cover - tiny wrapper
+        return load_questions(self.path)
+
+
+class AdrianoLombardoProvider(JSONQuestionProvider):
+    def __init__(self, path: Path | None = None):
+        if path is None:
+            path = Path(__file__).resolve().parent.parent / "data" / "domande_oracolo.json"
+        super().__init__("AdrianoLombardo", path)
+
+
+class TheMProvider(JSONQuestionProvider):
+    def __init__(self, path: Path | None = None):
+        if path is None:
+            path = Path(__file__).resolve().parent.parent / "data" / "domande_oracolo.json"
+        super().__init__("TheM", path)
+
+
+class CryptoMadonneProvider(JSONQuestionProvider):
+    def __init__(self, path: Path | None = None):
+        if path is None:
+            path = Path(__file__).resolve().parent.parent / "data" / "domande_oracolo.json"
+        super().__init__("CryptoMadonne", path)
+
+
+# Register built-in providers
+register_question_provider(AdrianoLombardoProvider())
+register_question_provider(TheMProvider())
+register_question_provider(CryptoMadonneProvider())
 
 
 

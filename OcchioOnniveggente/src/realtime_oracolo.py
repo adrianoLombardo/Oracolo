@@ -217,7 +217,7 @@ async def _receiver(
                     conv.push_user(text)
                     norm = text.strip().lower()
                     off_list = state.get("off_topic_questions", [])
-                    if any(norm == q.get("question", "").strip().lower() for q in off_list):
+                    if any(norm == q.domanda.strip().lower() for q in off_list):
                         state["off_topic"] = True
                         reply, _ = answer_with_followup(text, None, "")
                         _emit("answer", f"🔮 {reply}")
@@ -255,10 +255,17 @@ async def _run(url: str, sr: int, barge_threshold: float) -> None:
     send_q: "queue.Queue[bytes]" = queue.Queue()
     audio_q: "queue.Queue[bytes]" = queue.Queue()
     try:
-        good_q, off_q, follow_q = load_questions()
+        categories = load_questions()
     except Exception:  # pragma: no cover - IO errors logged and ignored
         logger.exception("Failed to load questions")
-        good_q, off_q, follow_q = [], [], []
+        categories = {}
+
+    good_q = categories.get("poetica", [])
+    off_q: list = []
+    for k, v in categories.items():
+        if k != "poetica":
+            off_q.extend(v)
+    follow_q = [q.follow_up for q in good_q if q.follow_up]
 
     state: dict[str, Any] = {
         "tts_playing": False,
@@ -273,7 +280,7 @@ async def _run(url: str, sr: int, barge_threshold: float) -> None:
     conv = ConversationManager(idle_timeout=60)
     conv.transition(DialogState.LISTENING)
     if good_q:
-        q = random.choice(good_q).get("question", "")
+        q = random.choice(good_q).domanda
         if q:
             conv.transition(DialogState.SPEAKING)
             await _tts_say(q, state)
