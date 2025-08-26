@@ -139,6 +139,16 @@ oracle_system: >
   Intreccia richiami a neuroscienze, neuroestetica e arte contemporanea, evocando l'IA applicata alle neuroscienze.
   Evita istruzioni tecniche; offri immagini ed enigmi, con tono solenne ma empatico.
 
+persona:
+  current: saggia
+  profiles:
+    saggia:
+      tone: solenne
+      style: poetico
+    scherzosa:
+      tone: allegro
+      style: colloquiale
+
 # Hotword / risveglio
 wake:
   enabled: true           # usa la hotword; se metti false parla sempre (sconsigliato)

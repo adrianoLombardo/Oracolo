@@ -158,6 +158,18 @@ class RealtimeConfig(BaseModel):
     gpu_workers: int = 1
 
 
+class PersonaProfile(BaseModel):
+    tone: str = "neutro"
+    style: str = "formale"
+
+
+class PersonaConfig(BaseModel):
+    current: str = "standard"
+    profiles: Dict[str, PersonaProfile] = Field(
+        default_factory=lambda: {"standard": PersonaProfile()}
+    )
+
+
 class Settings(BaseModel):
     debug: bool = False
     stt_backend: Literal["openai", "whisper"] = "openai"
@@ -173,6 +185,7 @@ class Settings(BaseModel):
     oracle_system: str = ""  # stile oracolare
     oracle_policy: str = ""  # prompt fattuale/guardrail
     answer_mode: Literal["detailed", "concise"] = "detailed"
+    persona: PersonaConfig = PersonaConfig()
     docstore_path: str = "data/docstore"
     retrieval_top_k: int = 3
     wake: Optional[WakeConfig] = WakeConfig()
