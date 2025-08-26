@@ -27,6 +27,12 @@ from .retrieval import Question, load_questions
 
 QUESTIONS_BY_TYPE: dict[str, List[Question]] = load_questions()
 
+# Track questions already asked for each category during the current session.
+# Keys are category names (lowercase) and values are the indexes of questions
+# that have been served.  Once all questions in a category have been used the
+# set is cleared to start a new cycle.
+_USED_QUESTIONS: dict[str, set[int]] = {}
+
 
 # Risposte predefinite per domande fuori tema
 OFF_TOPIC_RESPONSES: dict[str, str] = {
@@ -426,13 +432,32 @@ def stream_generate(
 # ---------------------------------------------------------------------------
 
 
+
 def random_question(category: str) -> Question | None:
     """Return a random question object from the desired ``category``."""
 
-    qs = QUESTIONS_BY_TYPE.get(category.lower())
+def random_question(category: str) -> dict[str, str] | None:
+    """Return a random question from ``category`` without immediate repeats.
+
+    Questions already returned are tracked per category.  Once all questions in
+    a category have been used the tracking set is cleared, allowing the cycle to
+    restart.
+    """
+
+
+    cat = category.lower()
+    qs = QUESTIONS_BY_TYPE.get(cat)
     if not qs:
         return None
-    return random.choice(qs)
+
+    used = _USED_QUESTIONS.setdefault(cat, set())
+    if len(used) == len(qs):
+        used.clear()
+
+    available = [i for i in range(len(qs)) if i not in used]
+    idx = random.choice(available)
+    used.add(idx)
+    return qs[idx]
 
 
 def answer_with_followup(
