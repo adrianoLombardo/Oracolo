@@ -304,6 +304,7 @@ def stream_generate(
     client: Any,
     llm_model: str,
     style_prompt: str,
+    tone: str = "informal",
     *,
     context: List[dict[str, Any]] | None = None,
     history: List[dict[str, str]] | None = None,
@@ -321,7 +322,7 @@ def stream_generate(
     seconds have elapsed.
     """
 
-    instructions = _build_instructions(lang_hint, context, mode)
+    instructions = _build_instructions(lang_hint, context, mode, tone)
     messages = _build_messages(question, context, history)
     response = client.responses.with_streaming_response.create(
         model=llm_model, instructions=instructions, input=messages
@@ -477,16 +478,8 @@ def transcribe(audio_path: Path, client: Any, model: str, *, lang_hint: str | No
     except Exception as exc:  # noqa: BLE001 - delegato a handle_error
         return handle_error(exc, context="transcribe")
 
-def transcribe(*args, **kwargs) -> Tuple[str, str | None]:
-    """Minimal speech-to-text stub returning an empty transcription and ``None``."""
-    text = ""
-    lang = detect_language(text)
-    return text, lang
->
 
-
-def fast_transcribe(*args, **kwargs) -> str | None:
-    """Compatibility wrapper around :func:`transcribe` returning only text."""
-    text, _ = transcribe(*args, **kwargs)
-    return text
+def fast_transcribe(audio_path: Path, client: Any, model: str, *, lang_hint: str | None = None) -> str | None:
+    """Wrapper around :func:`transcribe` returning only the transcription text."""
+    return transcribe(audio_path, client, model, lang_hint=lang_hint)
 
