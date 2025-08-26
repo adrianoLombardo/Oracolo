@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from contextvars import ContextVar
+from typing import Any, Callable, Iterable
 
 from src.profile_utils import save_profile
 from src.ui_state import UIState, apply_to_chat
@@ -10,7 +11,7 @@ from src.ui_state import UIState, apply_to_chat
 _STATE_VAR: ContextVar[UIState] = ContextVar("ui_state")
 
 
-def _read_json(environ) -> dict:
+def _read_json(environ: dict[str, Any]) -> dict[str, Any]:
     """Return request body as JSON dict.
 
     Raises ``ValueError`` if the body does not contain valid JSON.
@@ -29,7 +30,10 @@ def _read_json(environ) -> dict:
         raise ValueError("Invalid JSON") from exc
 
 
-def app(environ, start_response):
+def app(
+    environ: dict[str, Any],
+    start_response: Callable[..., Any],
+) -> Iterable[bytes]:
     """Minimal WSGI application exposing a couple of endpoints."""
     token = _STATE_VAR.set(UIState())
     try:

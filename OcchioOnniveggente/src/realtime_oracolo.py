@@ -12,6 +12,8 @@ l'interruzione naturale.
 
 from __future__ import annotations
 
+# ruff: noqa: I001
+
 import asyncio
 import json
 import os
@@ -96,7 +98,7 @@ async def _mic_worker(
         # BARGE-IN: richiedi ~250ms sopra soglia prima di inviare l'evento.
         # (25 callback da 10ms = 250ms)
         samples = np.frombuffer(data, dtype=np.int16).astype(np.float32)
-        level = float(np.sqrt(np.mean(samples ** 2)))
+        level = float(np.sqrt(np.mean(samples**2)))
 
         if state.get("tts_playing"):
             # isteresi + cooldown per non spammare
@@ -115,13 +117,16 @@ async def _mic_worker(
                 state["barge_sent"] = True
                 state["last_barge_ts"] = now
                 asyncio.run_coroutine_threadsafe(
-                    ws.send(json.dumps({"type": "barge_in"})),
-                    loop
+                    ws.send(json.dumps({"type": "barge_in"})), loop
                 )
 
     with sd.RawInputStream(
-        samplerate=sr, channels=1, dtype="int16",
-        callback=callback, blocksize=BLOCKSIZE, latency="low"
+        samplerate=sr,
+        channels=1,
+        dtype="int16",
+        callback=callback,
+        blocksize=BLOCKSIZE,
+        latency="low",
     ):
         while True:
             await asyncio.sleep(0.1)
@@ -177,7 +182,6 @@ async def _player(
         else:
             state["tts_playing"] = True
 
-
         # Diagnostica: stampa valori per ~3s (una volta ogni 50 callback)
         state["diag_counter"] = state.get("diag_counter", 0) + 1
         if state["diag_counter"] <= 150 and state["diag_counter"] % 50 == 0:
@@ -190,7 +194,6 @@ async def _player(
         if state.get("ducking"):
             arr = np.frombuffer(outdata, dtype=np.int16)
             arr[:] = (arr * 0.3).astype(np.int16)
-        main
 
     with sd.RawOutputStream(
         samplerate=sr,
@@ -334,7 +337,7 @@ async def _run(
             _emit("status", "✅ pronto a ricevere audio")
             _emit(
                 "status",
-                f"🔌 Realtime WS → {url}  (sr={sr}, in={sd.default.device[0]}, out={sd.default.device[1]})",
+                f"🔌 Realtime WS → {url}  (sr={sr}, in={sd.default.device[0]}, out={sd.default.device[1]})",  # noqa: E501
             )
 
             tasks = [
@@ -396,7 +399,7 @@ def main() -> None:
     parser.add_argument("--quiet", action="store_true")
     args = parser.parse_args()
 
-    def _parse_dev(v):
+    def _parse_dev(v: int | str | None) -> int | None:
         if v is None or str(v).strip().lower() in {"none", ""}:
             return None
         try:
@@ -411,4 +414,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
