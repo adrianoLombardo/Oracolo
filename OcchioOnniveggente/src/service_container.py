@@ -12,8 +12,9 @@ from dataclasses import dataclass, field
 from typing import Any
 import asyncio
 
-from .audio import SpeechToText, TextToSpeech, LocalSpeechToText, LocalTextToSpeech
-from .openai_async import LLMClient, OpenAILLMClient
+from .audio import SpeechToText, TextToSpeech
+from .openai_async import LLMClient
+from .plugins import create_stt, create_tts, create_llm
 from .conversation import ConversationManager
 
 import atexit
@@ -93,28 +94,19 @@ class ServiceContainer:
     def speech_to_text(self) -> SpeechToText:
         if self._stt_service is None:
             provider = getattr(self.settings, "stt_provider", "local")
-            if provider == "local":
-                self._stt_service = LocalSpeechToText()
-            else:
-                raise ValueError(f"Unsupported STT provider: {provider}")
+            self._stt_service = create_stt(provider, self)
         return self._stt_service
 
     def text_to_speech(self) -> TextToSpeech:
         if self._tts_service is None:
             provider = getattr(self.settings, "tts_provider", "local")
-            if provider == "local":
-                self._tts_service = LocalTextToSpeech()
-            else:
-                raise ValueError(f"Unsupported TTS provider: {provider}")
+            self._tts_service = create_tts(provider, self)
         return self._tts_service
 
     def llm_client(self) -> LLMClient:
         if self._llm_service is None:
             provider = getattr(self.settings, "llm_provider", "openai")
-            if provider == "openai":
-                self._llm_service = OpenAILLMClient(self.openai_client())
-            else:
-                raise ValueError(f"Unsupported LLM provider: {provider}")
+            self._llm_service = create_llm(provider, self)
         return self._llm_service
 
     # ------------------------------------------------------------------

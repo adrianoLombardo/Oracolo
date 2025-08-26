@@ -135,3 +135,17 @@ class OpenAILLMClient:
         self.responses = _ResponseWrapper(client)
 
 
+def create_openai_llm(container: "ServiceContainer") -> LLMClient:
+    """Factory returning an :class:`OpenAILLMClient` bound to ``container``."""
+    return OpenAILLMClient(container.openai_client())
+
+
+try:  # pragma: no cover - registry may not be available during docs build
+    from .plugins import register_llm
+    from .service_container import ServiceContainer
+
+    register_llm("openai", create_openai_llm)
+except Exception:  # pragma: no cover - defensive
+    pass
+
+

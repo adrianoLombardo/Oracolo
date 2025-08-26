@@ -11,6 +11,28 @@ OcchioOnniveggente/
 └── tests/            # test automatici (pytest)
 ```
 
+## Estensibilità e modularità
+
+### Plugin backend
+
+Registri di plugin consentono ora di estendere i provider STT/TTS/LLM tramite
+entry point Python.  I backend predefiniti sono registrati automaticamente ma è
+possibile aggiungerne altri definendo gli entry point `oracolo.stt`,
+`oracolo.tts` e `oracolo.llm`.
+
+### GUI modulare
+
+Il front‑end è stato separato in componenti riusabili che espongono un'unica
+API `run()`.  I wrapper `CLIFrontend` e `WebFrontend` permettono di integrare
+facilmente l'interfaccia a riga di comando o quella web/REST.
+
+### Configurazione
+
+Lo schema completo delle impostazioni è generabile tramite lo script
+`scripts/generate_settings_schema.py` che produce
+`docs/settings.schema.json` con tutti i parametri validi e i relativi valori di
+default.
+
 ## Domande fuori tema
 
 Il file `data/domande_oracolo.json` contiene anche quesiti marcati con
