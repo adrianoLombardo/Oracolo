@@ -74,6 +74,64 @@ class Question:
     def __getitem__(self, key: str) -> Any:
         return getattr(self, key)
 
+    def __post_init__(self) -> None:
+        if not self.domanda:
+            raise ValueError("domanda must not be empty")
+        if not self.type:
+            raise ValueError("type must not be empty")
+        self.type = self.type.lower()
+        if self.tag:
+            seen: set[str] = set()
+            normalized: List[str] = []
+            for t in self.tag:
+                s = str(t).lower()
+                if s not in seen:
+                    seen.add(s)
+                    normalized.append(s)
+            self.tag = normalized
+
+    def to_dict(self) -> Dict[str, Any]:
+        data: Dict[str, Any] = {
+            "id": self.id,
+            "domanda": self.domanda,
+            "type": self.type,
+        }
+        if self.follow_up is not None:
+            data["follow_up"] = self.follow_up
+        if self.opera is not None:
+            data["opera"] = self.opera
+        if self.artista is not None:
+            data["artista"] = self.artista
+        if self.location is not None:
+            data["location"] = self.location
+        if self.tag:
+            data["tag"] = list(self.tag)
+        return data
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "Question":
+        tags = data.get("tag")
+        if isinstance(tags, list):
+            tag_list = [str(t) for t in tags]
+        elif tags is None:
+            tag_list = None
+        else:
+            tag_list = [str(tags)]
+        qid = data.get("id")
+        follow_up = data.get("follow_up")
+        if follow_up is not None:
+            follow_up = str(follow_up)
+        return cls(
+            id=str(qid) if qid is not None else None,
+            domanda=str(data.get("domanda", "")),
+            type=str(data.get("type", "")),
+            follow_up=follow_up,
+            opera=data.get("opera"),
+            artista=data.get("artista"),
+            location=data.get("location"),
+            tag=tag_list,
+        )
+
 
 class QuestionProvider(Protocol):
     """Interface for pluggable question sources.
@@ -238,20 +296,14 @@ def load_questions(path: str | Path | None = None) -> Dict[str, List[Question]]:
             if not isinstance(item, dict):
                 logger.warning("Invalid question at index %s: %r", idx, item)
                 continue
-            qid = item.get("id")
-            domanda = item.get("domanda")
-            qtype = item.get("type")
-            if not isinstance(qid, (int, str)) or not isinstance(domanda, str) or not isinstance(qtype, str):
+            try:
+                q = Question.from_dict(item)
+            except Exception:
                 logger.warning(
                     "Question missing required fields at index %s: %r", idx, item
                 )
                 continue
-            follow_up = item.get("follow_up")
-            if follow_up is not None and not isinstance(follow_up, str):
-                follow_up = str(follow_up)
-            categories.setdefault(qtype.lower(), []).append(
-                Question(id=str(qid), domanda=domanda, type=qtype.lower(), follow_up=follow_up)
-            )
+            categories.setdefault(q.type, []).append(q)
         return categories
 
     result: Dict[str, List[Question]] = {}
@@ -334,17 +386,25 @@ def load_questions_from_providers(context: str | None = None) -> Dict[str, List[
             logger.exception("Question provider %s failed", provider.name)
             data = {}
         for cat, qs in data.items():
-            merged.setdefault(cat, []).extend(qs)
+            for q in qs:
+                if not isinstance(q, Question):
+                    try:
+                        q = Question.from_dict(q)
+                    except Exception:
+                        logger.warning(
+                            "Invalid question from provider %s: %r", provider.name, q
+                        )
+                        continue
+                merged.setdefault(cat, []).append(q)
     # Deduplicate by question text to avoid duplicates when multiple providers
     # return overlapping entries.
     for cat, qs in list(merged.items()):
         seen: set[str] = set()
         unique: List[Question] = []
         for q in qs:
-            text = q.domanda if isinstance(q, Question) else q.get("domanda", "")
-            if text in seen:
+            if q.domanda in seen:
                 continue
-            seen.add(text)
+            seen.add(q.domanda)
             unique.append(q)
         merged[cat] = unique
     return merged
@@ -710,32 +770,10 @@ def load_questions(path: str | Path | None = None) -> Dict[str, List[Question]]:
     categories: Dict[str, List[Question]] = {}
 
     def _add_item(item: dict) -> None:
-        domanda = item.get("domanda")
-        qtype = item.get("type")
-        qid = item.get("id")
-        if not isinstance(domanda, str) or not isinstance(qtype, str) or not isinstance(
-            qid, (int, str)
-        ):
+        try:
+            q = Question.from_dict(item)
+        except Exception:
             return
-        follow_up = item.get("follow_up")
-        opera = item.get("opera")
-        artista = item.get("artista")
-        location = item.get("location")
-        tags = item.get("tag")
-        if isinstance(tags, list):
-            tags = [str(t) for t in tags]
-        elif tags is not None:
-            tags = [str(tags)]
-        q = Question(
-            id=str(qid),
-            domanda=domanda,
-            type=qtype.lower(),
-            follow_up=follow_up,
-            opera=opera,
-            artista=artista,
-            location=location,
-            tag=tags,
-        )
         categories.setdefault(q.type, []).append(q)
 
     if isinstance(data, list):
