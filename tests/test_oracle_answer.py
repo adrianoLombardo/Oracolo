@@ -4,7 +4,11 @@ from pathlib import Path
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
-from OcchioOnniveggente.src.oracle import answer_and_log_followup, oracle_answer
+from OcchioOnniveggente.src.oracle import (
+    answer_and_log_followup,
+    oracle_answer,
+    DEFAULT_FOLLOW_UPS,
+)
 
 
 class DummyResp:
@@ -62,3 +66,19 @@ def test_answer_and_log_followup(tmp_path: Path):
     assert first["question"] == "Chi sei?"
     assert second["question"] == "Vuoi continuare?"
     assert second["answer"] == ""
+
+
+def test_default_followup_used_when_missing(tmp_path: Path):
+    client = DummyClient()
+    qdata = {"domanda": "Come stai?", "type": "evocativa"}
+    log = tmp_path / "log.jsonl"
+    answer, follow_up = answer_and_log_followup(
+        qdata, client, "test-model", log, session_id="sess-2"
+    )
+    assert answer == "risposta"
+    assert follow_up == DEFAULT_FOLLOW_UPS["evocativa"]
+    lines = log.read_text(encoding="utf-8").strip().splitlines()
+    # follow-up should be appended as second log entry
+    assert len(lines) == 2
+    second = json.loads(lines[1])
+    assert second["question"] == DEFAULT_FOLLOW_UPS["evocativa"]

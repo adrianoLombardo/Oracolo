@@ -450,6 +450,15 @@ def stream_generate(
 # ---------------------------------------------------------------------------
 
 
+# Default follow-up messages per question category.  When a question does not
+# specify its own ``follow_up`` field the message for its category is used.
+DEFAULT_FOLLOW_UPS: dict[str, str] = {
+    "poetica": "Ti va di approfondire questa immagine?",
+    "didattica": "Puoi fornire un esempio pratico?",
+    "evocativa": "Che altre sensazioni emergono?",
+    "orientamento": "Quale sarà il tuo prossimo passo concreto?",
+}
+
 
 def random_question(category: str) -> Question | None:
     """Return a random question object from the desired ``category``."""
@@ -462,9 +471,10 @@ def random_question(category: str) -> dict[str, str] | None:
 
     Questions already returned are tracked per category.  Once all questions in
     a category have been used the tracking set is cleared, allowing the cycle to
-    restart.
+    restart.  The returned object is a plain ``dict`` with keys ``domanda``,
+    ``type`` and ``follow_up`` (resolved to the default for the category when
+    absent).
     """
-
 
     cat = category.lower()
     qs = QUESTIONS_BY_TYPE.get(cat)
@@ -479,21 +489,37 @@ def random_question(category: str) -> dict[str, str] | None:
     available = [i for i in range(len(qs)) if i not in used]
     idx = random.choice(available)
     used.add(idx)
-    return qs[idx]
+    q = qs[idx]
+    follow = q.follow_up or DEFAULT_FOLLOW_UPS.get(q.type.lower(), "")
+    return {"domanda": q.domanda, "type": q.type, "follow_up": follow}
 
 
 def answer_with_followup(
-    question_data: Question,
+    question_data: Question | dict[str, str],
     client: Any,
     llm_model: str,
     *,
     lang_hint: str = "it",
 ) -> tuple[str, str]:
-    """Generate an answer for ``question_data`` and return its follow-up."""
+    """Generate an answer for ``question_data`` and return its follow-up.
 
-    question = question_data.domanda
+    ``question_data`` may be a :class:`Question` instance or a plain dict with at
+    least the keys ``domanda`` and ``type``.  If the input does not define a
+    ``follow_up`` field the default message for its category is used.
+    """
+
+    if isinstance(question_data, dict):
+        question = question_data.get("domanda", "")
+        qtype = question_data.get("type", "").lower()
+        follow_up = question_data.get("follow_up")
+    else:
+        question = question_data.domanda
+        qtype = question_data.type.lower()
+        follow_up = question_data.follow_up
+
     answer, _ = oracle_answer(question, lang_hint, client, llm_model, "")
-    follow_up = question_data.follow_up or ""
+    if not follow_up:
+        follow_up = DEFAULT_FOLLOW_UPS.get(qtype, "")
     return answer, follow_up
 
 
