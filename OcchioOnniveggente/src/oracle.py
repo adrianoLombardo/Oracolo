@@ -48,6 +48,9 @@ def get_questions() -> dict[str, List[Question]]:
 # set is cleared to start a new cycle.
 _USED_QUESTIONS: dict[str, set[int]] = {}
 
+# Counter for user interactions logged via :func:`log_interaction`.
+_INTERACTION_COUNTER = 0
+
 
 
 # ---------------------------------------------------------------------------
@@ -510,11 +513,15 @@ def stream_generate(
                     yield delta
 
 
+
+"""Questions handling utilities."""
+
 # ---------------------------------------------------------------------------
 # Questions handling
 # ---------------------------------------------------------------------------
 
 def random_question(category: str) -> dict[str, str] | None:
+
 
 
 
@@ -529,6 +536,19 @@ DEFAULT_FOLLOW_UPS: dict[str, str] = {
 
 
 def random_question(category: str) -> Question | None:
+
+
+def random_question(category: str) -> dict[str, str] | None:
+    """Return a random question from ``category`` without immediate repeats.
+
+    Questions are loaded as :class:`Question` dataclasses but this helper returns
+    a plain dictionary for ease of use by higher level components and tests.
+    Already served questions are tracked and the cycle restarts once all
+    questions in a category have been used.
+    """
+
+    cat = category.lower()
+    qs = QUESTIONS_BY_TYPE.get(cat)
 
 
     """Return a random question from ``category`` without immediate repeats.
@@ -549,6 +569,7 @@ def random_question(category: str) -> Question | None:
     cat = category.lower()
     qs = get_questions().get(cat)
 
+
     if not qs:
         return None
 
@@ -559,6 +580,15 @@ def random_question(category: str) -> Question | None:
     available = [i for i in range(len(qs)) if i not in used]
     idx = random.choice(available)
     used.add(idx)
+
+
+    q = qs[idx]
+    return {"domanda": q.domanda, "type": q.type, "follow_up": q.follow_up}
+
+
+def answer_with_followup(
+    question_data: Question | dict[str, str],
+
     q = qs[idx]
 
     return {"domanda": q.domanda, "follow_up": q.follow_up}
@@ -573,6 +603,7 @@ def answer_with_followup(
     question_data: Question | dict[str, Any],
 
     question_data: Question | dict[str, str],
+
 
     client: Any,
     llm_model: str,
@@ -620,6 +651,15 @@ def answer_with_followup(
         follow_up = question_data.follow_up
 
 
+
+    if isinstance(question_data, dict):
+        question = question_data.get("domanda", "")
+        follow_up = question_data.get("follow_up") or ""
+    else:
+        question = question_data.domanda
+        follow_up = question_data.follow_up or ""
+    answer, _ = oracle_answer(question, lang_hint, client, llm_model, "")
+
     answer, _ = oracle_answer(question, lang_hint, client, llm_model, "")
     if not follow_up:
         follow_up = DEFAULT_FOLLOW_UPS.get(qtype, "")
@@ -632,6 +672,7 @@ def answer_with_followup(
         follow_up = question_data.get("follow_up") or ""
 
     answer, _ = oracle_answer(question, lang_hint, client, llm_model, "")
+
 
 
     return answer, follow_up
@@ -757,6 +798,65 @@ def append_log(
             f.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
     return session_id
+
+
+# ---------------------------------------------------------------------------
+# Interaction logging
+# ---------------------------------------------------------------------------
+
+def log_interaction(
+    *,
+    context: Any | None = None,
+    category: str | None = None,
+    question: str | None = None,
+    follow_up: str | None = None,
+    user_response: str | None = None,
+    path: Path | None = None,
+    endpoint: str | None = None,
+) -> int:
+    """Log a user interaction and return its sequential counter.
+
+    The interaction is appended to ``path`` as JSON lines when provided or
+    sent via HTTP POST to ``endpoint``.  Both destinations may be used at the
+    same time.  The entry records the provided ``context``, ``category``,
+    ``question`` and ``follow_up`` along with the ``user_response`` and a
+    monotonically increasing ``interaction`` counter.
+    """
+
+    global _INTERACTION_COUNTER
+    _INTERACTION_COUNTER += 1
+    entry = {
+        "timestamp": datetime.utcnow().isoformat(),
+        "interaction": _INTERACTION_COUNTER,
+        "context": context,
+        "category": category,
+        "question": question,
+        "follow_up": follow_up,
+        "user_response": user_response,
+    }
+
+    data = json.dumps(entry, ensure_ascii=False)
+
+    if endpoint:
+        try:
+            import urllib.request
+
+            req = urllib.request.Request(
+                endpoint,
+                data=data.encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            urllib.request.urlopen(req, timeout=5)
+        except Exception:
+            pass
+
+    if path:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as f:
+            f.write(data + "\n")
+
+    return _INTERACTION_COUNTER
 
 
 # ---------------------------------------------------------------------------
