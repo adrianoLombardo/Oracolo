@@ -18,31 +18,31 @@ import random
 from threading import Event
 from pathlib import Path
 from typing import Any, AsyncGenerator, Callable, Iterable, Iterator, List, Tuple
+from dataclasses import asdict
 
 from langdetect import LangDetectException, detect
 
 from .utils.error_handler import handle_error
-from .retrieval import Question, load_questions
+from .retrieval import Question, load_questions_from_providers
 
 
-_QUESTIONS_CACHE: dict[str, List[dict[str, Any]]] | None = None
-_QUESTIONS_MTIME: float | None = None
+_QUESTIONS_CACHE: dict[str | None, dict[str, List[Question]]] = {}
 
 
-def get_questions() -> dict[str, List[dict[str, Any]]]:
-    """Return the questions dataset reloading it when the file changes."""
+def get_questions(context: str | None = None) -> dict[str, List[Question]]:
+    """Return the questions provided by the available providers.
 
-    global _QUESTIONS_CACHE, _QUESTIONS_MTIME
-    path = Path(__file__).resolve().parent.parent / "data" / "domande_oracolo.json"
-    mtime = path.stat().st_mtime if path.exists() else None
+    Results are cached per ``context`` value to avoid repeatedly reading
+    files or other backends.
+    """
 
-    if _QUESTIONS_CACHE is None or mtime != _QUESTIONS_MTIME:
-        _QUESTIONS_CACHE = load_questions(path)
-        _QUESTIONS_MTIME = mtime
+    key = context.lower() if context else None
+    if key not in _QUESTIONS_CACHE:
+        _QUESTIONS_CACHE[key] = load_questions_from_providers(context)
+    return _QUESTIONS_CACHE[key]
 
-    return _QUESTIONS_CACHE or {}
 
-QUESTIONS_BY_TYPE: dict[str, List[Question]] = load_questions()
+QUESTIONS_BY_TYPE: dict[str, List[Question]] = get_questions()
 
 # Track questions already asked for each category during the current session.
 # Keys are category names (lowercase) and values are the indexes of questions
@@ -449,41 +449,44 @@ def stream_generate(
 # Questions handling
 # ---------------------------------------------------------------------------
 
-
-
-def random_question(category: str) -> Question | None:
-    """Return a random question object from the desired ``category``."""
-
-
-    qs = get_questions().get(category.lower())
-
-def random_question(category: str) -> dict[str, str] | None:
+def random_question(category: str, context: str | None = None) -> dict[str, str] | None:
     """Return a random question from ``category`` without immediate repeats.
 
-    Questions already returned are tracked per category.  Once all questions in
-    a category have been used the tracking set is cleared, allowing the cycle to
-    restart.
+    Parameters
+    ----------
+    category:
+        Category of the desired question.
+    context:
+        Optional provider name. When given only questions served by the
+        matching :class:`QuestionProvider` are considered.
+
+    Questions already returned are tracked per category and context.  Once all
+    questions in a pair have been used the tracking set is cleared, allowing
+    the cycle to restart.
     """
 
 
     cat = category.lower()
-    qs = QUESTIONS_BY_TYPE.get(cat)
+    qs_by_type = get_questions(context)
+    qs = qs_by_type.get(cat)
 
     if not qs:
         return None
 
-    used = _USED_QUESTIONS.setdefault(cat, set())
+    key = f"{context}:{cat}" if context else cat
+    used = _USED_QUESTIONS.setdefault(key, set())
     if len(used) == len(qs):
         used.clear()
 
     available = [i for i in range(len(qs)) if i not in used]
     idx = random.choice(available)
     used.add(idx)
-    return qs[idx]
+    q = qs[idx]
+    return asdict(q) if not isinstance(q, dict) else q
 
 
 def answer_with_followup(
-    question_data: Question,
+    question_data: Question | dict[str, str],
     client: Any,
     llm_model: str,
     *,
@@ -491,9 +494,13 @@ def answer_with_followup(
 ) -> tuple[str, str]:
     """Generate an answer for ``question_data`` and return its follow-up."""
 
-    question = question_data.domanda
+    if isinstance(question_data, Question):
+        question = question_data.domanda
+        follow_up = question_data.follow_up or ""
+    else:
+        question = question_data.get("domanda", "")
+        follow_up = question_data.get("follow_up", "") or ""
     answer, _ = oracle_answer(question, lang_hint, client, llm_model, "")
-    follow_up = question_data.follow_up or ""
     return answer, follow_up
 
 
