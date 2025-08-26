@@ -481,6 +481,7 @@ class ConversationFlow:
         return self.index >= len(self.flow) - 1
 
 
+
 @dataclass
 class QuestionSession:
     """Serve questions cycling through categories.
@@ -512,9 +513,9 @@ class QuestionSession:
         return q if q is not None else Question(domanda="", type=cat)
 
 
+
 __all__ = [
     "ConversationFlow",
-    "QuestionSession",
     "DEFAULT_FOLLOW_UPS",
     "OFF_TOPIC_RESPONSES",
     "OFF_TOPIC_REPLIES",

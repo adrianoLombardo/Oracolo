@@ -5,7 +5,11 @@ import random
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 
+
 from OcchioOnniveggente.src.oracle import QuestionSession as OracleQuestionSession, get_questions
+from OcchioOnniveggente.src.question_session import QuestionSession
+from OcchioOnniveggente.src.oracle import get_questions
+
 
 
 def test_round_robin_rotation():
@@ -25,7 +29,6 @@ def test_weighted_selection():
     chosen = {session.next_question().type for _ in range(10)}
     assert chosen == {target}
 
-from OcchioOnniveggente.src.question_session import QuestionSession
 from OcchioOnniveggente.src.retrieval import Question
 
 

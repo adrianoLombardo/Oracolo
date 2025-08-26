@@ -3,6 +3,10 @@ from __future__ import annotations
 """Session helper combining question rotation and answer tracking."""
 
 from dataclasses import dataclass, field
+import atexit
+import json
+import os
+import pickle
 import random
 from random import Random
 from typing import Dict, List, Optional
@@ -21,7 +25,11 @@ class QuestionSession:
     weights: Optional[Dict[str, float]] = None
     answers: List[str] = field(default_factory=list)
     replies: List[str] = field(default_factory=list)
+
     rng: Random | None = None
+
+    state_path: str | os.PathLike[str] | None = None
+
 
     def __post_init__(self) -> None:
         if self.questions is None:
@@ -31,7 +39,15 @@ class QuestionSession:
         self._categories = list(self.questions.keys())
         self._index = 0
         self._used: Dict[str, set[int]] = {cat: set() for cat in self._categories}
+
         self._rng = self.rng or random
+
+        if self.state_path:
+            path = os.fspath(self.state_path)
+            if os.path.exists(path):
+                self.load(path)
+            atexit.register(self.save, path)
+
 
     def next_question(self, category: str | None = None) -> Question | None:
         """Return a question, cycling categories and avoiding repeats."""
@@ -65,3 +81,35 @@ class QuestionSession:
         self.answers.append(answer)
         if reply is not None:
             self.replies.append(reply)
+
+    def save(self, path: str | os.PathLike[str]) -> None:
+        """Persist session state to ``path`` in JSON or pickle format."""
+
+        path = os.fspath(path)
+        data = {
+            "used": {k: list(v) for k, v in self._used.items()},
+            "answers": self.answers,
+            "replies": self.replies,
+            "index": self._index,
+        }
+        if path.endswith(".json"):
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(data, f)
+        else:
+            with open(path, "wb") as f:
+                pickle.dump(data, f)
+
+    def load(self, path: str | os.PathLike[str]) -> None:
+        """Load session state from ``path``."""
+
+        path = os.fspath(path)
+        if path.endswith(".json"):
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        else:
+            with open(path, "rb") as f:
+                data = pickle.load(f)
+        self._used = {k: set(v) for k, v in data.get("used", {}).items()}
+        self.answers = data.get("answers", [])
+        self.replies = data.get("replies", [])
+        self._index = data.get("index", 0)
