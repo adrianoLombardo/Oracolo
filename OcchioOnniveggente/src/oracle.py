@@ -123,6 +123,7 @@ def oracle_answer(
     history: List[dict[str, str]] | None = None,
     policy_prompt: str = "",
     mode: str = "detailed",
+    topic: str | None = None,
     stream: bool = False,
     on_token: Callable[[str], None] | None = None,
 ) -> Tuple[str, List[dict[str, Any]]]:
@@ -134,6 +135,10 @@ def oracle_answer(
     to form the final answer.
     """
 
+    # The ``topic`` argument is accepted for API compatibility with the real
+    # project.  In this lightweight implementation it is currently unused but
+    # allowing it avoids unexpected ``TypeError`` exceptions when higher level
+    # components pass the parameter.
     instructions = _build_instructions(lang_hint, context, mode)
     messages = _build_messages(question, context, history)
 
@@ -174,6 +179,7 @@ async def oracle_answer_stream(
     history: List[dict[str, str]] | None = None,
     policy_prompt: str = "",
     mode: str = "detailed",
+    topic: str | None = None,
 ) -> AsyncGenerator[Tuple[str, bool], None]:
     """Stream answer tokens from the model.
 
@@ -181,6 +187,9 @@ async def oracle_answer_stream(
     with the accumulated output.
     """
 
+    # ``topic`` is accepted for interface compatibility.  It is not used by the
+    # simplified streaming helper but allows callers to pass the argument
+    # unconditionally.
     instructions = _build_instructions(lang_hint, context, mode)
     messages = _build_messages(question, context, history)
     response = client.responses.with_streaming_response.create(
