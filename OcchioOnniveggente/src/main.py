@@ -45,6 +45,8 @@ from src.cli import _ensure_utf8_stdout, say, oracle_greeting, default_response
 from src.audio_device import pick_device, debug_print_devices
 from src.profile_utils import get_active_profile, make_domain_settings
 
+logger = logging.getLogger(__name__)
+
 
 
 # --------------------------- main ------------------------------------- #
@@ -70,7 +72,7 @@ def main() -> None:
         console=not args.quiet,
     )
 
-    say("Occhio Onniveggente · Oracolo ✨")
+    say("Occhio Onniveggente · Oracolo ✨", role="system")
 
     load_dotenv()
 
@@ -81,18 +83,18 @@ def main() -> None:
             raw_settings = yaml.safe_load(cfg_path.read_text(encoding="utf-8")) or {}
             SET = Settings.model_validate(raw_settings)
         except (ValidationError, yaml.YAMLError) as e:
-            print("⚠️ Configurazione non valida:", e)
-            print("Uso impostazioni di default.")
+            logger.warning("⚠️ Configurazione non valida: %s", e)
+            logger.warning("Uso impostazioni di default.")
             raw_settings = {}
             SET = Settings()
     else:
-        print("⚠️ settings.yaml non trovato, uso impostazioni di default.")
+        logger.warning("⚠️ settings.yaml non trovato, uso impostazioni di default.")
         raw_settings = {}
         SET = Settings()
 
     api_key = get_openai_api_key(SET)
     if not api_key:
-        print(
+        logger.error(
             "❌ È necessaria una API key OpenAI.\n"
             "   Imposta la variabile d'ambiente OPENAI_API_KEY"
             " oppure aggiungi openai.api_key a settings.yaml."
@@ -187,7 +189,7 @@ def main() -> None:
     elif LIGHT_MODE == "wled":
         light = WledLight(lighting_conf)
     else:
-        print("⚠️ lighting.mode non valido, uso WLED di default")
+        logger.warning("⚠️ lighting.mode non valido, uso WLED di default")
         light = WledLight(lighting_conf)
 
     # Wake config: default ON e lista di frasi
@@ -299,7 +301,7 @@ def main() -> None:
             if dlg.state != DialogState.SLEEP:
                 remain = int(dlg.active_deadline - now)
                 if remain != countdown_last and not args.quiet:
-                    print(f"\r⏳ Inattività: {max(remain,0):02d}s", end="", flush=True)
+                    logger.debug("⏳ Inattività: %02ds", max(remain, 0))
                     countdown_last = remain
 
             # timeout inattività globale
@@ -308,7 +310,7 @@ def main() -> None:
                 dlg.transition(DialogState.SLEEP)
                 countdown_last = -1
                 if not args.quiet:
-                    print()
+                    logger.debug("")
                 continue
 
             # ---------------------- SLEEP: attendo hotword ---------------------- #
@@ -402,7 +404,7 @@ def main() -> None:
             # ---------------------- AWAKE: saluta ---------------------- #
             if dlg.state == DialogState.AWAKE:
                 greet = oracle_greeting(wake_lang, tone)
-                print(f"🔮 Oracolo: {greet}", flush=True)
+                say(greet, role="assistant")
                 synthesize(greet, OUTPUT_WAV, client, TTS_MODEL, TTS_VOICE)
                 evt = threading.Event()
                 mon = threading.Thread(
@@ -647,7 +649,7 @@ def main() -> None:
 
             # ---------------------- SPEAKING: TTS risposta ---------------------- #
             if dlg.state == DialogState.SPEAKING:
-                print(f"🔮 Oracolo: {pending_answer}", flush=True)
+                say(pending_answer, role="assistant")
                 if PROF.contains_profanity(pending_answer):
                     if FILTER_MODE == "block":
                         say("⚠️ La risposta conteneva termini non ammessi, riformulo…")
@@ -668,14 +670,14 @@ def main() -> None:
                     sources=pending_sources,
                 )
                 if pending_sources:
-                    print("📚 Fonti:")
+                    logger.info("📚 Fonti:")
                     for i, src in enumerate(pending_sources, 1):
                         title = src.get("title") or src.get("id", "")
                         sid = src.get("id", "")
                         score = src.get("score", 0.0)
                         snippet = src.get("text", "").replace("\n", " ")[:200]
-                        print(f"[{i}] {title} ({sid}, score={score:.2f})")
-                        print(f"    {snippet}")
+                        logger.info("[%s] %s (%s, score=%.2f)", i, title, sid, score)
+                        logger.info("    %s", snippet)
                 base = color_from_text(pending_answer, {k: v for k, v in PALETTES.items()})
                 if hasattr(light, "set_base_rgb"):
                     light.set_base_rgb(base)
@@ -715,7 +717,7 @@ def main() -> None:
                     say("🌘 Torno al silenzio. Di' «ciao oracolo» per riattivarmi.")
                     countdown_last = -1
                     if not args.quiet:
-                        print()
+                        logger.info("")
                 else:
                     dlg.transition(DialogState.LISTENING)
                 continue
@@ -724,7 +726,7 @@ def main() -> None:
             dlg.transition(DialogState.SLEEP)
             countdown_last = -1
             if not args.quiet:
-                print()
+                logger.info("")
 
     finally:
         try:
@@ -732,7 +734,7 @@ def main() -> None:
             light.stop()
         except Exception:
             pass
-        print("👁️  Arrivederci.")
+        say("👁️  Arrivederci.", role="assistant")
         listener.stop()
 
 

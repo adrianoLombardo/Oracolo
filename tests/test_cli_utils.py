@@ -1,3 +1,4 @@
+import json
 import sys
 from pathlib import Path
 
@@ -8,7 +9,8 @@ from OcchioOnniveggente.src.cli import say, oracle_greeting, _ensure_utf8_stdout
 def test_say_prints(capsys):
     say("hello")
     captured = capsys.readouterr()
-    assert "hello" in captured.out
+    data = json.loads(captured.out.strip())
+    assert data == {"type": "chat", "role": "assistant", "text": "hello"}
 
 
 def test_oracle_greeting_languages():

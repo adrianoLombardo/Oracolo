@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sys
 import time
 from typing import Iterator
@@ -16,9 +17,10 @@ def _ensure_utf8_stdout() -> None:
         pass
 
 
-def say(msg: str) -> None:
-    """Print a message intended for the user conversation."""
-    print(msg, flush=True)
+def say(msg: str, *, role: str = "assistant") -> None:
+    """Send a chat message as a JSON object to stdout."""
+    payload = {"type": "chat", "role": role, "text": msg}
+    print(json.dumps(payload, ensure_ascii=False), flush=True)
 
 
 
@@ -57,15 +59,16 @@ def default_response(kind: str, lang: str, tone: str = "informal") -> str:
     return "Non ho capito." if tone == "formal" else "Non ti ho capito."
 
 def stream_say(
-    tokens: Iterator[str], *, stop_event: Event | None = None, timeout: float | None = None
+    tokens: Iterator[str], *, stop_event: Event | None = None, timeout: float | None = None,
+    role: str = "assistant",
 ) -> str:
-    """Print ``tokens`` as they are produced.
+    """Consume ``tokens`` and emit a single JSON chat message.
 
-    The function consumes the ``tokens`` iterator, printing each chunk as soon
-    as it becomes available.  It returns the accumulated text.  Streaming can
-    be interrupted either by setting ``stop_event`` or by pressing
-    ``Ctrl+C``/``KeyboardInterrupt``; a ``timeout`` in seconds can also be
-    provided to stop after a fixed duration.
+    The function iterates over ``tokens`` collecting them into a single string.
+    Streaming can be interrupted either by setting ``stop_event`` or by
+    pressing ``Ctrl+C``/``KeyboardInterrupt``; a ``timeout`` in seconds can
+    also be provided to stop after a fixed duration.  The accumulated text is
+    sent via :func:`say` and returned.
     """
 
     text = ""
@@ -77,17 +80,9 @@ def stream_say(
             if timeout is not None and (time.monotonic() - start) > timeout:
                 break
             text += chunk
-            print(chunk, end="", flush=True)
     except KeyboardInterrupt:  # pragma: no cover - interactive usage
         pass
-    finally:
-        print()
+
+    say(text, role=role)
     return text
-
-
-def oracle_greeting(lang: str) -> str:
-    """Return a greeting string based on ``lang``."""
-    if (lang or "").lower().startswith("en"):
-        return "Hello, I am the Oracle. Ask your question."
-    return "Ciao, sono l'Oracolo. Fai pure la tua domanda."
 
