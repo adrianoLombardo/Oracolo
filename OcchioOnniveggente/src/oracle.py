@@ -21,6 +21,7 @@ from typing import Any, AsyncGenerator, Callable, ClassVar, Dict, Iterable, Iter
 
 from langdetect import LangDetectException, detect  # type: ignore
 
+from .conversation import ChatState
 from .retrieval import Question, load_questions, Context
 
 logger = logging.getLogger(__name__)
@@ -251,6 +252,7 @@ def oracle_answer(
     question_type: str | None = None,
     categoria: str | None = None,
     off_topic_category: str | None = None,
+    chat: ChatState | None = None,
 ) -> Tuple[str, List[dict[str, Any]]]:
     """Return an answer from ``client`` and the context used."""
 
@@ -276,10 +278,15 @@ def oracle_answer(
                 text += delta
                 if on_token:
                     on_token(delta)
+        if chat:
+            chat.push_assistant(text)
         return text, context or []
 
     resp = client.responses.create(model=llm_model, instructions=instr, input=msgs)
-    return getattr(resp, "output_text", ""), context or []
+    ans = getattr(resp, "output_text", "")
+    if chat:
+        chat.push_assistant(ans)
+    return ans, context or []
 
 
 async def oracle_answer_async(
@@ -298,6 +305,7 @@ async def oracle_answer_async(
     question_type: str | None = None,
     categoria: str | None = None,
     off_topic_category: str | None = None,
+    chat: ChatState | None = None,
 ) -> Tuple[str, List[dict[str, Any]]]:
     """Async wrapper around :func:`oracle_answer` using ``asyncio.to_thread``."""
 
@@ -317,6 +325,7 @@ async def oracle_answer_async(
         question_type=question_type,
         categoria=categoria,
         off_topic_category=off_topic_category,
+        chat=chat,
     )
 
 
@@ -330,6 +339,7 @@ async def oracle_answer_stream(
     context: list[dict[str, Any]] | None = None,
     mode: str | None = None,
     policy_prompt: str | None = None,
+    chat: ChatState | None = None,
 ) -> AsyncGenerator[Tuple[str, bool], None]:
     """Async generator yielding response chunks and completion flag."""
 
@@ -344,6 +354,8 @@ async def oracle_answer_stream(
             delta = getattr(evt, "delta", "")
             text += delta
             yield delta, False
+    if chat:
+        chat.push_assistant(text)
     yield text, True
 
 
@@ -355,6 +367,7 @@ def stream_generate(
     style_prompt: str,
     *,
     stop_event: Event | None = None,
+    chat: ChatState | None = None,
 ) -> Iterator[str]:
     """Return a generator producing chunks from the streaming response."""
 
@@ -365,11 +378,16 @@ def stream_generate(
         stream = client.responses.with_streaming_response.create(
             model=llm_model, instructions=instr, input=msgs
         )
+        text = ""
         for evt in stream:
             if stop_event and stop_event.is_set():
                 break
             if getattr(evt, "type", "") == "response.output_text.delta":
-                yield getattr(evt, "delta", "")
+                delta = getattr(evt, "delta", "")
+                text += delta
+                yield delta
+        if chat:
+            chat.push_assistant(text)
 
     return _gen()
 
@@ -468,12 +486,16 @@ async def synthesize_async(
 # Transcription helpers
 # ---------------------------------------------------------------------------
 
-async def transcribe(audio_path: Path, client: Any, model: str) -> str:
+async def transcribe(
+    audio_path: Path, client: Any, model: str, *, chat: ChatState | None = None
+) -> str:
     """Best effort transcription with coarse error handling.
 
     ``AsyncOpenAI`` removed the ``client.transcribe`` shortcut in favour of the
     ``audio.transcriptions.create`` endpoint.  The helper now supports both
     calling conventions for compatibility with older clients used in the tests.
+    When ``chat`` is provided the transcribed text is appended to it as a user
+    message.
     """
 
     try:
@@ -493,27 +515,40 @@ async def transcribe(audio_path: Path, client: Any, model: str) -> str:
                 result = await result
 
         if isinstance(result, dict) and "text" in result:
-            return str(result["text"])
-        if hasattr(result, "text"):
-            return str(getattr(result, "text"))
-        return str(result)
+            text = str(result["text"])
+        elif hasattr(result, "text"):
+            text = str(getattr(result, "text"))
+        else:
+            text = str(result)
+        if chat:
+            chat.push_user(text)
+        return text
     except ConnectionError:
-        logger.warning(
-            "Errore di rete, controlla la connessione (context: transcribe)"
-        )
-        return "Errore di rete, controlla la connessione"
+        msg = "Errore di rete, controlla la connessione"
+        logger.warning("Errore di rete, controlla la connessione (context: transcribe)")
+        if chat:
+            chat.push_user(msg)
+        return msg
     except ValueError:
+        msg = "Errore dell'API"
         logger.error("Errore dell'API (context: transcribe)")
-        return "Errore dell'API"
+        if chat:
+            chat.push_user(msg)
+        return msg
     except OSError:
+        msg = "Errore audio"
         logger.error("Errore audio (context: transcribe)")
-        return "Errore audio"
+        if chat:
+            chat.push_user(msg)
+        return msg
 
 
-async def fast_transcribe(audio_path: Path, client: Any, model: str) -> str:
+async def fast_transcribe(
+    audio_path: Path, client: Any, model: str, *, chat: ChatState | None = None
+) -> str:
     """Alias of :func:`transcribe` maintained for backwards compatibility."""
 
-    return await transcribe(audio_path, client, model)
+    return await transcribe(audio_path, client, model, chat=chat)
 
 
 # ---------------------------------------------------------------------------
