@@ -50,6 +50,9 @@ QUESTIONS_BY_TYPE: dict[str, List[Question]] = load_questions()
 # set is cleared to start a new cycle.
 _USED_QUESTIONS: dict[str, set[int]] = {}
 
+# Counter for user interactions logged via :func:`log_interaction`.
+_INTERACTION_COUNTER = 0
+
 
 
 # Risposte predefinite per domande fuori tema
@@ -445,30 +448,20 @@ def stream_generate(
                     yield delta
 
 
-# ---------------------------------------------------------------------------
-# Questions handling
-# ---------------------------------------------------------------------------
+"""Questions handling utilities."""
 
-
-
-def random_question(category: str) -> Question | None:
-    """Return a random question object from the desired ``category``."""
-
-
-    qs = get_questions().get(category.lower())
 
 def random_question(category: str) -> dict[str, str] | None:
     """Return a random question from ``category`` without immediate repeats.
 
-    Questions already returned are tracked per category.  Once all questions in
-    a category have been used the tracking set is cleared, allowing the cycle to
-    restart.
+    Questions are loaded as :class:`Question` dataclasses but this helper returns
+    a plain dictionary for ease of use by higher level components and tests.
+    Already served questions are tracked and the cycle restarts once all
+    questions in a category have been used.
     """
-
 
     cat = category.lower()
     qs = QUESTIONS_BY_TYPE.get(cat)
-
     if not qs:
         return None
 
@@ -479,11 +472,13 @@ def random_question(category: str) -> dict[str, str] | None:
     available = [i for i in range(len(qs)) if i not in used]
     idx = random.choice(available)
     used.add(idx)
-    return qs[idx]
+
+    q = qs[idx]
+    return {"domanda": q.domanda, "type": q.type, "follow_up": q.follow_up}
 
 
 def answer_with_followup(
-    question_data: Question,
+    question_data: Question | dict[str, str],
     client: Any,
     llm_model: str,
     *,
@@ -491,9 +486,13 @@ def answer_with_followup(
 ) -> tuple[str, str]:
     """Generate an answer for ``question_data`` and return its follow-up."""
 
-    question = question_data.domanda
+    if isinstance(question_data, dict):
+        question = question_data.get("domanda", "")
+        follow_up = question_data.get("follow_up") or ""
+    else:
+        question = question_data.domanda
+        follow_up = question_data.follow_up or ""
     answer, _ = oracle_answer(question, lang_hint, client, llm_model, "")
-    follow_up = question_data.follow_up or ""
     return answer, follow_up
 
 
@@ -604,6 +603,65 @@ def append_log(
             f.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
     return session_id
+
+
+# ---------------------------------------------------------------------------
+# Interaction logging
+# ---------------------------------------------------------------------------
+
+def log_interaction(
+    *,
+    context: Any | None = None,
+    category: str | None = None,
+    question: str | None = None,
+    follow_up: str | None = None,
+    user_response: str | None = None,
+    path: Path | None = None,
+    endpoint: str | None = None,
+) -> int:
+    """Log a user interaction and return its sequential counter.
+
+    The interaction is appended to ``path`` as JSON lines when provided or
+    sent via HTTP POST to ``endpoint``.  Both destinations may be used at the
+    same time.  The entry records the provided ``context``, ``category``,
+    ``question`` and ``follow_up`` along with the ``user_response`` and a
+    monotonically increasing ``interaction`` counter.
+    """
+
+    global _INTERACTION_COUNTER
+    _INTERACTION_COUNTER += 1
+    entry = {
+        "timestamp": datetime.utcnow().isoformat(),
+        "interaction": _INTERACTION_COUNTER,
+        "context": context,
+        "category": category,
+        "question": question,
+        "follow_up": follow_up,
+        "user_response": user_response,
+    }
+
+    data = json.dumps(entry, ensure_ascii=False)
+
+    if endpoint:
+        try:
+            import urllib.request
+
+            req = urllib.request.Request(
+                endpoint,
+                data=data.encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            urllib.request.urlopen(req, timeout=5)
+        except Exception:
+            pass
+
+    if path:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as f:
+            f.write(data + "\n")
+
+    return _INTERACTION_COUNTER
 
 
 # ---------------------------------------------------------------------------
