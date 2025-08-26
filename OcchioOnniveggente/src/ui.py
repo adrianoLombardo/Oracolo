@@ -2757,15 +2757,19 @@ class OracoloUI(tk.Tk):
             self.start_btn.configure(state="normal")
             self.stop_btn.configure(state="disabled")
 
-        if self.ws_server_proc is not None and self.ws_server_proc.poll() is None:
-            if hasattr(self, "server_menu"):
-                self.server_menu.entryconfig(self._srv_start_idx, state="disabled")
-                self.server_menu.entryconfig(self._srv_stop_idx, state="normal")
-        else:
+        server_running = self.ws_server_proc is not None and self.ws_server_proc.poll() is None
+        if not server_running:
             self.ws_server_proc = None
-            if hasattr(self, "server_menu"):
-                self.server_menu.entryconfig(self._srv_start_idx, state="normal")
-                self.server_menu.entryconfig(self._srv_stop_idx, state="disabled")
+        if hasattr(self, "server_menu"):
+            desired_start_state = "disabled" if server_running else "normal"
+            current_start_state = self.server_menu.entrycget(self._srv_start_idx, "state")
+            if current_start_state != desired_start_state:
+                self.server_menu.entryconfig(self._srv_start_idx, state=desired_start_state)
+
+            desired_stop_state = "normal" if server_running else "disabled"
+            current_stop_state = self.server_menu.entrycget(self._srv_stop_idx, "state")
+            if current_stop_state != desired_stop_state:
+                self.server_menu.entryconfig(self._srv_stop_idx, state=desired_stop_state)
 
         if self.proc is not None and self.proc.poll() is None:
             self.status_var.set("🟢 In esecuzione")
