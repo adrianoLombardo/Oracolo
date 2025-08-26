@@ -524,6 +524,17 @@ def random_question(category: str) -> dict[str, str] | None:
 
 
 
+def random_question(category: str) -> Question | None:
+    """Return a random question from ``category`` without immediate repeats.
+
+    A set of already served indexes is maintained for each category in
+    ``_USED_QUESTIONS``.  When all questions in the category have been served the
+    tracking set is cleared so that a new cycle can begin.
+    """
+
+    cat = category.lower()
+    qs = QUESTIONS_BY_TYPE.get(cat)
+
 
 # Default follow-up messages per question category.  When a question does not
 # specify its own ``follow_up`` field the message for its category is used.
@@ -570,11 +581,13 @@ def random_question(category: str) -> dict[str, str] | None:
     qs = get_questions().get(cat)
 
 
+
     if not qs:
         return None
 
     used = _USED_QUESTIONS.setdefault(cat, set())
     if len(used) == len(qs):
+        # all questions served -> start a new cycle
         used.clear()
 
     available = [i for i in range(len(qs)) if i not in used]
@@ -587,6 +600,9 @@ def random_question(category: str) -> dict[str, str] | None:
 
 
 def answer_with_followup(
+
+    question_data: Question | dict[str, str] | str,
+
     question_data: Question | dict[str, str],
 
     q = qs[idx]
@@ -605,11 +621,32 @@ def answer_with_followup(
     question_data: Question | dict[str, str],
 
 
+
     client: Any,
     llm_model: str,
     *,
     lang_hint: str = "it",
 ) -> tuple[str, str]:
+
+    """Generate an answer for ``question_data`` and return its follow-up.
+
+    ``question_data`` can be either a :class:`Question` object, a mapping with
+    ``domanda``/``follow_up`` keys or a plain string containing just the
+    question text.
+    """
+
+    if isinstance(question_data, Question):
+        question = question_data.domanda
+        follow_up = question_data.follow_up or ""
+    elif isinstance(question_data, dict):
+        question = question_data.get("domanda", "")
+        follow_up = question_data.get("follow_up") or ""
+    else:
+        question = str(question_data)
+        follow_up = ""
+
+    answer, _ = oracle_answer(question, lang_hint, client, llm_model, "")
+
 
     """Generate an answer for ``question_data`` and return its follow-up."""
     if isinstance(question_data, dict):
@@ -675,6 +712,7 @@ def answer_with_followup(
 
 
 
+
     return answer, follow_up
 
 
@@ -682,7 +720,11 @@ def answer_and_log_followup(
 
     question_data: Question | dict[str, str],
 
+
+    question_data: Question | dict[str, str],
+
     question_data: Question,
+
 
     client: Any,
     llm_model: str,
@@ -703,6 +745,16 @@ def answer_and_log_followup(
     answer, follow_up = answer_with_followup(
         question_data, client, llm_model, lang_hint=lang_hint
     )
+
+
+    if isinstance(question_data, Question):
+        question_text = question_data.domanda
+    else:
+        question_text = question_data.get("domanda", "")
+
+    append_log(
+        question_text,
+
     question = (
         question_data.domanda
         if isinstance(question_data, Question)
@@ -713,6 +765,7 @@ def answer_and_log_followup(
         question,
 
         question_data.domanda,
+
 
         answer,
         log_path,

@@ -29,3 +29,13 @@ def test_random_question_no_repeat_until_exhaustion():
     q = random_question(category)
     assert q.domanda in seen
     assert len(_USED_QUESTIONS[category]) == 1
+
+    # Drawing the remaining questions again should not repeat within the
+    # new cycle.
+    seen_second_cycle = {q.domanda}
+    for _ in range(total - 1):
+        q = random_question(category)
+        assert q.domanda not in seen_second_cycle
+        seen_second_cycle.add(q.domanda)
+
+    assert len(_USED_QUESTIONS[category]) == total
