@@ -17,6 +17,9 @@ from prometheus_client import (
 )
 from starlette.requests import Request
 from starlette.responses import Response
+from starlette.status import HTTP_401_UNAUTHORIZED
+import os
+from typing import Any
 from .task_queue import task_queue
 
 try:  # pragma: no cover - optional dependencies
@@ -93,8 +96,33 @@ async def metrics_middleware(request: Request, call_next):  # type: ignore[no-un
     return response
 
 
-def metrics_endpoint() -> Response:
-    """Expose collected metrics in Prometheus text format."""
+def _extract_token(req: Any) -> str | None:
+    """Extract Bearer token from request headers or query parameters."""
+    if req is None:
+        return None
+    auth = getattr(req, "headers", {}).get("Authorization")
+    if auth and auth.startswith("Bearer "):
+        return auth.split(" ", 1)[1]
+    params = getattr(req, "query_params", None) or getattr(req, "args", None)
+    if params is not None:
+        return params.get("token")
+    return None
+
+
+def metrics_endpoint(request: Request = None) -> Response:  # type: ignore[assignment]
+    """Expose collected metrics in Prometheus text format.
+
+    If the environment variable ``METRICS_TOKEN`` is set, the same token must
+    be provided via ``Authorization: Bearer <token>`` or ``?token=`` query
+    parameter; otherwise a 401 response is returned.
+    """
+
+    token = os.getenv("METRICS_TOKEN")
+    if token:
+        provided = _extract_token(request)
+        if provided != token:
+            return Response("unauthorized", status_code=HTTP_401_UNAUTHORIZED)
+
     return Response(generate_latest(REGISTRY), media_type=CONTENT_TYPE_LATEST)
 
 

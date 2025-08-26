@@ -11,6 +11,13 @@ OcchioOnniveggente/
 └── tests/            # test automatici (pytest)
 ```
 
+## Gestione delle chiavi
+
+Le credenziali richieste (es. `OPENAI_API_KEY`) sono lette da variabili
+d'ambiente. Puoi salvarle in un file `.env` caricato automaticamente con
+`python-dotenv` oppure utilizzare un secret manager esterno. Il file `.env` è
+escluso dal controllo versione per evitare di committare chiavi sensibili.
+
 ## Estensibilità e modularità
 
 ### Plugin backend
@@ -100,6 +107,11 @@ sull'endpoint `/metrics`, interrogabile con strumenti come Prometheus:
 ```bash
 curl http://localhost:8000/metrics
 ```
+
+Per limitare l'accesso è possibile impostare la variabile d'ambiente
+`METRICS_TOKEN` e inviare il relativo bearer token nelle richieste
+(`Authorization: Bearer <token>`). In alternativa proteggi l'endpoint tramite
+un reverse proxy con autenticazione dedicata.
 
 Nel log (livello `DEBUG`) sono visibili gli stessi dati. La funzione
 `resolve_device` utilizza `gpu_utilization_percent` per dirottare le nuove

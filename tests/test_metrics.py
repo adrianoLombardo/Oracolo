@@ -18,3 +18,14 @@ def test_metrics_endpoint_records_requests():
     resp = client.get("/metrics")
     assert resp.status_code == 200
     assert b"http_requests_total" in resp.content
+
+
+def test_metrics_endpoint_requires_token(monkeypatch):
+    monkeypatch.setenv("METRICS_TOKEN", "s3cr3t")
+    client = TestClient(app)
+
+    resp = client.get("/metrics")
+    assert resp.status_code == 401
+
+    resp = client.get("/metrics", headers={"Authorization": "Bearer s3cr3t"})
+    assert resp.status_code == 200

@@ -1,0 +1,21 @@
+# Python artifacts
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+
+# Environment files
+.env
+*.env
+
+# Logs
+data/logs/
+*.log
+*.sqlite
+
+# IDE / editor
+.vscode/
+
+# Misc
+.DS_Store

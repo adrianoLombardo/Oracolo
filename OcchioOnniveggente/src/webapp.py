@@ -4,7 +4,8 @@ import asyncio
 import tempfile
 from pathlib import Path
 
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, Response as FlaskResponse
+from dotenv import load_dotenv
 
 from .service_container import container
 from .oracle import oracle_answer, transcribe
@@ -14,6 +15,7 @@ from .metrics import metrics_endpoint, health_endpoint
 def create_app() -> Flask:
     """Create and configure the Flask application."""
 
+    load_dotenv()
     app = Flask(__name__, template_folder="templates", static_folder="static")
 
     conv = container.conversation_manager
@@ -53,7 +55,10 @@ def create_app() -> Flask:
 
     @app.get("/metrics")
     def metrics() -> "flask.Response":
-        return metrics_endpoint()
+        resp = metrics_endpoint(request)
+        return FlaskResponse(
+            resp.body, status=resp.status_code, headers=dict(resp.headers), mimetype=resp.media_type
+        )
 
     @app.get("/healthz")
     def health() -> "flask.Response":
