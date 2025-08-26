@@ -279,6 +279,8 @@ def load_questions(path: str | Path | None = None) -> Dict[Context, Dict[str, Li
                         result[Context.from_str(key)] = _parse_list(items)
             else:
                 logger.warning("Unsupported structure in %s", f)
+        if len(result) == 1:
+            return next(iter(result.values()))
         return result
 
     if not root.exists():
@@ -300,6 +302,9 @@ def load_questions(path: str | Path | None = None) -> Dict[Context, Dict[str, Li
     else:
         logger.warning("Unsupported structure in %s", root)
 
+    if len(result) == 1:
+        # When only one context is present expose the inner mapping directly
+        return next(iter(result.values()))
     return result
 
 
