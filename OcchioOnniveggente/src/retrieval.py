@@ -187,7 +187,9 @@ def _load_index(path: str | Path) -> List[Dict]:
 
 
 
-def load_questions(path: str | Path | None = None) -> Dict[Context, Dict[str, List[Question]]]:
+def load_questions(
+    path: str | Path | None = None,
+) -> Dict[Context, Dict[str, List[Question]]] | Dict[str, List[Question]]:
     """Read question datasets and group entries by context and category.
 
     The function accepts either a directory containing one JSON file per
@@ -205,7 +207,9 @@ def load_questions(path: str | Path | None = None) -> Dict[Context, Dict[str, Li
     Returns
     -------
     dict
-        ``Context`` to ``{category -> [Question, ...]}`` mapping.
+        ``Context`` to ``{category -> [Question, ...]}`` mapping.  When only the
+        generic context is present the inner mapping is returned directly for
+        convenience.
     """
 
     root = Path(path) if path is not None else Path(__file__).resolve().parent.parent / "data"
@@ -279,6 +283,8 @@ def load_questions(path: str | Path | None = None) -> Dict[Context, Dict[str, Li
                         result[Context.from_str(key)] = _parse_list(items)
             else:
                 logger.warning("Unsupported structure in %s", f)
+        if len(result) == 1 and Context.GENERIC in result:
+            return result[Context.GENERIC]
         return result
 
     if not root.exists():
@@ -300,6 +306,8 @@ def load_questions(path: str | Path | None = None) -> Dict[Context, Dict[str, Li
     else:
         logger.warning("Unsupported structure in %s", root)
 
+    if len(result) == 1 and Context.GENERIC in result:
+        return result[Context.GENERIC]
     return result
 
 
