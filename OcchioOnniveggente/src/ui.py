@@ -1089,12 +1089,14 @@ class OracoloUI(tk.Tk):
                 )
             pin_ctx = [{"id": f"pin{i}", "text": t} for i, t in enumerate(self.chat_state.pinned)]
             ctx = pin_ctx + ctx
+            tone = self.settings.get("tone", "informal")
             ans, used_ctx = await oracle_answer_async(
                 text,
                 lang,
                 client,
                 self.settings.get("llm_model", "gpt-4o"),
                 style_prompt,
+                tone=tone,
                 context=ctx,
                 history=self.chat_state.history,
                 topic=self.chat_state.topic_text,

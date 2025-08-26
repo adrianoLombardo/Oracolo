@@ -16,6 +16,8 @@ import inspect
 from pathlib import Path
 from typing import Any, AsyncGenerator, Callable, Iterable, List, Tuple
 
+from langdetect import LangDetectException, detect
+
 
 # ---------------------------------------------------------------------------
 # Formatting helpers
@@ -67,13 +69,24 @@ def extract_summary(answer: str) -> str:
     return answer.strip()
 
 
+def detect_language(text: str) -> str | None:
+    """Detect the language of ``text`` using ``langdetect``."""
+    try:
+        return detect(text)
+    except LangDetectException:
+        return None
+
+
 # ---------------------------------------------------------------------------
 # Core answer helpers
 # ---------------------------------------------------------------------------
 
 
 def _build_instructions(
-    lang_hint: str, context: List[dict[str, Any]] | None, mode: str
+    lang_hint: str,
+    context: List[dict[str, Any]] | None,
+    mode: str,
+    tone: str,
 ) -> str:
     """Return an instruction string for the LLM."""
 
@@ -89,6 +102,10 @@ def _build_instructions(
     else:
         parts.append("Stile dettagliato.")
         parts.append("Struttura: 1)")
+    if tone == "formal":
+        parts.append("Tono formale.")
+    elif tone == "informal":
+        parts.append("Tono informale.")
     return "\n".join(parts)
 
 
@@ -119,6 +136,7 @@ def oracle_answer(
     client: Any,
     llm_model: str,
     style_prompt: str,
+    tone: str = "informal",
     *,
     context: List[dict[str, Any]] | None = None,
     history: List[dict[str, str]] | None = None,
@@ -140,7 +158,7 @@ def oracle_answer(
     # project.  In this lightweight implementation it is currently unused but
     # allowing it avoids unexpected ``TypeError`` exceptions when higher level
     # components pass the parameter.
-    instructions = _build_instructions(lang_hint, context, mode)
+    instructions = _build_instructions(lang_hint, context, mode, tone)
     messages = _build_messages(question, context, history)
 
     if stream:
@@ -169,6 +187,7 @@ async def oracle_answer_async(
     client: Any,
     llm_model: str,
     style_prompt: str,
+    tone: str = "informal",
     *,
     context: List[dict[str, Any]] | None = None,
     history: List[dict[str, str]] | None = None,
@@ -180,7 +199,7 @@ async def oracle_answer_async(
 ) -> Tuple[str, List[dict[str, Any]]]:
     """Async variant of :func:`oracle_answer` supporting ``AsyncOpenAI``."""
 
-    instructions = _build_instructions(lang_hint, context, mode)
+    instructions = _build_instructions(lang_hint, context, mode, tone)
     messages = _build_messages(question, context, history)
 
     if stream:
@@ -247,6 +266,7 @@ async def oracle_answer_stream(
     policy_prompt: str = "",
     mode: str = "detailed",
     topic: str | None = None,
+    tone: str = "informal",
 ) -> AsyncGenerator[Tuple[str, bool], None]:
     """Stream answer tokens from the model.
 
@@ -257,7 +277,7 @@ async def oracle_answer_stream(
     # ``topic`` is accepted for interface compatibility.  It is not used by the
     # simplified streaming helper but allows callers to pass the argument
     # unconditionally.
-    instructions = _build_instructions(lang_hint, context, mode)
+    instructions = _build_instructions(lang_hint, context, mode, tone)
     messages = _build_messages(question, context, history)
     response = client.responses.with_streaming_response.create(
         model=llm_model, instructions=instructions, input=messages
@@ -371,19 +391,15 @@ async def synthesize_async(*args, **kwargs):  # pragma: no cover - thin wrapper
 
 
 
-def transcribe(*args, **kwargs) -> str | None:
-    """Minimal speech-to-text stub used only for imports in tests."""
-    return ""
+def transcribe(*args, **kwargs) -> Tuple[str, str | None]:
+    """Minimal speech-to-text stub returning an empty transcription and ``None``."""
+    text = ""
+    lang = detect_language(text)
+    return text, lang
 
 
 def fast_transcribe(*args, **kwargs) -> str | None:
-    """Compatibility wrapper around :func:`transcribe`.
-
-    The original project exposes a separate ``fast_transcribe`` helper for
-    quick speech-to-text operations.  In this trimmed down test environment we
-    simply delegate to :func:`transcribe` so that callers depending on the
-    function can import and use it without raising an ``ImportError``.
-    """
-
-    return transcribe(*args, **kwargs)
+    """Compatibility wrapper around :func:`transcribe` returning only text."""
+    text, _ = transcribe(*args, **kwargs)
+    return text
 

@@ -305,6 +305,7 @@ chat:
   pinned: []
   summary_model: gpt-4o-mini
   summary_max_tokens: 256
+  tone: informal
 
 # RAG: dove sono i documenti indicizzati e quanti frammenti prendere
 docstore_path: DataBase/index.json
