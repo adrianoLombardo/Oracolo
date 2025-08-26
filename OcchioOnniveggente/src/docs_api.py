@@ -13,11 +13,13 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI
+from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 
 from .metrics import metrics_middleware, metrics_endpoint
 
+load_dotenv()
 app = FastAPI()
 FastAPIInstrumentor.instrument_app(app)
 app.middleware("http")(metrics_middleware)

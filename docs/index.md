@@ -10,3 +10,4 @@ Benvenuto nella documentazione di **Oracolo**, assistente vocale in italiano e i
 - [Tutorial](tutorials/stt_tts.md)
 - [Deploy](deploy.md)
 - [Versionamento](versioning.md)
+- [Sicurezza](security.md)
