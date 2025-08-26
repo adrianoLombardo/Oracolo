@@ -14,6 +14,7 @@ import csv
 import json
 import inspect
 import time
+import random
 from threading import Event
 from pathlib import Path
 from typing import Any, AsyncGenerator, Callable, Iterable, Iterator, List, Tuple
@@ -21,6 +22,20 @@ from typing import Any, AsyncGenerator, Callable, Iterable, Iterator, List, Tupl
 from langdetect import LangDetectException, detect
 
 from .utils.error_handler import handle_error
+from .retrieval import load_questions
+
+
+GOOD_QUESTIONS, OFF_TOPIC_QUESTIONS, FOLLOW_UPS = load_questions()
+
+
+# Risposte predefinite per domande fuori tema
+OFF_TOPIC_RESPONSES: dict[str, str] = {
+    "poetica": "Preferirei non avventurarmi in slanci poetici.",
+    "didattica": "Al momento non posso fornire spiegazioni didattiche.",
+    "evocativa": "Queste domande evocative sfuggono al mio scopo.",
+    "orientamento": "Non sono in grado di offrire indicazioni stradali.",
+    "default": "Mi dispiace, non posso aiutarti con questa richiesta.",
+}
 
 
 OFF_TOPIC_REPLIES = {
@@ -167,8 +182,12 @@ def oracle_answer(
     topic: str | None = None,
     stream: bool = False,
     on_token: Callable[[str], None] | None = None,
+
     question_type: str | None = None,
     categoria: str | None = None,
+
+    off_topic_category: str | None = None,
+
 ) -> Tuple[str, List[dict[str, Any]]]:
     """Return an answer from ``client`` and the context used.
 
@@ -182,8 +201,16 @@ def oracle_answer(
     # project.  In this lightweight implementation it is currently unused but
     # allowing it avoids unexpected ``TypeError`` exceptions when higher level
     # components pass the parameter.
+
     if question_type == "off_topic":
         return off_topic_reply(categoria), []
+
+    if off_topic_category:
+        msg = OFF_TOPIC_RESPONSES.get(
+            off_topic_category, OFF_TOPIC_RESPONSES["default"]
+        )
+        return msg, []
+
 
     instructions = _build_instructions(lang_hint, context, mode, tone)
     messages = _build_messages(question, context, history)
@@ -223,6 +250,7 @@ async def oracle_answer_async(
     topic: str | None = None,
     stream: bool = False,
     on_token: Callable[[str], None] | None = None,
+
     question_type: str | None = None,
     categoria: str | None = None,
 ) -> Tuple[str, List[dict[str, Any]]]:
@@ -230,6 +258,17 @@ async def oracle_answer_async(
 
     if question_type == "off_topic":
         return off_topic_reply(categoria), []
+
+    off_topic_category: str | None = None,
+) -> Tuple[str, List[dict[str, Any]]]:
+    """Async variant of :func:`oracle_answer` supporting ``AsyncOpenAI``."""
+
+    if off_topic_category:
+        msg = OFF_TOPIC_RESPONSES.get(
+            off_topic_category, OFF_TOPIC_RESPONSES["default"]
+        )
+        return msg, []
+
 
     instructions = _build_instructions(lang_hint, context, mode, tone)
     messages = _build_messages(question, context, history)
@@ -383,6 +422,47 @@ def stream_generate(
                 delta = getattr(event, "delta", "")
                 if delta:
                     yield delta
+
+
+# ---------------------------------------------------------------------------
+# Questions handling
+# ---------------------------------------------------------------------------
+
+
+def random_good_question() -> dict[str, str] | None:
+    """Return a random entry from the preloaded good questions list."""
+
+    if not GOOD_QUESTIONS:
+        return None
+    return random.choice(GOOD_QUESTIONS)
+
+
+def answer_with_followup(
+    question: str,
+    client: Any,
+    llm_model: str,
+    *,
+    lang_hint: str = "it",
+) -> tuple[str, str]:
+    """Generate an answer for ``question`` and suggest a follow-up.
+
+    If the question is present in the off-topic list a polite refusal is
+    returned instead.  The response type associated with good questions is
+    passed to :func:`oracle_answer` via ``style_prompt`` so that the model can
+    tailor the answer.
+    """
+
+    if any(question == q.get("question") for q in OFF_TOPIC_QUESTIONS):
+        answer = "Mi dispiace, preferisco non rispondere a questa domanda."
+    else:
+        resp_type = next(
+            (q.get("response_type", "") for q in GOOD_QUESTIONS if q.get("question") == question),
+            "",
+        )
+        answer, _ = oracle_answer(question, lang_hint, client, llm_model, resp_type)
+    follow_up = random.choice(FOLLOW_UPS) if FOLLOW_UPS else ""
+    return answer, follow_up
+
 
 
 # ---------------------------------------------------------------------------

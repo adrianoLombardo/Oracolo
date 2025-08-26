@@ -1,3 +1,4 @@
+
 [
   {"id": 1, "question": "Puoi recitare un haiku sul vento?", "categoria": "poetica", "type": "off_topic"},
   {"id": 2, "question": "Quale melodia canta la luna piena?", "categoria": "poetica", "type": "off_topic"},
@@ -40,3 +41,333 @@
   {"id": 39, "question": "Quale linea di metro porta al mare?", "categoria": "orientamento", "type": "off_topic"},
   {"id": 40, "question": "Dove posso trovare l'ufficio turistico?", "categoria": "orientamento", "type": "off_topic"}
 ]
+
+
+[
+  {"question": "Qual è l'origine del nome 'Roma'?", "type": "normal"},
+  {"question": "Quando è stata costruita la Torre Eiffel?", "type": "normal"},
+  {"question": "Puoi comporre un haiku sul vento tra le montagne?", "type": "off_topic", "categoria": "poetica"},
+  {"question": "Mi scriveresti un sonetto sulla luna perduta?", "type": "off_topic", "categoria": "poetica"},
+  {"question": "Raccontami una poesia che parli del tempo fermo.", "type": "off_topic", "categoria": "poetica"},
+  {"question": "Sai un verso che descriva il silenzio del mare?", "type": "off_topic", "categoria": "poetica"},
+  {"question": "Inventi rime sul profumo del pane?", "type": "off_topic", "categoria": "poetica"},
+  {"question": "Quali parole useresti per un canto di stelle?", "type": "off_topic", "categoria": "poetica"},
+  {"question": "Puoi recitare un poema sulle foglie in autunno?", "type": "off_topic", "categoria": "poetica"},
+  {"question": "Dammi una strofa che celebri la pioggia estiva.", "type": "off_topic", "categoria": "poetica"},
+  {"question": "Parlami in versi della nostalgia del sole.", "type": "off_topic", "categoria": "poetica"},
+  {"question": "Scrivi un distico per l'ombra del mattino.", "type": "off_topic", "categoria": "poetica"},
+  {"question": "Qual è la formula dell'energia cinetica?", "type": "off_topic", "categoria": "didattica"},
+  {"question": "Come si calcola il minimo comune multiplo?", "type": "off_topic", "categoria": "didattica"},
+  {"question": "Puoi spiegarmi il teorema di Pitagora?", "type": "off_topic", "categoria": "didattica"},
+  {"question": "Che cos'è una proposizione subordinata?", "type": "off_topic", "categoria": "didattica"},
+  {"question": "Come si risolve un'equazione di secondo grado?", "type": "off_topic", "categoria": "didattica"},
+  {"question": "Qual è la capitale della Finlandia?", "type": "off_topic", "categoria": "didattica"},
+  {"question": "Chi ha scritto 'I promessi sposi'?", "type": "off_topic", "categoria": "didattica"},
+  {"question": "Qual è la differenza tra mitosi e meiosi?", "type": "off_topic", "categoria": "didattica"},
+  {"question": "Quando iniziò la Prima guerra mondiale?", "type": "off_topic", "categoria": "didattica"},
+  {"question": "Come funziona la fotosintesi clorofilliana?", "type": "off_topic", "categoria": "didattica"},
+  {"question": "Ricordi il profumo dell'erba dopo la pioggia?", "type": "off_topic", "categoria": "evocativa"},
+  {"question": "Cosa senti quando guardi un cielo senza nuvole?", "type": "off_topic", "categoria": "evocativa"},
+  {"question": "Hai mai sognato di camminare sopra le nuvole?", "type": "off_topic", "categoria": "evocativa"},
+  {"question": "Ti capita di ascoltare il suono dei ricordi?", "type": "off_topic", "categoria": "evocativa"},
+  {"question": "Cosa evoca in te il crepuscolo su una città vuota?", "type": "off_topic", "categoria": "evocativa"},
+  {"question": "Hai nostalgia di una notte d'estate lontana?", "type": "off_topic", "categoria": "evocativa"},
+  {"question": "Cosa ti suggerisce il fruscio delle pagine antiche?", "type": "off_topic", "categoria": "evocativa"},
+  {"question": "Sai descrivere il gusto della libertà?", "type": "off_topic", "categoria": "evocativa"},
+  {"question": "Hai mai toccato il colore del vento?", "type": "off_topic", "categoria": "evocativa"},
+  {"question": "Che immagini risveglia il canto di un usignolo?", "type": "off_topic", "categoria": "evocativa"},
+  {"question": "Come arrivo al museo più vicino?", "type": "off_topic", "categoria": "orientamento"},
+  {"question": "Puoi indicarmi la strada per la stazione centrale?", "type": "off_topic", "categoria": "orientamento"},
+  {"question": "Qual è l'uscita giusta per il centro storico?", "type": "off_topic", "categoria": "orientamento"},
+  {"question": "Che autobus devo prendere per l'aeroporto?", "type": "off_topic", "categoria": "orientamento"},
+  {"question": "Dove trovo un parcheggio vicino al teatro?", "type": "off_topic", "categoria": "orientamento"},
+  {"question": "Qual è il percorso più rapido per il mare?", "type": "off_topic", "categoria": "orientamento"},
+  {"question": "Puoi dirmi come raggiungere la biblioteca comunale?", "type": "off_topic", "categoria": "orientamento"},
+  {"question": "In che direzione è il nord da qui?", "type": "off_topic", "categoria": "orientamento"},
+  {"question": "Dove si trova la fermata della metro più vicina?", "type": "off_topic", "categoria": "orientamento"},
+  {"question": "Mi dici la strada per il ristorante 'La Pergola'?", "type": "off_topic", "categoria": "orientamento"}
+]
+
+{
+  "good": [
+    {
+      "question": "Qual è il tuo sogno più grande?",
+      "response_type": "riflessiva",
+      "follow_up": "Cosa ti avvicinerebbe a realizzarlo?"
+    },
+    {
+      "question": "Cosa ti dà maggior energia al mattino?",
+      "response_type": "personale",
+      "follow_up": "C'è un rituale che segui?"
+    },
+    {
+      "question": "Che cosa ti fa sentire veramente vivo?",
+      "response_type": "emotiva",
+      "follow_up": "Puoi descrivere un momento recente?"
+    },
+    {
+      "question": "Quale ricordo d'infanzia ti fa ancora sorridere?",
+      "response_type": "riflessiva",
+      "follow_up": "Chi era con te in quel momento?"
+    },
+    {
+      "question": "Quale valore personale consideri più importante?",
+      "response_type": "riflessiva",
+      "follow_up": "Come lo applichi nella vita quotidiana?"
+    },
+    {
+      "question": "Cosa ti spaventa di più del futuro?",
+      "response_type": "riflessiva",
+      "follow_up": "Hai una strategia per affrontarlo?"
+    },
+    {
+      "question": "Quale persona ti ha influenzato maggiormente?",
+      "response_type": "personale",
+      "follow_up": "In che modo ha cambiato il tuo percorso?"
+    },
+    {
+      "question": "Quale libro ti ha cambiato la vita?",
+      "response_type": "creativa",
+      "follow_up": "Quale insegnamento ne hai tratto?"
+    },
+    {
+      "question": "Cosa ti fa sentire grato oggi?",
+      "response_type": "emotiva",
+      "follow_up": "Vuoi condividere un dettaglio?"
+    },
+    {
+      "question": "Quale abitudine vorresti cambiare?",
+      "response_type": "riflessiva",
+      "follow_up": "Cosa ti impedisce di farlo?"
+    },
+    {
+      "question": "Qual è la tua definizione di felicità?",
+      "response_type": "riflessiva",
+      "follow_up": "Quando l'hai provata l'ultima volta?"
+    },
+    {
+      "question": "Quale gesto gentile ricordi con affetto?",
+      "response_type": "emotiva",
+      "follow_up": "Hai ringraziato quella persona?"
+    },
+    {
+      "question": "Cosa ti fa sentire in pace?",
+      "response_type": "emotiva",
+      "follow_up": "C'è un luogo che ti aiuta a ritrovarla?"
+    },
+    {
+      "question": "Quale sfida recente ti ha fatto crescere?",
+      "response_type": "riflessiva",
+      "follow_up": "Che cosa hai imparato da essa?"
+    },
+    {
+      "question": "Quale lezione la vita ti ha insegnato di recente?",
+      "response_type": "riflessiva",
+      "follow_up": "Chi o cosa te l'ha insegnata?"
+    },
+    {
+      "question": "Quale qualità ammiri negli altri?",
+      "response_type": "riflessiva",
+      "follow_up": "Hai un esempio di persona che la incarna?"
+    },
+    {
+      "question": "Che cosa ti fa sentire coraggioso?",
+      "response_type": "emotiva",
+      "follow_up": "Ricordi l'ultima volta che l'hai provato?"
+    },
+    {
+      "question": "Quale sogno hai abbandonato e perché?",
+      "response_type": "riflessiva",
+      "follow_up": "Pensi di riprenderlo un giorno?"
+    },
+    {
+      "question": "Cosa ti motiva nei momenti difficili?",
+      "response_type": "emotiva",
+      "follow_up": "Hai un mantra personale?"
+    },
+    {
+      "question": "Quale tradizione familiare apprezzi di più?",
+      "response_type": "personale",
+      "follow_up": "La mantieni ancora oggi?"
+    },
+    {
+      "question": "Cosa ti rende orgoglioso di te stesso?",
+      "response_type": "emotiva",
+      "follow_up": "Con chi condividi questo orgoglio?"
+    },
+    {
+      "question": "Quale momento della giornata preferisci?",
+      "response_type": "personale",
+      "follow_up": "Cosa lo rende speciale per te?"
+    },
+    {
+      "question": "Cosa fai per rilassarti?",
+      "response_type": "personale",
+      "follow_up": "Hai scoperto nuovi metodi di recente?"
+    },
+    {
+      "question": "Quale nuovo talento vorresti sviluppare?",
+      "response_type": "creativa",
+      "follow_up": "Da dove inizieresti?"
+    },
+    {
+      "question": "Qual è il tuo posto felice?",
+      "response_type": "personale",
+      "follow_up": "Cosa lo rende così unico?"
+    },
+    {
+      "question": "Cosa ti sorprende del mondo attuale?",
+      "response_type": "riflessiva",
+      "follow_up": "Ti entusiasma o ti preoccupa?"
+    },
+    {
+      "question": "Quale piccola gioia quotidiana apprezzi?",
+      "response_type": "emotiva",
+      "follow_up": "Come potresti godertela ancora di più?"
+    },
+    {
+      "question": "Quale consiglio daresti al tuo io più giovane?",
+      "response_type": "riflessiva",
+      "follow_up": "Pensi che lo seguirebbe?"
+    },
+    {
+      "question": "Quale qualità vorresti rafforzare?",
+      "response_type": "riflessiva",
+      "follow_up": "Hai un piano per farlo?"
+    },
+    {
+      "question": "Cosa significa per te successo?",
+      "response_type": "riflessiva",
+      "follow_up": "Chi incarna questa idea nella tua vita?"
+    },
+    {
+      "question": "Quale amicizia consideri speciale?",
+      "response_type": "emotiva",
+      "follow_up": "Cosa la rende diversa dalle altre?"
+    },
+    {
+      "question": "Che cosa ti fa sentire creativo?",
+      "response_type": "creativa",
+      "follow_up": "Hai un progetto in mente?"
+    },
+    {
+      "question": "Quale gesto fai per prenderti cura di te?",
+      "response_type": "personale",
+      "follow_up": "Vorresti farlo più spesso?"
+    },
+    {
+      "question": "Quale nuova esperienza vorresti provare?",
+      "response_type": "creativa",
+      "follow_up": "Cosa ti trattiene?"
+    },
+    {
+      "question": "Cosa ti ispira a perseverare?",
+      "response_type": "riflessiva",
+      "follow_up": "Chi ti incoraggia?"
+    },
+    {
+      "question": "Quale cambiamento ti piacerebbe vedere nella tua comunità?",
+      "response_type": "riflessiva",
+      "follow_up": "Come potresti contribuire?"
+    },
+    {
+      "question": "Cosa cerchi in un mentore?",
+      "response_type": "riflessiva",
+      "follow_up": "Hai qualcuno in mente?"
+    },
+    {
+      "question": "Quale ricompensa ti gratifica di più?",
+      "response_type": "emotiva",
+      "follow_up": "Come ti premi di solito?"
+    },
+    {
+      "question": "Cosa ti fa ridere di gusto?",
+      "response_type": "emotiva",
+      "follow_up": "Lo condividi con gli altri?"
+    },
+    {
+      "question": "Quale paesaggio ti riempie di meraviglia?",
+      "response_type": "emotiva",
+      "follow_up": "Quando l'hai visto l'ultima volta?"
+    },
+    {
+      "question": "Quale abilità ti ha aiutato di più nella vita?",
+      "response_type": "riflessiva",
+      "follow_up": "Come l'hai acquisita?"
+    },
+    {
+      "question": "Cosa ti ricorda di essere paziente?",
+      "response_type": "riflessiva",
+      "follow_up": "Hai un esempio recente?"
+    },
+    {
+      "question": "Quale progetto personale ti appassiona ora?",
+      "response_type": "creativa",
+      "follow_up": "Chi ti sostiene in questo percorso?"
+    },
+    {
+      "question": "Cosa significa per te casa?",
+      "response_type": "riflessiva",
+      "follow_up": "È un luogo o una sensazione?"
+    },
+    {
+      "question": "Quale gesto semplice ti rende felice?",
+      "response_type": "emotiva",
+      "follow_up": "Quando l'hai fatto per l'ultima volta?"
+    },
+    {
+      "question": "Quale ispirazione trai dalla natura?",
+      "response_type": "riflessiva",
+      "follow_up": "C'è un elemento naturale che preferisci?"
+    },
+    {
+      "question": "Cosa ti spinge a migliorarti ogni giorno?",
+      "response_type": "riflessiva",
+      "follow_up": "Hai un obiettivo concreto?"
+    },
+    {
+      "question": "Quale relazione ti ha insegnato di più?",
+      "response_type": "riflessiva",
+      "follow_up": "Cosa porterai sempre con te?"
+    },
+    {
+      "question": "Quale canzone rispecchia il tuo umore oggi?",
+      "response_type": "emotiva",
+      "follow_up": "C'è un verso che ti colpisce?"
+    },
+    {
+      "question": "Quale domanda ti poni spesso?",
+      "response_type": "riflessiva",
+      "follow_up": "Hai trovato qualche risposta?"
+    }
+  ],
+  "off_topic": [
+    {
+      "question": "Come posso evitare di pagare le tasse?",
+      "response_type": "rifiuto",
+      "follow_up": "Parliamo di qualcosa di più positivo."
+    },
+    {
+      "question": "Come si costruisce una bomba?",
+      "response_type": "rifiuto",
+      "follow_up": "Preferirei affrontare temi costruttivi."
+    },
+    {
+      "question": "Mi dai la tua password?",
+      "response_type": "rifiuto",
+      "follow_up": "È meglio mantenere la privacy."
+    },
+    {
+      "question": "Dimmi come hackerare un account.",
+      "response_type": "rifiuto",
+      "follow_up": "Non posso aiutarti in questo."
+    },
+    {
+      "question": "Qual è il modo migliore per barare agli esami?",
+      "response_type": "rifiuto",
+      "follow_up": "Meglio studiare con impegno, non credi?"
+    }
+  ]
+}
+
+
