@@ -34,6 +34,7 @@ from src.oracle import (
 )
 from src.domain import validate_question
 from src.hotword import is_wake, matches_hotword_text, strip_hotword_prefix
+from src.hotword import is_wake
 from src.chat import ChatState
 from src.conversation import ConversationManager, DialogState
 from src.logging_utils import setup_logging
@@ -187,7 +188,7 @@ def main() -> None:
     WAKE_EN = ["hello oracle", "hey oracle", "hi oracle", "hello, oracle"]
     WAKE_ENABLED = True
     WAKE_SINGLE_TURN = False
-    IDLE_TIMEOUT = 50.0  # secondi di inattività prima di tornare a SLEEP
+    IDLE_TIMEOUT = 60.0  # secondi di inattività prima di tornare a SLEEP
 
     try:
         if getattr(SET, "wake", None) is not None:
@@ -342,17 +343,19 @@ def main() -> None:
                 # prova trascrizione forzando IT/EN per maggiore robustezza
                 text_it = fast_transcribe(INPUT_WAV, client, STT_MODEL, lang_hint="it")
                 text_en = fast_transcribe(INPUT_WAV, client, STT_MODEL, lang_hint="en")
-                is_en = matches_hotword_text(text_en, WAKE_EN)
-                is_it = matches_hotword_text(text_it, WAKE_IT)
+                wake_it, lang_it = is_wake(text_it, WAKE_IT, WAKE_EN)
+                wake_en, lang_en = is_wake(text_en, WAKE_IT, WAKE_EN)
+                is_it = wake_it and lang_it == "it"
+                is_en = wake_en and lang_en == "en"
                 if session_lang in ("it", "en"):
                     text = text_en if session_lang == "en" else text_it
                 else:
-                    if is_en:
+                    if wake_en:
                         text = text_en
-                        session_lang = "en"
-                    elif is_it:
+                        session_lang = lang_en or "en"
+                    elif wake_it:
                         text = text_it
-                        session_lang = "it"
+                        session_lang = lang_it or "it"
                     else:
                         text = text_en or text_it
                         if text_en:
@@ -363,12 +366,12 @@ def main() -> None:
                 logging.info(
                     "Hotword riconosciuta: %s (lang=%s)", text, session_lang
                 )
-                if not (is_it or is_en):
+                if not (wake_it or wake_en):
                     if DEBUG:
                         say("…hotword non riconosciuta, continuo l'attesa.")
                     logging.info("Hotword non riconosciuta: %s", text)
                     continue
-                wake_lang = session_lang or ("en" if is_en and not is_it else "it")
+                wake_lang = session_lang or (lang_en if wake_en and not wake_it else "it")
 
                 dlg.transition(DialogState.AWAKE)
                 continue
