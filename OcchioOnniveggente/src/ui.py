@@ -1089,12 +1089,14 @@ class OracoloUI(tk.Tk):
                 )
             pin_ctx = [{"id": f"pin{i}", "text": t} for i, t in enumerate(self.chat_state.pinned)]
             ctx = pin_ctx + ctx
+            tone = self.settings.get("tone", "informal")
             ans, used_ctx = await oracle_answer_async(
                 text,
                 lang,
                 client,
                 self.settings.get("llm_model", "gpt-4o"),
                 style_prompt,
+                tone=tone,
                 context=ctx,
                 history=self.chat_state.history,
                 topic=self.chat_state.topic_text,
@@ -1234,7 +1236,7 @@ class OracoloUI(tk.Tk):
 
     def _poll_idle(self) -> None:
         now = time.time()
-        timeout = self.settings.get("wake", {}).get("idle_timeout", 50)
+        timeout = self.settings.get("wake", {}).get("idle_timeout", 60)
         if now - self.last_activity > timeout:
             self.status_var.set("😴 Dormiente — dì Ciao Oracolo per riattivarmi")
         elif self.status_var.get().startswith("😴"):
@@ -2309,7 +2311,7 @@ class OracoloUI(tk.Tk):
         win.configure(bg=self._bg)
 
         wake = self.settings.setdefault("wake", {})
-        timeout_var = tk.IntVar(value=int(wake.get("idle_timeout", 50)))
+        timeout_var = tk.IntVar(value=int(wake.get("idle_timeout", 60)))
         it_var = tk.StringVar(value=", ".join(wake.get("it_phrases", [])))
         en_var = tk.StringVar(value=", ".join(wake.get("en_phrases", [])))
 

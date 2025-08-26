@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 class WakeConfig(BaseModel):
     enabled: bool = True
     single_turn: bool = False
-    idle_timeout: float = 50.0
+    idle_timeout: float = 60.0
     it_phrases: List[str] = Field(default_factory=lambda: ["ciao oracolo", "ehi oracolo", "salve oracolo", "ciao, oracolo"])
     en_phrases: List[str] = Field(default_factory=lambda: ["hello oracle", "hey oracle", "hi oracle", "hello, oracle"])
 
@@ -141,6 +141,7 @@ class ChatConfig(BaseModel):
     pinned: List[str] = Field(default_factory=list)
     summary_model: str = "gpt-4o-mini"
     summary_max_tokens: int = 256
+    tone: Literal["formal", "informal"] = "informal"
 
 
 class RealtimeAudioConfig(BaseModel):

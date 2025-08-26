@@ -1,10 +1,15 @@
 import sys
+import threading
 from types import SimpleNamespace
 from pathlib import Path
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
-from OcchioOnniveggente.src.oracle import oracle_answer, oracle_answer_stream
+from OcchioOnniveggente.src.oracle import (
+    oracle_answer,
+    oracle_answer_stream,
+    stream_generate,
+)
 
 
 class DummyEvent(SimpleNamespace):
@@ -75,3 +80,20 @@ def test_oracle_answer_stream_generator():
 
     asyncio.run(run())
     assert parts == [("foo", False), ("bar", False), ("foobar", True)]
+
+
+def test_stream_generate_basic():
+    c = DummyClient()
+    gen = stream_generate("q", "it", c, "gpt", "")
+    assert list(gen) == ["foo", "bar"]
+
+
+def test_stream_generate_stop_event():
+    c = DummyClient()
+    stop = threading.Event()
+    gen = stream_generate("q", "it", c, "gpt", "", stop_event=stop)
+    first = next(gen)
+    stop.set()
+    rest = list(gen)
+    assert first == "foo"
+    assert rest == []
