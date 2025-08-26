@@ -136,10 +136,12 @@ def main() -> None:
 
     # Chat state
     CHAT_ENABLED = bool(getattr(getattr(SET, "chat", None), "enabled", False))
+    CHAT_TURNS = int(getattr(getattr(SET, "chat", None), "max_turns", 10))
+    CHAT_HISTORY_LIMIT = CHAT_TURNS * 2
 
     def _new_chat():
         return ChatState(
-            max_turns=int(getattr(getattr(SET, "chat", None), "max_turns", 10)),
+            max_turns=0,
             persist_jsonl=Path(
                 getattr(
                     getattr(SET, "chat", None),
@@ -270,6 +272,8 @@ def main() -> None:
             prof_name, prof = get_active_profile(CURRENT_CFG, session_profile_name)
             if CHAT_ENABLED:
                 chat = chat_histories[session_profile_name]
+                dlg.chat = chat
+                dlg.max_history = CHAT_HISTORY_LIMIT
             else:
                 chat = None
                 if not args.autostart:
@@ -483,12 +487,12 @@ def main() -> None:
                 pending_q = q
                 pending_lang = eff_lang
                 if CHAT_ENABLED and chat is not None:
-                    chat.push_user(q)
+                    dlg.push_user(q)
                     changed = chat.update_topic(q, client, EMB_MODEL)
                     if changed:
                         say("🔀 Cambio tema.")
                     pending_topic = chat.topic_text
-                    pending_history = chat.history
+                    pending_history = dlg.messages
                 else:
                     pending_topic = None
                     pending_history = None
@@ -546,7 +550,7 @@ def main() -> None:
 
                     pending_full_answer = pending_answer
                     if CHAT_ENABLED and chat is not None:
-                        chat.push_assistant(pending_full_answer)
+                        dlg.push_assistant(pending_full_answer)
                     if dlg.turn_id != processing_turn:
                         continue
                     dlg.transition(DialogState.SPEAKING)
@@ -575,7 +579,7 @@ def main() -> None:
                 )
                 pending_full_answer = pending_answer
                 if CHAT_ENABLED and chat is not None:
-                    chat.push_assistant(pending_full_answer)
+                    dlg.push_assistant(pending_full_answer)
                 pending_answer = extract_summary(pending_full_answer)
                 if dlg.turn_id != processing_turn:
                     continue
