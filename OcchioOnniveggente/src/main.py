@@ -33,12 +33,13 @@ from src.oracle import (
     extract_summary,
 )
 from src.domain import validate_question
-from src.hotword import is_wake, matches_hotword_text
+from src.hotword import is_wake, matches_hotword_text, strip_hotword_prefix
+from src.hotword import is_wake
 from src.chat import ChatState
 from src.conversation import ConversationManager, DialogState
 from src.logging_utils import setup_logging
 from src.language_session import update_language
-from src.cli import _ensure_utf8_stdout, say, oracle_greeting
+from src.cli import _ensure_utf8_stdout, say, oracle_greeting, default_response
 from src.audio_device import pick_device, debug_print_devices
 from src.profile_utils import get_active_profile, make_domain_settings
 
@@ -100,6 +101,7 @@ def main() -> None:
     session_profile_name, _ = get_active_profile(raw_settings)
 
     DEBUG = bool(SET.debug) and (not args.quiet)
+    tone = getattr(SET.chat, "tone", "informal")
 
     # Audio
     AUDIO_CONF = SET.audio
@@ -135,10 +137,12 @@ def main() -> None:
 
     # Chat state
     CHAT_ENABLED = bool(getattr(getattr(SET, "chat", None), "enabled", False))
+    CHAT_TURNS = int(getattr(getattr(SET, "chat", None), "max_turns", 10))
+    CHAT_HISTORY_LIMIT = CHAT_TURNS * 2
 
     def _new_chat():
         return ChatState(
-            max_turns=int(getattr(getattr(SET, "chat", None), "max_turns", 10)),
+            max_turns=0,
             persist_jsonl=Path(
                 getattr(
                     getattr(SET, "chat", None),
@@ -187,7 +191,7 @@ def main() -> None:
     WAKE_EN = ["hello oracle", "hey oracle", "hi oracle", "hello, oracle"]
     WAKE_ENABLED = True
     WAKE_SINGLE_TURN = False
-    IDLE_TIMEOUT = 50.0  # secondi di inattività prima di tornare a SLEEP
+    IDLE_TIMEOUT = 60.0  # secondi di inattività prima di tornare a SLEEP
 
     try:
         if getattr(SET, "wake", None) is not None:
@@ -269,6 +273,8 @@ def main() -> None:
             prof_name, prof = get_active_profile(CURRENT_CFG, session_profile_name)
             if CHAT_ENABLED:
                 chat = chat_histories[session_profile_name]
+                dlg.chat = chat
+                dlg.max_history = CHAT_HISTORY_LIMIT
             else:
                 chat = None
                 if not args.autostart:
@@ -342,17 +348,19 @@ def main() -> None:
                 # prova trascrizione forzando IT/EN per maggiore robustezza
                 text_it = fast_transcribe(INPUT_WAV, client, STT_MODEL, lang_hint="it")
                 text_en = fast_transcribe(INPUT_WAV, client, STT_MODEL, lang_hint="en")
-                is_en = matches_hotword_text(text_en, WAKE_EN)
-                is_it = matches_hotword_text(text_it, WAKE_IT)
+                wake_it, lang_it = is_wake(text_it, WAKE_IT, WAKE_EN)
+                wake_en, lang_en = is_wake(text_en, WAKE_IT, WAKE_EN)
+                is_it = wake_it and lang_it == "it"
+                is_en = wake_en and lang_en == "en"
                 if session_lang in ("it", "en"):
                     text = text_en if session_lang == "en" else text_it
                 else:
-                    if is_en:
+                    if wake_en:
                         text = text_en
-                        session_lang = "en"
-                    elif is_it:
+                        session_lang = lang_en or "en"
+                    elif wake_it:
                         text = text_it
-                        session_lang = "it"
+                        session_lang = lang_it or "it"
                     else:
                         text = text_en or text_it
                         if text_en:
@@ -363,19 +371,19 @@ def main() -> None:
                 logging.info(
                     "Hotword riconosciuta: %s (lang=%s)", text, session_lang
                 )
-                if not (is_it or is_en):
+                if not (wake_it or wake_en):
                     if DEBUG:
                         say("…hotword non riconosciuta, continuo l'attesa.")
                     logging.info("Hotword non riconosciuta: %s", text)
                     continue
-                wake_lang = session_lang or ("en" if is_en and not is_it else "it")
+                wake_lang = session_lang or (lang_en if wake_en and not wake_it else "it")
 
                 dlg.transition(DialogState.AWAKE)
                 continue
 
             # ---------------------- AWAKE: saluta ---------------------- #
             if dlg.state == DialogState.AWAKE:
-                greet = oracle_greeting(wake_lang)
+                greet = oracle_greeting(wake_lang, tone)
                 print(f"🔮 Oracolo: {greet}", flush=True)
                 synthesize(greet, OUTPUT_WAV, client, TTS_MODEL, TTS_VOICE)
                 evt = threading.Event()
@@ -432,6 +440,9 @@ def main() -> None:
                     debug=DEBUG and (not args.quiet),
                     lang_hint=session_lang,
                 )
+                matched, remainder = strip_hotword_prefix(q, WAKE_IT + WAKE_EN)
+                if matched:
+                    q = remainder
                 say(f"📝 Domanda: {q}")
                 if not q:
                     continue
@@ -440,11 +451,11 @@ def main() -> None:
                 eff_lang = session_lang
                 if PROF.contains_profanity(q):
                     if FILTER_MODE == "block":
-                        say("🚫 Linguaggio offensivo/bestemmie non ammessi. Riformula in italiano o inglese.")
+                        say(default_response("profanity", eff_lang, tone))
                         continue
                     else:
                         q = PROF.mask(q)
-                        say("⚠️ Testo filtrato: " + q)
+                        say(default_response("filtered", eff_lang, tone) + q)
                 m = re.search(r"cambia profilo in\s+(.+)", low_q)
                 if m:
                     new_prof = m.group(1).strip().lower()
@@ -477,12 +488,14 @@ def main() -> None:
                 pending_q = q
                 pending_lang = eff_lang
                 if CHAT_ENABLED and chat is not None:
-                    chat.push_user(q)
+                    dlg.push_user(q)
                     changed = chat.update_topic(q, client, EMB_MODEL)
                     if changed:
                         say("🔀 Cambio tema.")
                     pending_topic = chat.topic_text
                     pending_history = chat.messages_for_llm()
+                    pending_history = dlg.messages
+
                 else:
                     pending_topic = None
                     pending_history = None
@@ -540,7 +553,7 @@ def main() -> None:
 
                     pending_full_answer = pending_answer
                     if CHAT_ENABLED and chat is not None:
-                        chat.push_assistant(pending_full_answer)
+                        dlg.push_assistant(pending_full_answer)
                     if dlg.turn_id != processing_turn:
                         continue
                     dlg.transition(DialogState.SPEAKING)
@@ -561,6 +574,7 @@ def main() -> None:
                     client,
                     LLM_MODEL,
                     effective_system if STYLE_ENABLED else "",
+                    tone=tone,
                     context=context_texts,
                     history=pending_history,
                     topic=topic,
@@ -569,7 +583,7 @@ def main() -> None:
                 )
                 pending_full_answer = pending_answer
                 if CHAT_ENABLED and chat is not None:
-                    chat.push_assistant(pending_full_answer)
+                    dlg.push_assistant(pending_full_answer)
                 pending_answer = extract_summary(pending_full_answer)
                 if dlg.turn_id != processing_turn:
                     continue

@@ -92,6 +92,28 @@ prestazioni su CPU rispetto all'uso diretto di PyTorch.
 In caso di errore il sistema effettua automaticamente il fallback al backend
 OpenAI.
 
+## Modalità streaming
+
+È possibile ricevere la risposta dell'LLM in tempo reale utilizzando la nuova
+funzione `stream_generate` in `src/oracle.py`. La funzione restituisce un
+iteratore che emette piccoli chunk di testo man mano che vengono prodotti dal
+modello, permettendo di aggiornare l'interfaccia senza attese.
+
+Esempio minimo in modalità testuale:
+
+```python
+from OcchioOnniveggente.src.oracle import stream_generate
+from OcchioOnniveggente.src.cli import stream_say
+from openai import OpenAI
+
+client = OpenAI()
+tokens = stream_generate("Ciao?", "it", client, "gpt-4o", "")
+stream_say(tokens)
+```
+
+Lo streaming può essere interrotto impostando un `threading.Event`, passando
+un parametro `timeout` oppure premendo `CTRL+C` nella CLI.
+
 
 ---
 
@@ -105,6 +127,7 @@ pip install pytest                     # necessario per eseguire i test
 Servono inoltre:
 - **Python 3.10+**
 - Un'API key OpenAI (`OPENAI_API_KEY`)
+- Motore TTS locale `pyttsx3` e VAD adattivo `webrtcvad` inclusi in `requirements.txt`.
 - (Opzionale) GPU NVIDIA con ≥4 GB di VRAM per usare modelli Whisper locali; in assenza viene usata la CPU (più lenta).
   La selezione del device è gestita da `resolve_device` e può essere
   personalizzata impostando `compute.device` in `settings.yaml` o la
@@ -135,6 +158,12 @@ Per avviare con dispositivi audio diversi:
 audio:
   input_device: 2   # indice input (da sounddevice.query_devices)
   output_device: 5
+openai:
+  tts_voice: alloy   # voce TTS locale (pyttsx3)
+
+recording:
+  use_webrtcvad: true
+  vad_sensitivity: 2  # 0=più sensibile, 3=più severo
 ```
 
 Il file include inoltre sezioni per l'attivazione tramite **hotword** e per
@@ -144,7 +173,7 @@ definire più **profili** preconfigurati. Ad esempio:
 wake:
   enabled: true
   single_turn: false
-  idle_timeout: 50
+  idle_timeout: 60
   it_phrases: ["ciao oracolo"]
 
 profiles:

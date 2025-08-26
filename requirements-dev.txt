@@ -3,3 +3,7 @@ isort>=5.10.1
 mypy>=1.0.0
 ruff>=0.1.0
 faster-whisper>=1.0.0
+pyttsx3>=2.90
+webrtcvad>=2.0.10
+langdetect>=1.0.9
+
