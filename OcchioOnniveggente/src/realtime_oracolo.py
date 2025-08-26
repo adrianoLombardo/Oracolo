@@ -17,12 +17,19 @@ import json
 import os
 import queue
 import time
+import random
+import logging
 from typing import Any
 
 import numpy as np
 import sounddevice as sd
 import websockets
 from src.conversation import ConversationManager, DialogState
+from src.retrieval import load_questions
+from src import local_audio
+from src.oracle import answer_with_followup
+
+logger = logging.getLogger(__name__)
 
 
 SR = 24_000
@@ -37,6 +44,21 @@ WS_URL = os.getenv("ORACOLO_WS_URL", "ws://localhost:8765")
 def _emit(kind: str, text: str) -> None:
     """Emit a structured message on stdout."""
     print(json.dumps({"type": kind, "text": text}, ensure_ascii=False), flush=True)
+
+
+async def _tts_say(text: str, state: dict[str, Any]) -> None:
+    """Speak ``text`` using the local TTS while avoiding overlap."""
+
+    loop = asyncio.get_running_loop()
+    while state.get("tts_playing"):
+        await asyncio.sleep(0.1)
+    try:
+        state["tts_playing"] = True
+        await loop.run_in_executor(None, local_audio.tts_speak, text)
+    except Exception:  # pragma: no cover - best effort playback
+        logger.warning("tts playback failed", exc_info=True)
+    finally:
+        state["tts_playing"] = False
 
 
 async def _mic_worker(
@@ -169,8 +191,13 @@ async def _player(
             await asyncio.sleep(0.1)
 
 
-async def _receiver(ws, audio_q: "queue.Queue[bytes]", conv: ConversationManager) -> None:
-    """Gestisce i messaggi provenienti dal server."""
+async def _receiver(
+    ws,
+    audio_q: "queue.Queue[bytes]",
+    conv: ConversationManager,
+    state: dict[str, Any],
+) -> None:
+    """Gestisce i messaggi provenienti dal server e il flusso locale."""
 
     try:
         async for msg in ws:
@@ -188,11 +215,31 @@ async def _receiver(ws, audio_q: "queue.Queue[bytes]", conv: ConversationManager
                 _emit("partial", f"… {text}")
                 if data.get("final"):
                     conv.push_user(text)
+                    norm = text.strip().lower()
+                    off_list = state.get("off_topic_questions", [])
+                    if any(norm == q.get("question", "").strip().lower() for q in off_list):
+                        state["off_topic"] = True
+                        reply, _ = answer_with_followup(text, None, "")
+                        _emit("answer", f"🔮 {reply}")
+                        conv.transition(DialogState.SPEAKING)
+                        await _tts_say(reply, state)
+                        conv.push_assistant(reply)
+                        conv.transition(DialogState.LISTENING)
             elif kind == "answer":
                 conv.transition(DialogState.SPEAKING)
                 text = data.get("text", "")
                 conv.chat.stream_assistant(iter([text]))
                 _emit("answer", f"🔮 {text}")
+                if not state.get("off_topic"):
+                    follow = state.get("follow_ups", [])
+                    if follow:
+                        q = random.choice(follow)
+                        conv.transition(DialogState.SPEAKING)
+                        await _tts_say(q, state)
+                        conv.push_assistant(q)
+                        conv.transition(DialogState.LISTENING)
+                else:
+                    state["off_topic"] = False
             elif kind == "answer_token":
                 conv.transition(DialogState.SPEAKING)
                 token = data.get("text", "")
@@ -207,14 +254,31 @@ async def _run(url: str, sr: int, barge_threshold: float) -> None:
 
     send_q: "queue.Queue[bytes]" = queue.Queue()
     audio_q: "queue.Queue[bytes]" = queue.Queue()
+    try:
+        good_q, off_q, follow_q = load_questions()
+    except Exception:  # pragma: no cover - IO errors logged and ignored
+        logger.exception("Failed to load questions")
+        good_q, off_q, follow_q = [], [], []
+
     state: dict[str, Any] = {
         "tts_playing": False,
         "barge_sent": False,
         "barge_threshold": barge_threshold,
         "ducking": False,
+        "good_questions": good_q,
+        "off_topic_questions": off_q,
+        "follow_ups": follow_q,
+        "off_topic": False,
     }
     conv = ConversationManager(idle_timeout=60)
     conv.transition(DialogState.LISTENING)
+    if good_q:
+        q = random.choice(good_q).get("question", "")
+        if q:
+            conv.transition(DialogState.SPEAKING)
+            await _tts_say(q, state)
+            conv.push_assistant(q)
+            conv.transition(DialogState.LISTENING)
 
     async with websockets.connect(url, ping_interval=20, ping_timeout=20) as ws:
         await ws.send(
@@ -247,7 +311,7 @@ async def _run(url: str, sr: int, barge_threshold: float) -> None:
         tasks = [
             asyncio.create_task(_mic_worker(ws, send_q, sr=sr, state=state)),
             asyncio.create_task(_sender(ws, send_q)),
-            asyncio.create_task(_receiver(ws, audio_q, conv)),
+            asyncio.create_task(_receiver(ws, audio_q, conv, state)),
             asyncio.create_task(_player(audio_q, sr=sr, state=state)),
         ]
         try:
