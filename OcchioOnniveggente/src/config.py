@@ -140,6 +140,7 @@ class ChatConfig(BaseModel):
     pinned: List[str] = Field(default_factory=list)
     summary_model: str = "gpt-4o-mini"
     summary_max_tokens: int = 256
+    tone: Literal["formal", "informal"] = "informal"
 
 
 class RealtimeAudioConfig(BaseModel):

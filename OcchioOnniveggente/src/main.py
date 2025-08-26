@@ -39,7 +39,7 @@ from src.chat import ChatState
 from src.conversation import ConversationManager, DialogState
 from src.logging_utils import setup_logging
 from src.language_session import update_language
-from src.cli import _ensure_utf8_stdout, say, oracle_greeting
+from src.cli import _ensure_utf8_stdout, say, oracle_greeting, default_response
 from src.audio_device import pick_device, debug_print_devices
 from src.profile_utils import get_active_profile, make_domain_settings
 
@@ -101,6 +101,7 @@ def main() -> None:
     session_profile_name, _ = get_active_profile(raw_settings)
 
     DEBUG = bool(SET.debug) and (not args.quiet)
+    tone = getattr(SET.chat, "tone", "informal")
 
     # Audio
     AUDIO_CONF = SET.audio
@@ -382,7 +383,7 @@ def main() -> None:
 
             # ---------------------- AWAKE: saluta ---------------------- #
             if dlg.state == DialogState.AWAKE:
-                greet = oracle_greeting(wake_lang)
+                greet = oracle_greeting(wake_lang, tone)
                 print(f"🔮 Oracolo: {greet}", flush=True)
                 synthesize(greet, OUTPUT_WAV, client, TTS_MODEL, TTS_VOICE)
                 evt = threading.Event()
@@ -450,11 +451,11 @@ def main() -> None:
                 eff_lang = session_lang
                 if PROF.contains_profanity(q):
                     if FILTER_MODE == "block":
-                        say("🚫 Linguaggio offensivo/bestemmie non ammessi. Riformula in italiano o inglese.")
+                        say(default_response("profanity", eff_lang, tone))
                         continue
                     else:
                         q = PROF.mask(q)
-                        say("⚠️ Testo filtrato: " + q)
+                        say(default_response("filtered", eff_lang, tone) + q)
                 m = re.search(r"cambia profilo in\s+(.+)", low_q)
                 if m:
                     new_prof = m.group(1).strip().lower()
@@ -571,6 +572,7 @@ def main() -> None:
                     client,
                     LLM_MODEL,
                     effective_system if STYLE_ENABLED else "",
+                    tone=tone,
                     context=context_texts,
                     history=pending_history,
                     topic=topic,
