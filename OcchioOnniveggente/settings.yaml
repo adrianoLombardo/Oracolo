@@ -89,6 +89,8 @@ recording:
   # NUOVO: soglia minima di ampiezza (0..1) per considerare valida una registrazione.
   # Se il picco audio è sotto questa soglia, la registrazione viene scartata come "silenzio".
   min_speech_level: 0.01
+  use_webrtcvad: true        # abilita VAD adattivo WebRTC
+  vad_sensitivity: 2         # 0=più sensibile, 3=più severo
 
 vad:
   # Parametri del VAD "a energia"
@@ -141,7 +143,7 @@ oracle_system: >
 wake:
   enabled: true           # usa la hotword; se metti false parla sempre (sconsigliato)
   single_turn: false      # dopo 1 risposta resta attivo finché c'è attività
-  idle_timeout: 50        # secondi di inattività prima di tornare a SLEEP
+  idle_timeout: 60        # secondi di inattività prima di tornare a SLEEP
 
   # Frasi riconosciute (tolleranti a maiuscole, punteggiatura, piccoli errori STT)
   it_phrases:
@@ -305,6 +307,7 @@ chat:
   pinned: []
   summary_model: gpt-4o-mini
   summary_max_tokens: 256
+  tone: informal
 
 # RAG: dove sono i documenti indicizzati e quanti frammenti prendere
 docstore_path: DataBase/index.json

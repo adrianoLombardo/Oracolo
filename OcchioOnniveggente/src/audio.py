@@ -142,7 +142,9 @@ def _record_with_webrtcvad(
     END_MS = int(recording_conf.get("end_ms", 800))
     MAX_MS = int(recording_conf.get("max_ms", 15000))
     MIN_SPEECH = float(recording_conf.get("min_speech_level", 0.01))
-    vad = webrtcvad.Vad(2)
+    mode = int(recording_conf.get("vad_sensitivity", 2))
+    mode = max(0, min(3, mode))
+    vad = webrtcvad.Vad(mode)
     path.parent.mkdir(parents=True, exist_ok=True)
     print(f"\n🎤 Parla pure (VAD webrtc, max {MAX_MS/1000:.1f}s)…")
     stream_kwargs = {"samplerate": sr, "blocksize": frame_samples, "channels": 1, "dtype": "int16"}
@@ -212,7 +214,7 @@ def record_until_silence(
     except Exception:
         pass
 
-    if recording_conf.get("use_webrtcvad") and webrtcvad is not None:
+    if recording_conf.get("use_webrtcvad", True) and webrtcvad is not None:
         return _record_with_webrtcvad(
             path, sr, recording_conf, input_device_id, tts_playing, preprocessor
         )
