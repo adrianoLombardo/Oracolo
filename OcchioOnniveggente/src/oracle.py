@@ -497,6 +497,45 @@ def answer_with_followup(
     return answer, follow_up
 
 
+def answer_and_log_followup(
+    question_data: dict[str, str],
+    client: Any,
+    llm_model: str,
+    log_path: Path,
+    *,
+    session_id: str,
+    lang_hint: str = "it",
+) -> tuple[str, str]:
+    """Generate an answer and log the follow-up for the user.
+
+    The question and its answer are written to ``log_path`` via
+    :func:`append_log`.  If a ``follow_up`` field is present in
+    ``question_data`` it is appended to the same log so that the caller can
+    immediately propose it to the user.  The function returns both the
+    ``answer`` and ``follow_up``.
+    """
+
+    answer, follow_up = answer_with_followup(
+        question_data, client, llm_model, lang_hint=lang_hint
+    )
+    append_log(
+        question_data.get("domanda", ""),
+        answer,
+        log_path,
+        session_id=session_id,
+        lang=lang_hint,
+    )
+    if follow_up:
+        append_log(
+            follow_up,
+            "",
+            log_path,
+            session_id=session_id,
+            lang=lang_hint,
+        )
+    return answer, follow_up
+
+
 
 # ---------------------------------------------------------------------------
 # Logging
