@@ -52,6 +52,73 @@ _USED_QUESTIONS: dict[str, set[int]] = {}
 
 
 
+# ---------------------------------------------------------------------------
+# Conversation state machine
+# ---------------------------------------------------------------------------
+
+
+class ConversationFlow:
+    """Simple state machine to model multi-phase dialogues.
+
+    The flow is defined as an ordered list of phase names.  By default the
+    phases are ``introduzione`` → ``domanda_principale`` → ``follow_up`` →
+    ``chiusura``.  Custom flows for specific contexts can be supplied via the
+    ``flows`` mapping at construction time.
+    """
+
+    DEFAULT_FLOW = [
+        "introduzione",
+        "domanda_principale",
+        "follow_up",
+        "chiusura",
+    ]
+
+    def __init__(
+        self,
+        *,
+        context: str | None = None,
+        flows: dict[str, list[str]] | None = None,
+    ) -> None:
+        flows = flows or {}
+        self._flows = flows
+        self._context = context
+        self._phases = list(flows.get(context, self.DEFAULT_FLOW))
+        if not self._phases:
+            raise ValueError("Flow must contain at least one phase")
+        self._index = 0
+
+    @property
+    def state(self) -> str:
+        """Return the name of the current phase."""
+
+        return self._phases[self._index]
+
+    def advance(self) -> str:
+        """Advance to the next phase and return it.
+
+        If already at the last phase, the state remains unchanged.
+        """
+
+        if self._index < len(self._phases) - 1:
+            self._index += 1
+        return self.state
+
+    def is_finished(self) -> bool:
+        """Return ``True`` when the flow reached its final phase."""
+
+        return self._index >= len(self._phases) - 1
+
+    def reset(self, *, context: str | None = None) -> None:
+        """Reset to the first phase optionally switching ``context``."""
+
+        if context is not None:
+            self._context = context
+            self._phases = list(self._flows.get(context, self.DEFAULT_FLOW))
+            if not self._phases:
+                raise ValueError("Flow must contain at least one phase")
+        self._index = 0
+
+
 # Risposte predefinite per domande fuori tema
 OFF_TOPIC_RESPONSES: dict[str, str] = {
     "poetica": "Preferirei non avventurarmi in slanci poetici.",
@@ -448,15 +515,6 @@ def stream_generate(
 # ---------------------------------------------------------------------------
 # Questions handling
 # ---------------------------------------------------------------------------
-
-
-
-def random_question(category: str) -> Question | None:
-    """Return a random question object from the desired ``category``."""
-
-
-    qs = get_questions().get(category.lower())
-
 def random_question(category: str) -> dict[str, str] | None:
     """Return a random question from ``category`` without immediate repeats.
 
@@ -479,21 +537,30 @@ def random_question(category: str) -> dict[str, str] | None:
     available = [i for i in range(len(qs)) if i not in used]
     idx = random.choice(available)
     used.add(idx)
-    return qs[idx]
+    q = qs[idx]
+    return {"domanda": q.domanda, "follow_up": q.follow_up}
 
 
 def answer_with_followup(
-    question_data: Question,
+    question_data: Question | dict[str, str],
     client: Any,
     llm_model: str,
     *,
     lang_hint: str = "it",
 ) -> tuple[str, str]:
-    """Generate an answer for ``question_data`` and return its follow-up."""
+    """Generate an answer for ``question_data`` and return its follow-up.
 
-    question = question_data.domanda
+    ``question_data`` may be either a :class:`Question` object or a plain
+    dictionary with ``domanda`` and optional ``follow_up`` keys.
+    """
+
+    if isinstance(question_data, dict):
+        question = question_data.get("domanda", "")
+        follow_up = question_data.get("follow_up", "") or ""
+    else:
+        question = question_data.domanda
+        follow_up = question_data.follow_up or ""
     answer, _ = oracle_answer(question, lang_hint, client, llm_model, "")
-    follow_up = question_data.follow_up or ""
     return answer, follow_up
 
 
