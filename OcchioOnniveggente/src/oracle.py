@@ -22,10 +22,10 @@ from typing import Any, AsyncGenerator, Callable, Iterable, Iterator, List, Tupl
 from langdetect import LangDetectException, detect
 
 from .utils.error_handler import handle_error
-from .retrieval import load_questions
+from .retrieval import Question, load_questions
 
 
-QUESTIONS_BY_TYPE = load_questions()
+QUESTIONS_BY_TYPE: dict[str, List[Question]] = load_questions()
 
 
 # Risposte predefinite per domande fuori tema
@@ -426,7 +426,7 @@ def stream_generate(
 # ---------------------------------------------------------------------------
 
 
-def random_question(category: str) -> dict[str, str] | None:
+def random_question(category: str) -> Question | None:
     """Return a random question object from the desired ``category``."""
 
     qs = QUESTIONS_BY_TYPE.get(category.lower())
@@ -436,7 +436,7 @@ def random_question(category: str) -> dict[str, str] | None:
 
 
 def answer_with_followup(
-    question_data: dict[str, str],
+    question_data: Question,
     client: Any,
     llm_model: str,
     *,
@@ -444,9 +444,9 @@ def answer_with_followup(
 ) -> tuple[str, str]:
     """Generate an answer for ``question_data`` and return its follow-up."""
 
-    question = question_data.get("domanda", "")
+    question = question_data.domanda
     answer, _ = oracle_answer(question, lang_hint, client, llm_model, "")
-    follow_up = question_data.get("follow_up", "")
+    follow_up = question_data.follow_up or ""
     return answer, follow_up
 
 

@@ -48,6 +48,13 @@ class Chunk:
     meta: Dict[str, Any]
 
 
+@dataclass
+class Question:
+    domanda: str
+    type: str
+    follow_up: str | None = None
+
+
 def _simple_sentences(txt: str) -> List[str]:
     # split robusto su righe/punteggiatura
     parts = re.split(r'(?<=[\.\!\?])\s+|\n{2,}', txt)
@@ -77,7 +84,7 @@ def _load_index(path: str | Path) -> List[Dict]:
 
 
 
-def load_questions(path: str | Path | None = None) -> Dict[str, List[Dict[str, Any]]]:
+def load_questions(path: str | Path | None = None) -> Dict[str, List[Question]]:
     """Read the entire questions dataset and group entries by category.
 
     Parameters
@@ -106,13 +113,26 @@ def load_questions(path: str | Path | None = None) -> Dict[str, List[Dict[str, A
         logger.exception("Invalid JSON in questions file: %s", p)
         return {}
 
-    categories: Dict[str, List[Dict[str, Any]]] = {}
+    categories: Dict[str, List[Question]] = {}
     if isinstance(data, list):
-        for item in data:
+        for idx, item in enumerate(data):
             if not isinstance(item, dict):
+                logger.warning("Invalid question at index %s: %r", idx, item)
                 continue
-            cat = str(item.get("type", "")).lower()
-            categories.setdefault(cat, []).append(item)
+            domanda = item.get("domanda")
+            qtype = item.get("type")
+            if not isinstance(domanda, str) or not isinstance(qtype, str):
+                logger.warning(
+                    "Question missing required fields at index %s: %r", idx, item
+                )
+                continue
+            follow_up = item.get("follow_up")
+            if follow_up is not None and not isinstance(follow_up, str):
+                follow_up = str(follow_up)
+            cat = qtype.lower()
+            categories.setdefault(cat, []).append(
+                Question(domanda=domanda, type=cat, follow_up=follow_up)
+            )
 
     return categories
 
