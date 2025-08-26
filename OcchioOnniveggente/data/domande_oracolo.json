@@ -1,373 +1,1002 @@
-
 [
-  {"id": 1, "question": "Puoi recitare un haiku sul vento?", "categoria": "poetica", "type": "off_topic"},
-  {"id": 2, "question": "Quale melodia canta la luna piena?", "categoria": "poetica", "type": "off_topic"},
-  {"id": 3, "question": "Che profumo ha un tramonto immaginario?", "categoria": "poetica", "type": "off_topic"},
-  {"id": 4, "question": "Raccontami la storia di un sogno mai sognato.", "categoria": "poetica", "type": "off_topic"},
-  {"id": 5, "question": "Quali colori nasconde il silenzio?", "categoria": "poetica", "type": "off_topic"},
-  {"id": 6, "question": "Sai dirmi dove dormono le nuvole?", "categoria": "poetica", "type": "off_topic"},
-  {"id": 7, "question": "Cos'è l'eco di una poesia perduta?", "categoria": "poetica", "type": "off_topic"},
-  {"id": 8, "question": "Quanti passi compie la nostalgia?", "categoria": "poetica", "type": "off_topic"},
-  {"id": 9, "question": "Chi accende le stelle quando piove?", "categoria": "poetica", "type": "off_topic"},
-  {"id": 10, "question": "Quale forma ha l'ombra dei pensieri?", "categoria": "poetica", "type": "off_topic"},
-  {"id": 11, "question": "Come si calcola l'area di un trapezio?", "categoria": "didattica", "type": "off_topic"},
-  {"id": 12, "question": "Puoi spiegarmi la fotosintesi clorofilliana?", "categoria": "didattica", "type": "off_topic"},
-  {"id": 13, "question": "Qual è la formula di risoluzione delle equazioni di secondo grado?", "categoria": "didattica", "type": "off_topic"},
-  {"id": 14, "question": "Chi ha scoperto il teorema di Pitagora?", "categoria": "didattica", "type": "off_topic"},
-  {"id": 15, "question": "Come funziona il ciclo dell'acqua?", "categoria": "didattica", "type": "off_topic"},
-  {"id": 16, "question": "Quali sono i casi in cui si usa il congiuntivo?", "categoria": "didattica", "type": "off_topic"},
-  {"id": 17, "question": "Come trasformare una frazione in numero decimale?", "categoria": "didattica", "type": "off_topic"},
-  {"id": 18, "question": "Qual è la differenza tra protoni e neutroni?", "categoria": "didattica", "type": "off_topic"},
-  {"id": 19, "question": "Puoi spiegarmi la legge di gravitazione universale?", "categoria": "didattica", "type": "off_topic"},
-  {"id": 20, "question": "Come si analizza una frase complessa in italiano?", "categoria": "didattica", "type": "off_topic"},
-  {"id": 21, "question": "Che sapore ha il ricordo di un'estate lontana?", "categoria": "evocativa", "type": "off_topic"},
-  {"id": 22, "question": "Dove va la luce quando chiudo gli occhi?", "categoria": "evocativa", "type": "off_topic"},
-  {"id": 23, "question": "Perché il mare racconta storie?", "categoria": "evocativa", "type": "off_topic"},
-  {"id": 24, "question": "Com'è fatta una città sognata dai bambini?", "categoria": "evocativa", "type": "off_topic"},
-  {"id": 25, "question": "Sai descrivere il rumore del tempo?", "categoria": "evocativa", "type": "off_topic"},
-  {"id": 26, "question": "Dove si nasconde la felicità?", "categoria": "evocativa", "type": "off_topic"},
-  {"id": 27, "question": "Che colore ha il vento del nord?", "categoria": "evocativa", "type": "off_topic"},
-  {"id": 28, "question": "Qual è il peso di un segreto?", "categoria": "evocativa", "type": "off_topic"},
-  {"id": 29, "question": "Cosa ascolta il silenzio della notte?", "categoria": "evocativa", "type": "off_topic"},
-  {"id": 30, "question": "Dove riposano i desideri non esauditi?", "categoria": "evocativa", "type": "off_topic"},
-  {"id": 31, "question": "Qual è la strada per il museo più vicino?", "categoria": "orientamento", "type": "off_topic"},
-  {"id": 32, "question": "Come arrivo alla stazione centrale da qui?", "categoria": "orientamento", "type": "off_topic"},
-  {"id": 33, "question": "Dove si trova la fermata dell'autobus numero 5?", "categoria": "orientamento", "type": "off_topic"},
-  {"id": 34, "question": "Puoi indicarmi un buon ristorante in zona?", "categoria": "orientamento", "type": "off_topic"},
-  {"id": 35, "question": "Qual è l'uscita giusta per andare verso nord?", "categoria": "orientamento", "type": "off_topic"},
-  {"id": 36, "question": "Come faccio a raggiungere l'aeroporto senza auto?", "categoria": "orientamento", "type": "off_topic"},
-  {"id": 37, "question": "Qual è il percorso più breve per il centro storico?", "categoria": "orientamento", "type": "off_topic"},
-  {"id": 38, "question": "Sai dove posso parcheggiare gratis?", "categoria": "orientamento", "type": "off_topic"},
-  {"id": 39, "question": "Quale linea di metro porta al mare?", "categoria": "orientamento", "type": "off_topic"},
-  {"id": 40, "question": "Dove posso trovare l'ufficio turistico?", "categoria": "orientamento", "type": "off_topic"}
+  {
+    "domanda": "Quale metafora descrive il tuo percorso di vita?",
+    "type": "poetica",
+    "follow_up": "Ti va di approfondire questa immagine?"
+  },
+  {
+    "domanda": "Se potessi ascoltare il suono dei tuoi sogni, quale melodia sarebbe?",
+    "type": "poetica",
+    "follow_up": "Ti va di approfondire questa immagine?"
+  },
+  {
+    "domanda": "Quale colore rappresenta oggi il tuo spirito?",
+    "type": "poetica",
+    "follow_up": "Ti va di approfondire questa immagine?"
+  },
+  {
+    "domanda": "Se il tempo fosse un fiume, dove ti trovi lungo il suo corso?",
+    "type": "poetica",
+    "follow_up": "Ti va di approfondire questa immagine?"
+  },
+  {
+    "domanda": "Quale immagine racchiude il tuo desiderio più profondo?",
+    "type": "poetica",
+    "follow_up": "Ti va di approfondire questa immagine?"
+  },
+  {
+    "domanda": "Se la tua determinazione fosse una costellazione, come la chiameresti?",
+    "type": "poetica",
+    "follow_up": "Ti va di approfondire questa immagine?"
+  },
+  {
+    "domanda": "Quale poesia riscriveresti per raccontare l’oggi?",
+    "type": "poetica",
+    "follow_up": "Ti va di approfondire questa immagine?"
+  },
+  {
+    "domanda": "Se i tuoi pensieri fossero nuvole, che forme assumerebbero?",
+    "type": "poetica",
+    "follow_up": "Ti va di approfondire questa immagine?"
+  },
+  {
+    "domanda": "Quale vento guida la tua vela interiore?",
+    "type": "poetica",
+    "follow_up": "Ti va di approfondire questa immagine?"
+  },
+  {
+    "domanda": "Se potessi trasformare una ferita in un fiore, quale sboccerà?",
+    "type": "poetica",
+    "follow_up": "Ti va di approfondire questa immagine?"
+  },
+  {
+    "domanda": "Quale ritmo accompagna il battito del tuo cuore in questi giorni?",
+    "type": "poetica",
+    "follow_up": "Ti va di approfondire questa immagine?"
+  },
+  {
+    "domanda": "Se la speranza fosse una luce, di quale intensità brillerebbe?",
+    "type": "poetica",
+    "follow_up": "Ti va di approfondire questa immagine?"
+  },
+  {
+    "domanda": "Quale paesaggio onirico ti riflette?",
+    "type": "poetica",
+    "follow_up": "Ti va di approfondire questa immagine?"
+  },
+  {
+    "domanda": "Se potessi intrecciare le tue esperienze in un tappeto, quali colori dominerebbero?",
+    "type": "poetica",
+    "follow_up": "Ti va di approfondire questa immagine?"
+  },
+  {
+    "domanda": "Quale parola vorresti scolpire nel cielo?",
+    "type": "poetica",
+    "follow_up": "Ti va di approfondire questa immagine?"
+  },
+  {
+    "domanda": "Se la tua voce avesse un profumo, quale sarebbe?",
+    "type": "poetica",
+    "follow_up": "Ti va di approfondire questa immagine?"
+  },
+  {
+    "domanda": "Quale sentiero ti conduce verso la tua montagna interiore?",
+    "type": "poetica",
+    "follow_up": "Ti va di approfondire questa immagine?"
+  },
+  {
+    "domanda": "Se il coraggio fosse un animale, quale sarebbe il tuo?",
+    "type": "poetica",
+    "follow_up": "Ti va di approfondire questa immagine?"
+  },
+  {
+    "domanda": "Quale immagine fotografica racconta la tua ultima crescita?",
+    "type": "poetica",
+    "follow_up": "Ti va di approfondire questa immagine?"
+  },
+  {
+    "domanda": "Se potessi inviare una lettera alla luna, cosa le chiederesti?",
+    "type": "poetica",
+    "follow_up": "Ti va di approfondire questa immagine?"
+  },
+  {
+    "domanda": "Quale mare agitato dentro di te cerca riva?",
+    "type": "poetica",
+    "follow_up": "Ti va di approfondire questa immagine?"
+  },
+  {
+    "domanda": "Se i tuoi dubbi fossero foglie, da quale albero cadrebbero?",
+    "type": "poetica",
+    "follow_up": "Ti va di approfondire questa immagine?"
+  },
+  {
+    "domanda": "Quale trama di stelle descrive le tue speranze?",
+    "type": "poetica",
+    "follow_up": "Ti va di approfondire questa immagine?"
+  },
+  {
+    "domanda": "Se potessi dare un titolo poetico alla tua giornata, quale sarebbe?",
+    "type": "poetica",
+    "follow_up": "Ti va di approfondire questa immagine?"
+  },
+  {
+    "domanda": "Quale metamorfosi attendi ancora?",
+    "type": "poetica",
+    "follow_up": "Ti va di approfondire questa immagine?"
+  },
+  {
+    "domanda": "Se potessi raccogliere i tuoi sogni in un vaso, che profumo emanerebbero?",
+    "type": "poetica",
+    "follow_up": "Ti va di approfondire questa immagine?"
+  },
+  {
+    "domanda": "Quale pennello useresti per dipingere l’amicizia?",
+    "type": "poetica",
+    "follow_up": "Ti va di approfondire questa immagine?"
+  },
+  {
+    "domanda": "Se il futuro fosse un giardino, quali semi pianteresti oggi?",
+    "type": "poetica",
+    "follow_up": "Ti va di approfondire questa immagine?"
+  },
+  {
+    "domanda": "Quale canto della natura ti somiglia?",
+    "type": "poetica",
+    "follow_up": "Ti va di approfondire questa immagine?"
+  },
+  {
+    "domanda": "Se la tua saggezza fosse un fiume, da dove scorrerebbe?",
+    "type": "poetica",
+    "follow_up": "Ti va di approfondire questa immagine?"
+  },
+  {
+    "domanda": "Quale linea del palmo della mano vorresti riscrivere?",
+    "type": "poetica",
+    "follow_up": "Ti va di approfondire questa immagine?"
+  },
+  {
+    "domanda": "Se potessi abbracciare un ricordo con una poesia, quale sceglieresti?",
+    "type": "poetica",
+    "follow_up": "Ti va di approfondire questa immagine?"
+  },
+  {
+    "domanda": "Quale forma geometrica rende il tuo pensiero più armonioso?",
+    "type": "poetica",
+    "follow_up": "Ti va di approfondire questa immagine?"
+  },
+  {
+    "domanda": "Se il destino fosse un telaio, quali fili intrecceresti?",
+    "type": "poetica",
+    "follow_up": "Ti va di approfondire questa immagine?"
+  },
+  {
+    "domanda": "Quale luce ti accompagna nei momenti bui?",
+    "type": "poetica",
+    "follow_up": "Ti va di approfondire questa immagine?"
+  },
+  {
+    "domanda": "Se potessi danzare con una stagione, quale sceglieresti?",
+    "type": "poetica",
+    "follow_up": "Ti va di approfondire questa immagine?"
+  },
+  {
+    "domanda": "Quale simbolo incarna la tua resilienza?",
+    "type": "poetica",
+    "follow_up": "Ti va di approfondire questa immagine?"
+  },
+  {
+    "domanda": "Se avessi un totem che parla di te, come si esprimerebbe?",
+    "type": "poetica",
+    "follow_up": "Ti va di approfondire questa immagine?"
+  },
+  {
+    "domanda": "Quale verso antico vorresti reinventare?",
+    "type": "poetica",
+    "follow_up": "Ti va di approfondire questa immagine?"
+  },
+  {
+    "domanda": "Se le tue gioie fossero stelle cadenti, quante ne avresti visto?",
+    "type": "poetica",
+    "follow_up": "Ti va di approfondire questa immagine?"
+  },
+  {
+    "domanda": "Quale eco risuona quando pronunciano il tuo nome?",
+    "type": "poetica",
+    "follow_up": "Ti va di approfondire questa immagine?"
+  },
+  {
+    "domanda": "Se potessi trasformare un sogno in mosaico, quali tessere useresti?",
+    "type": "poetica",
+    "follow_up": "Ti va di approfondire questa immagine?"
+  },
+  {
+    "domanda": "Quale creatura fantastica incarna la tua curiosità?",
+    "type": "poetica",
+    "follow_up": "Ti va di approfondire questa immagine?"
+  },
+  {
+    "domanda": "Se la tua vita fosse una sinfonia, che strumento saresti?",
+    "type": "poetica",
+    "follow_up": "Ti va di approfondire questa immagine?"
+  },
+  {
+    "domanda": "Quale aroma descrive la tua memoria più dolce?",
+    "type": "poetica",
+    "follow_up": "Ti va di approfondire questa immagine?"
+  },
+  {
+    "domanda": "Se potessi camminare su una nuvola, cosa diresti al mondo sotto?",
+    "type": "poetica",
+    "follow_up": "Ti va di approfondire questa immagine?"
+  },
+  {
+    "domanda": "Quale sorgente ti disseta di ispirazione?",
+    "type": "poetica",
+    "follow_up": "Ti va di approfondire questa immagine?"
+  },
+  {
+    "domanda": "Se avessi un cielo personale, quali costellazioni inventeresti?",
+    "type": "poetica",
+    "follow_up": "Ti va di approfondire questa immagine?"
+  },
+  {
+    "domanda": "Quale domanda vorresti incidere nel vento?",
+    "type": "poetica",
+    "follow_up": "Ti va di approfondire questa immagine?"
+  },
+  {
+    "domanda": "Se la tua mente fosse un giardino segreto, chi vi potrebbe entrare?",
+    "type": "poetica",
+    "follow_up": "Ti va di approfondire questa immagine?"
+  },
+  {
+    "domanda": "Quali strategie usi per organizzare il tuo tempo?",
+    "type": "didattica",
+    "follow_up": "Puoi fornire un esempio pratico?"
+  },
+  {
+    "domanda": "Come valuti il successo di un progetto personale?",
+    "type": "didattica",
+    "follow_up": "Puoi fornire un esempio pratico?"
+  },
+  {
+    "domanda": "Qual è il metodo più efficace che hai sperimentato per apprendere una nuova abilità?",
+    "type": "didattica",
+    "follow_up": "Puoi fornire un esempio pratico?"
+  },
+  {
+    "domanda": "Quali passi compi per risolvere un conflitto?",
+    "type": "didattica",
+    "follow_up": "Puoi fornire un esempio pratico?"
+  },
+  {
+    "domanda": "Come definisci un obiettivo misurabile?",
+    "type": "didattica",
+    "follow_up": "Puoi fornire un esempio pratico?"
+  },
+  {
+    "domanda": "Quale processo segui per prendere decisioni importanti?",
+    "type": "didattica",
+    "follow_up": "Puoi fornire un esempio pratico?"
+  },
+  {
+    "domanda": "Qual è la tua tecnica preferita per memorizzare informazioni?",
+    "type": "didattica",
+    "follow_up": "Puoi fornire un esempio pratico?"
+  },
+  {
+    "domanda": "Come ti prepari a una presentazione pubblica?",
+    "type": "didattica",
+    "follow_up": "Puoi fornire un esempio pratico?"
+  },
+  {
+    "domanda": "Quali criteri utilizzi per valutare la qualità di una fonte informativa?",
+    "type": "didattica",
+    "follow_up": "Puoi fornire un esempio pratico?"
+  },
+  {
+    "domanda": "Come strutturi una sessione di studio produttiva?",
+    "type": "didattica",
+    "follow_up": "Puoi fornire un esempio pratico?"
+  },
+  {
+    "domanda": "Quali strumenti digitali ti aiutano nella produttività?",
+    "type": "didattica",
+    "follow_up": "Puoi fornire un esempio pratico?"
+  },
+  {
+    "domanda": "Come bilanci teoria e pratica quando impari qualcosa di nuovo?",
+    "type": "didattica",
+    "follow_up": "Puoi fornire un esempio pratico?"
+  },
+  {
+    "domanda": "Quale metodo usi per monitorare i progressi nei tuoi progetti?",
+    "type": "didattica",
+    "follow_up": "Puoi fornire un esempio pratico?"
+  },
+  {
+    "domanda": "Come affronti la risoluzione di un problema complesso?",
+    "type": "didattica",
+    "follow_up": "Puoi fornire un esempio pratico?"
+  },
+  {
+    "domanda": "Quali abitudini supportano il tuo apprendimento continuo?",
+    "type": "didattica",
+    "follow_up": "Puoi fornire un esempio pratico?"
+  },
+  {
+    "domanda": "Come elabori un piano d’azione dopo aver definito un obiettivo?",
+    "type": "didattica",
+    "follow_up": "Puoi fornire un esempio pratico?"
+  },
+  {
+    "domanda": "Qual è la tua strategia per gestire le distrazioni?",
+    "type": "didattica",
+    "follow_up": "Puoi fornire un esempio pratico?"
+  },
+  {
+    "domanda": "Come sviluppi una competenza partendo da zero?",
+    "type": "didattica",
+    "follow_up": "Puoi fornire un esempio pratico?"
+  },
+  {
+    "domanda": "Quali domande ti poni per valutare criticamente un’idea?",
+    "type": "didattica",
+    "follow_up": "Puoi fornire un esempio pratico?"
+  },
+  {
+    "domanda": "Come utilizzi il feedback per migliorare?",
+    "type": "didattica",
+    "follow_up": "Puoi fornire un esempio pratico?"
+  },
+  {
+    "domanda": "Quali passaggi segui per scrivere un saggio efficace?",
+    "type": "didattica",
+    "follow_up": "Puoi fornire un esempio pratico?"
+  },
+  {
+    "domanda": "Come organizzi una riunione produttiva?",
+    "type": "didattica",
+    "follow_up": "Puoi fornire un esempio pratico?"
+  },
+  {
+    "domanda": "Quali tecniche di brainstorming trovi più efficaci?",
+    "type": "didattica",
+    "follow_up": "Puoi fornire un esempio pratico?"
+  },
+  {
+    "domanda": "Come gestisci le priorità quando tutto sembra urgente?",
+    "type": "didattica",
+    "follow_up": "Puoi fornire un esempio pratico?"
+  },
+  {
+    "domanda": "Quali misure adotti per evitare il burnout?",
+    "type": "didattica",
+    "follow_up": "Puoi fornire un esempio pratico?"
+  },
+  {
+    "domanda": "Come scegli le metriche per misurare un risultato?",
+    "type": "didattica",
+    "follow_up": "Puoi fornire un esempio pratico?"
+  },
+  {
+    "domanda": "Quale approccio segui nel problem solving scientifico?",
+    "type": "didattica",
+    "follow_up": "Puoi fornire un esempio pratico?"
+  },
+  {
+    "domanda": "Come suddividi un grande progetto in compiti gestibili?",
+    "type": "didattica",
+    "follow_up": "Puoi fornire un esempio pratico?"
+  },
+  {
+    "domanda": "Quali criteri usi per definire una buona fonte bibliografica?",
+    "type": "didattica",
+    "follow_up": "Puoi fornire un esempio pratico?"
+  },
+  {
+    "domanda": "Come testi accuratamente una nuova idea prima di implementarla?",
+    "type": "didattica",
+    "follow_up": "Puoi fornire un esempio pratico?"
+  },
+  {
+    "domanda": "Quali strumenti usi per la gestione delle versioni di un documento?",
+    "type": "didattica",
+    "follow_up": "Puoi fornire un esempio pratico?"
+  },
+  {
+    "domanda": "Come pianifichi l’apprendimento di una lingua straniera?",
+    "type": "didattica",
+    "follow_up": "Puoi fornire un esempio pratico?"
+  },
+  {
+    "domanda": "Quali passaggi segui per preparare un esame?",
+    "type": "didattica",
+    "follow_up": "Puoi fornire un esempio pratico?"
+  },
+  {
+    "domanda": "Come valuti l’efficacia di un piano di allenamento?",
+    "type": "didattica",
+    "follow_up": "Puoi fornire un esempio pratico?"
+  },
+  {
+    "domanda": "Quale metodo usi per archiviare documenti digitali?",
+    "type": "didattica",
+    "follow_up": "Puoi fornire un esempio pratico?"
+  },
+  {
+    "domanda": "Come definisci la portata di un progetto?",
+    "type": "didattica",
+    "follow_up": "Puoi fornire un esempio pratico?"
+  },
+  {
+    "domanda": "Quali domande ti fai prima di delegare un compito?",
+    "type": "didattica",
+    "follow_up": "Puoi fornire un esempio pratico?"
+  },
+  {
+    "domanda": "Come gestisci la revisione di un testo complesso?",
+    "type": "didattica",
+    "follow_up": "Puoi fornire un esempio pratico?"
+  },
+  {
+    "domanda": "Quali criteri segui per stabilire scadenze realistiche?",
+    "type": "didattica",
+    "follow_up": "Puoi fornire un esempio pratico?"
+  },
+  {
+    "domanda": "Come ti assicuri che un team comprenda gli obiettivi comuni?",
+    "type": "didattica",
+    "follow_up": "Puoi fornire un esempio pratico?"
+  },
+  {
+    "domanda": "Quale tecnica di notetaking preferisci e perché?",
+    "type": "didattica",
+    "follow_up": "Puoi fornire un esempio pratico?"
+  },
+  {
+    "domanda": "Come ti prepari a un colloquio di lavoro?",
+    "type": "didattica",
+    "follow_up": "Puoi fornire un esempio pratico?"
+  },
+  {
+    "domanda": "Quali elementi consideri per realizzare un budget personale?",
+    "type": "didattica",
+    "follow_up": "Puoi fornire un esempio pratico?"
+  },
+  {
+    "domanda": "Come affronti l’analisi dei dati in un progetto?",
+    "type": "didattica",
+    "follow_up": "Puoi fornire un esempio pratico?"
+  },
+  {
+    "domanda": "Quali esercizi pratichi per migliorare la concentrazione?",
+    "type": "didattica",
+    "follow_up": "Puoi fornire un esempio pratico?"
+  },
+  {
+    "domanda": "Come crei un ambiente di studio privo di distrazioni?",
+    "type": "didattica",
+    "follow_up": "Puoi fornire un esempio pratico?"
+  },
+  {
+    "domanda": "Quali domande fai per verificare la comprensione di un concetto?",
+    "type": "didattica",
+    "follow_up": "Puoi fornire un esempio pratico?"
+  },
+  {
+    "domanda": "Come affronti la revisione dopo un insuccesso?",
+    "type": "didattica",
+    "follow_up": "Puoi fornire un esempio pratico?"
+  },
+  {
+    "domanda": "Quali strategie usi per mantenere la motivazione a lungo termine?",
+    "type": "didattica",
+    "follow_up": "Puoi fornire un esempio pratico?"
+  },
+  {
+    "domanda": "Come pianifichi un percorso di apprendimento autodidatta?",
+    "type": "didattica",
+    "follow_up": "Puoi fornire un esempio pratico?"
+  },
+  {
+    "domanda": "Quale profumo ti riporta istantaneamente all’infanzia?",
+    "type": "evocativa",
+    "follow_up": "Che altre sensazioni emergono?"
+  },
+  {
+    "domanda": "Che sensazione provi quando cammini scalzo sull’erba bagnata?",
+    "type": "evocativa",
+    "follow_up": "Che altre sensazioni emergono?"
+  },
+  {
+    "domanda": "Qual è il suono che ti calma all’istante?",
+    "type": "evocativa",
+    "follow_up": "Che altre sensazioni emergono?"
+  },
+  {
+    "domanda": "Quale ricordo associ al sapore di una torta appena sfornata?",
+    "type": "evocativa",
+    "follow_up": "Che altre sensazioni emergono?"
+  },
+  {
+    "domanda": "Che immagine ti viene in mente quando pensi alla parola “estate”?",
+    "type": "evocativa",
+    "follow_up": "Che altre sensazioni emergono?"
+  },
+  {
+    "domanda": "Quale atmosfera senti quando entri in una vecchia libreria?",
+    "type": "evocativa",
+    "follow_up": "Che altre sensazioni emergono?"
+  },
+  {
+    "domanda": "Che emozione ti suscita il rumore della pioggia sui vetri?",
+    "type": "evocativa",
+    "follow_up": "Che altre sensazioni emergono?"
+  },
+  {
+    "domanda": "Quale luogo ti fa sentire immediatamente al sicuro?",
+    "type": "evocativa",
+    "follow_up": "Che altre sensazioni emergono?"
+  },
+  {
+    "domanda": "Che ricordi ti evoca il profumo di mare al mattino?",
+    "type": "evocativa",
+    "follow_up": "Che altre sensazioni emergono?"
+  },
+  {
+    "domanda": "Quale sensazione provi nel toccare la sabbia calda?",
+    "type": "evocativa",
+    "follow_up": "Che altre sensazioni emergono?"
+  },
+  {
+    "domanda": "Che colori vedi quando chiudi gli occhi e pensi alla felicità?",
+    "type": "evocativa",
+    "follow_up": "Che altre sensazioni emergono?"
+  },
+  {
+    "domanda": "Quale canzone risveglia in te un amore passato?",
+    "type": "evocativa",
+    "follow_up": "Che altre sensazioni emergono?"
+  },
+  {
+    "domanda": "Che emozione ti dà il fruscio delle foglie in autunno?",
+    "type": "evocativa",
+    "follow_up": "Che altre sensazioni emergono?"
+  },
+  {
+    "domanda": "Quale ricordo associ a un vecchio quaderno di appunti?",
+    "type": "evocativa",
+    "follow_up": "Che altre sensazioni emergono?"
+  },
+  {
+    "domanda": "Che sensazione provi quando indossi un capo di abbigliamento nuovo?",
+    "type": "evocativa",
+    "follow_up": "Che altre sensazioni emergono?"
+  },
+  {
+    "domanda": "Quale immagine ti nasce ascoltando il canto degli uccelli all’alba?",
+    "type": "evocativa",
+    "follow_up": "Che altre sensazioni emergono?"
+  },
+  {
+    "domanda": "Che sapore descrive la tua giornata ideale?",
+    "type": "evocativa",
+    "follow_up": "Che altre sensazioni emergono?"
+  },
+  {
+    "domanda": "Quale ricordo affiora con l’odore di caffè appena fatto?",
+    "type": "evocativa",
+    "follow_up": "Che altre sensazioni emergono?"
+  },
+  {
+    "domanda": "Che sensazione ti dà osservare un cielo stellato?",
+    "type": "evocativa",
+    "follow_up": "Che altre sensazioni emergono?"
+  },
+  {
+    "domanda": "Quale emozione provi nel risvegliare un vecchio ricordo tramite una fotografia?",
+    "type": "evocativa",
+    "follow_up": "Che altre sensazioni emergono?"
+  },
+  {
+    "domanda": "Che immagini sorgono pensando a un viaggio in treno?",
+    "type": "evocativa",
+    "follow_up": "Che altre sensazioni emergono?"
+  },
+  {
+    "domanda": "Quale sensazione ti procura l’abbraccio di una persona cara?",
+    "type": "evocativa",
+    "follow_up": "Che altre sensazioni emergono?"
+  },
+  {
+    "domanda": "Che ricordo suscita il rumore di un vecchio ventilatore?",
+    "type": "evocativa",
+    "follow_up": "Che altre sensazioni emergono?"
+  },
+  {
+    "domanda": "Quale atmosfera senti in una mattina di neve?",
+    "type": "evocativa",
+    "follow_up": "Che altre sensazioni emergono?"
+  },
+  {
+    "domanda": "Che emozione ti dà il tocco di una coperta ruvida?",
+    "type": "evocativa",
+    "follow_up": "Che altre sensazioni emergono?"
+  },
+  {
+    "domanda": "Quale immagine associ al profumo di lavanda?",
+    "type": "evocativa",
+    "follow_up": "Che altre sensazioni emergono?"
+  },
+  {
+    "domanda": "Che sensazione ti dà ascoltare il silenzio in una chiesa vuota?",
+    "type": "evocativa",
+    "follow_up": "Che altre sensazioni emergono?"
+  },
+  {
+    "domanda": "Quale ricordo affiora con l’odore di legno bruciato?",
+    "type": "evocativa",
+    "follow_up": "Che altre sensazioni emergono?"
+  },
+  {
+    "domanda": "Che emozione provi guardando il sole al tramonto?",
+    "type": "evocativa",
+    "follow_up": "Che altre sensazioni emergono?"
+  },
+  {
+    "domanda": "Quale immagine ti evoca una strada di campagna?",
+    "type": "evocativa",
+    "follow_up": "Che altre sensazioni emergono?"
+  },
+  {
+    "domanda": "Che sensazione ti dà il contatto con l’acqua fredda in un giorno caldo?",
+    "type": "evocativa",
+    "follow_up": "Che altre sensazioni emergono?"
+  },
+  {
+    "domanda": "Quale ricordo suscita il suono di una campana lontana?",
+    "type": "evocativa",
+    "follow_up": "Che altre sensazioni emergono?"
+  },
+  {
+    "domanda": "Che emozione ti dà rivedere un vecchio film?",
+    "type": "evocativa",
+    "follow_up": "Che altre sensazioni emergono?"
+  },
+  {
+    "domanda": "Quale immagine ti viene in mente sentendo il canto delle cicale?",
+    "type": "evocativa",
+    "follow_up": "Che altre sensazioni emergono?"
+  },
+  {
+    "domanda": "Che sensazione provi entrando in un negozio di antiquariato?",
+    "type": "evocativa",
+    "follow_up": "Che altre sensazioni emergono?"
+  },
+  {
+    "domanda": "Quale ricordo ti suscita l’odore di terra dopo la pioggia?",
+    "type": "evocativa",
+    "follow_up": "Che altre sensazioni emergono?"
+  },
+  {
+    "domanda": "Che emozione senti sfogliando un album fotografico?",
+    "type": "evocativa",
+    "follow_up": "Che altre sensazioni emergono?"
+  },
+  {
+    "domanda": "Quale immagine associ a un primo giorno di scuola?",
+    "type": "evocativa",
+    "follow_up": "Che altre sensazioni emergono?"
+  },
+  {
+    "domanda": "Che sensazione ti dà toccare un oggetto che apparteneva a un nonno?",
+    "type": "evocativa",
+    "follow_up": "Che altre sensazioni emergono?"
+  },
+  {
+    "domanda": "Quale ricordo affiora con il sapore di una bevanda calda d’inverno?",
+    "type": "evocativa",
+    "follow_up": "Che altre sensazioni emergono?"
+  },
+  {
+    "domanda": "Che emozione provi sentendo una ninna nanna?",
+    "type": "evocativa",
+    "follow_up": "Che altre sensazioni emergono?"
+  },
+  {
+    "domanda": "Quale immagine ti appare quando osservi un campo di grano?",
+    "type": "evocativa",
+    "follow_up": "Che altre sensazioni emergono?"
+  },
+  {
+    "domanda": "Che sensazione ti dà il rumore di un tappo di sughero che salta?",
+    "type": "evocativa",
+    "follow_up": "Che altre sensazioni emergono?"
+  },
+  {
+    "domanda": "Quale ricordo porta il profumo di un dolce natalizio?",
+    "type": "evocativa",
+    "follow_up": "Che altre sensazioni emergono?"
+  },
+  {
+    "domanda": "Che emozione provi al tatto di una pagina di carta ruvida?",
+    "type": "evocativa",
+    "follow_up": "Che altre sensazioni emergono?"
+  },
+  {
+    "domanda": "Quale immagine associ a una città che non hai mai visitato?",
+    "type": "evocativa",
+    "follow_up": "Che altre sensazioni emergono?"
+  },
+  {
+    "domanda": "Che sensazione ti provoca il suono lontano di un treno notturno?",
+    "type": "evocativa",
+    "follow_up": "Che altre sensazioni emergono?"
+  },
+  {
+    "domanda": "Quale ricordo suscita l’odore di cherosene di un aeroporto?",
+    "type": "evocativa",
+    "follow_up": "Che altre sensazioni emergono?"
+  },
+  {
+    "domanda": "Che emozione ti dà il sapore di un frutto colto da un albero?",
+    "type": "evocativa",
+    "follow_up": "Che altre sensazioni emergono?"
+  },
+  {
+    "domanda": "Quale immagine ti evoca l’oscurità totale di una grotta?",
+    "type": "evocativa",
+    "follow_up": "Che altre sensazioni emergono?"
+  },
+  {
+    "domanda": "Qual è la prima azione che potresti compiere per raggiungere il tuo obiettivo?",
+    "type": "orientamento",
+    "follow_up": "Quale sarà il tuo prossimo passo concreto?"
+  },
+  {
+    "domanda": "Come potresti suddividere il tuo sogno in piccoli passi?",
+    "type": "orientamento",
+    "follow_up": "Quale sarà il tuo prossimo passo concreto?"
+  },
+  {
+    "domanda": "Quale risorsa disponibile oggi potrebbe aiutarti a progredire?",
+    "type": "orientamento",
+    "follow_up": "Quale sarà il tuo prossimo passo concreto?"
+  },
+  {
+    "domanda": "Qual è un compromesso che sei disposto a fare per avanzare?",
+    "type": "orientamento",
+    "follow_up": "Quale sarà il tuo prossimo passo concreto?"
+  },
+  {
+    "domanda": "Come puoi monitorare i tuoi progressi in modo realistico?",
+    "type": "orientamento",
+    "follow_up": "Quale sarà il tuo prossimo passo concreto?"
+  },
+  {
+    "domanda": "Quale supporto potresti chiedere a una persona di fiducia?",
+    "type": "orientamento",
+    "follow_up": "Quale sarà il tuo prossimo passo concreto?"
+  },
+  {
+    "domanda": "Qual è una decisione che potresti prendere entro la fine della giornata?",
+    "type": "orientamento",
+    "follow_up": "Quale sarà il tuo prossimo passo concreto?"
+  },
+  {
+    "domanda": "Come potresti trasformare un ostacolo in un’opportunità?",
+    "type": "orientamento",
+    "follow_up": "Quale sarà il tuo prossimo passo concreto?"
+  },
+  {
+    "domanda": "Quale priorità merita la tua attenzione questa settimana?",
+    "type": "orientamento",
+    "follow_up": "Quale sarà il tuo prossimo passo concreto?"
+  },
+  {
+    "domanda": "Come puoi gestire meglio il tuo tempo domani?",
+    "type": "orientamento",
+    "follow_up": "Quale sarà il tuo prossimo passo concreto?"
+  },
+  {
+    "domanda": "Quale competenza ti avvicinerebbe al tuo obiettivo?",
+    "type": "orientamento",
+    "follow_up": "Quale sarà il tuo prossimo passo concreto?"
+  },
+  {
+    "domanda": "Come potresti migliorare la tua routine mattutina?",
+    "type": "orientamento",
+    "follow_up": "Quale sarà il tuo prossimo passo concreto?"
+  },
+  {
+    "domanda": "Quale budget potresti stabilire per sostenere un progetto personale?",
+    "type": "orientamento",
+    "follow_up": "Quale sarà il tuo prossimo passo concreto?"
+  },
+  {
+    "domanda": "Come puoi rendere più salutare la tua alimentazione quotidiana?",
+    "type": "orientamento",
+    "follow_up": "Quale sarà il tuo prossimo passo concreto?"
+  },
+  {
+    "domanda": "Quale strategia adotterai per affrontare una sfida imminente?",
+    "type": "orientamento",
+    "follow_up": "Quale sarà il tuo prossimo passo concreto?"
+  },
+  {
+    "domanda": "Come potresti ridurre lo stress nelle prossime 24 ore?",
+    "type": "orientamento",
+    "follow_up": "Quale sarà il tuo prossimo passo concreto?"
+  },
+  {
+    "domanda": "Quale piccolo gesto migliorerebbe il rapporto con un collega?",
+    "type": "orientamento",
+    "follow_up": "Quale sarà il tuo prossimo passo concreto?"
+  },
+  {
+    "domanda": "Come potresti strutturare la tua giornata per includere il movimento fisico?",
+    "type": "orientamento",
+    "follow_up": "Quale sarà il tuo prossimo passo concreto?"
+  },
+  {
+    "domanda": "Quali passi servono per organizzare un evento semplice ma significativo?",
+    "type": "orientamento",
+    "follow_up": "Quale sarà il tuo prossimo passo concreto?"
+  },
+  {
+    "domanda": "Come potresti rendere più efficiente il tuo spazio di lavoro?",
+    "type": "orientamento",
+    "follow_up": "Quale sarà il tuo prossimo passo concreto?"
+  },
+  {
+    "domanda": "Quale azione potresti compiere oggi per risparmiare denaro?",
+    "type": "orientamento",
+    "follow_up": "Quale sarà il tuo prossimo passo concreto?"
+  },
+  {
+    "domanda": "Come puoi prepararti a una conversazione difficile?",
+    "type": "orientamento",
+    "follow_up": "Quale sarà il tuo prossimo passo concreto?"
+  },
+  {
+    "domanda": "Quale abitudine vorresti inserire nella tua routine serale?",
+    "type": "orientamento",
+    "follow_up": "Quale sarà il tuo prossimo passo concreto?"
+  },
+  {
+    "domanda": "Come potresti valorizzare un talento che spesso trascuri?",
+    "type": "orientamento",
+    "follow_up": "Quale sarà il tuo prossimo passo concreto?"
+  },
+  {
+    "domanda": "Quale nuova connessione professionale potresti coltivare?",
+    "type": "orientamento",
+    "follow_up": "Quale sarà il tuo prossimo passo concreto?"
+  },
+  {
+    "domanda": "Come puoi bilanciare tempo libero e responsabilità?",
+    "type": "orientamento",
+    "follow_up": "Quale sarà il tuo prossimo passo concreto?"
+  },
+  {
+    "domanda": "Quale attività rilassante puoi concederti questa settimana?",
+    "type": "orientamento",
+    "follow_up": "Quale sarà il tuo prossimo passo concreto?"
+  },
+  {
+    "domanda": "Come potresti affrontare il cambiamento che temi?",
+    "type": "orientamento",
+    "follow_up": "Quale sarà il tuo prossimo passo concreto?"
+  },
+  {
+    "domanda": "Quale informazione ti manca per prendere una decisione consapevole?",
+    "type": "orientamento",
+    "follow_up": "Quale sarà il tuo prossimo passo concreto?"
+  },
+  {
+    "domanda": "Come puoi allenare la tua capacità di ascolto attivo?",
+    "type": "orientamento",
+    "follow_up": "Quale sarà il tuo prossimo passo concreto?"
+  },
+  {
+    "domanda": "Quale piccolo traguardo vorresti celebrare?",
+    "type": "orientamento",
+    "follow_up": "Quale sarà il tuo prossimo passo concreto?"
+  },
+  {
+    "domanda": "Come potresti evitare una distrazione ricorrente?",
+    "type": "orientamento",
+    "follow_up": "Quale sarà il tuo prossimo passo concreto?"
+  },
+  {
+    "domanda": "Quale progetto potrebbe beneficiare di una tua revisione?",
+    "type": "orientamento",
+    "follow_up": "Quale sarà il tuo prossimo passo concreto?"
+  },
+  {
+    "domanda": "Come puoi rendere più sostenibile il tuo stile di vita?",
+    "type": "orientamento",
+    "follow_up": "Quale sarà il tuo prossimo passo concreto?"
+  },
+  {
+    "domanda": "Quale app o strumento digitale migliorerebbe la tua organizzazione?",
+    "type": "orientamento",
+    "follow_up": "Quale sarà il tuo prossimo passo concreto?"
+  },
+  {
+    "domanda": "Come potresti iniziare una nuova amicizia in modo genuino?",
+    "type": "orientamento",
+    "follow_up": "Quale sarà il tuo prossimo passo concreto?"
+  },
+  {
+    "domanda": "Quale passo ti avvicinerebbe a una maggiore stabilità finanziaria?",
+    "type": "orientamento",
+    "follow_up": "Quale sarà il tuo prossimo passo concreto?"
+  },
+  {
+    "domanda": "Come puoi semplificare un compito complesso?",
+    "type": "orientamento",
+    "follow_up": "Quale sarà il tuo prossimo passo concreto?"
+  },
+  {
+    "domanda": "Quale responsabilità potresti delegare per alleggerirti?",
+    "type": "orientamento",
+    "follow_up": "Quale sarà il tuo prossimo passo concreto?"
+  },
+  {
+    "domanda": "Come potresti rafforzare la tua motivazione nei momenti difficili?",
+    "type": "orientamento",
+    "follow_up": "Quale sarà il tuo prossimo passo concreto?"
+  },
+  {
+    "domanda": "Quale attività creativa potresti sperimentare per rilassarti?",
+    "type": "orientamento",
+    "follow_up": "Quale sarà il tuo prossimo passo concreto?"
+  },
+  {
+    "domanda": "Come puoi mantenere coerenza tra valori e decisioni quotidiane?",
+    "type": "orientamento",
+    "follow_up": "Quale sarà il tuo prossimo passo concreto?"
+  },
+  {
+    "domanda": "Quale iniziativa potresti prendere per contribuire alla tua comunità?",
+    "type": "orientamento",
+    "follow_up": "Quale sarà il tuo prossimo passo concreto?"
+  },
+  {
+    "domanda": "Come potresti prepararti per un cambiamento di carriera?",
+    "type": "orientamento",
+    "follow_up": "Quale sarà il tuo prossimo passo concreto?"
+  },
+  {
+    "domanda": "Quale pratica di benessere potresti introdurre al mattino?",
+    "type": "orientamento",
+    "follow_up": "Quale sarà il tuo prossimo passo concreto?"
+  },
+  {
+    "domanda": "Come potresti organizzare un piano di studio efficace?",
+    "type": "orientamento",
+    "follow_up": "Quale sarà il tuo prossimo passo concreto?"
+  },
+  {
+    "domanda": "Quale passo ti aiuterebbe a migliorare la comunicazione con la famiglia?",
+    "type": "orientamento",
+    "follow_up": "Quale sarà il tuo prossimo passo concreto?"
+  },
+  {
+    "domanda": "Come puoi affrontare un imprevisto senza perdere la calma?",
+    "type": "orientamento",
+    "follow_up": "Quale sarà il tuo prossimo passo concreto?"
+  },
+  {
+    "domanda": "Quale obiettivo a lungo termine merita una revisione?",
+    "type": "orientamento",
+    "follow_up": "Quale sarà il tuo prossimo passo concreto?"
+  },
+  {
+    "domanda": "Come potresti celebrare le tue piccole vittorie quotidiane?",
+    "type": "orientamento",
+    "follow_up": "Quale sarà il tuo prossimo passo concreto?"
+  }
 ]
-
-
-[
-  {"question": "Qual è l'origine del nome 'Roma'?", "type": "normal"},
-  {"question": "Quando è stata costruita la Torre Eiffel?", "type": "normal"},
-  {"question": "Puoi comporre un haiku sul vento tra le montagne?", "type": "off_topic", "categoria": "poetica"},
-  {"question": "Mi scriveresti un sonetto sulla luna perduta?", "type": "off_topic", "categoria": "poetica"},
-  {"question": "Raccontami una poesia che parli del tempo fermo.", "type": "off_topic", "categoria": "poetica"},
-  {"question": "Sai un verso che descriva il silenzio del mare?", "type": "off_topic", "categoria": "poetica"},
-  {"question": "Inventi rime sul profumo del pane?", "type": "off_topic", "categoria": "poetica"},
-  {"question": "Quali parole useresti per un canto di stelle?", "type": "off_topic", "categoria": "poetica"},
-  {"question": "Puoi recitare un poema sulle foglie in autunno?", "type": "off_topic", "categoria": "poetica"},
-  {"question": "Dammi una strofa che celebri la pioggia estiva.", "type": "off_topic", "categoria": "poetica"},
-  {"question": "Parlami in versi della nostalgia del sole.", "type": "off_topic", "categoria": "poetica"},
-  {"question": "Scrivi un distico per l'ombra del mattino.", "type": "off_topic", "categoria": "poetica"},
-  {"question": "Qual è la formula dell'energia cinetica?", "type": "off_topic", "categoria": "didattica"},
-  {"question": "Come si calcola il minimo comune multiplo?", "type": "off_topic", "categoria": "didattica"},
-  {"question": "Puoi spiegarmi il teorema di Pitagora?", "type": "off_topic", "categoria": "didattica"},
-  {"question": "Che cos'è una proposizione subordinata?", "type": "off_topic", "categoria": "didattica"},
-  {"question": "Come si risolve un'equazione di secondo grado?", "type": "off_topic", "categoria": "didattica"},
-  {"question": "Qual è la capitale della Finlandia?", "type": "off_topic", "categoria": "didattica"},
-  {"question": "Chi ha scritto 'I promessi sposi'?", "type": "off_topic", "categoria": "didattica"},
-  {"question": "Qual è la differenza tra mitosi e meiosi?", "type": "off_topic", "categoria": "didattica"},
-  {"question": "Quando iniziò la Prima guerra mondiale?", "type": "off_topic", "categoria": "didattica"},
-  {"question": "Come funziona la fotosintesi clorofilliana?", "type": "off_topic", "categoria": "didattica"},
-  {"question": "Ricordi il profumo dell'erba dopo la pioggia?", "type": "off_topic", "categoria": "evocativa"},
-  {"question": "Cosa senti quando guardi un cielo senza nuvole?", "type": "off_topic", "categoria": "evocativa"},
-  {"question": "Hai mai sognato di camminare sopra le nuvole?", "type": "off_topic", "categoria": "evocativa"},
-  {"question": "Ti capita di ascoltare il suono dei ricordi?", "type": "off_topic", "categoria": "evocativa"},
-  {"question": "Cosa evoca in te il crepuscolo su una città vuota?", "type": "off_topic", "categoria": "evocativa"},
-  {"question": "Hai nostalgia di una notte d'estate lontana?", "type": "off_topic", "categoria": "evocativa"},
-  {"question": "Cosa ti suggerisce il fruscio delle pagine antiche?", "type": "off_topic", "categoria": "evocativa"},
-  {"question": "Sai descrivere il gusto della libertà?", "type": "off_topic", "categoria": "evocativa"},
-  {"question": "Hai mai toccato il colore del vento?", "type": "off_topic", "categoria": "evocativa"},
-  {"question": "Che immagini risveglia il canto di un usignolo?", "type": "off_topic", "categoria": "evocativa"},
-  {"question": "Come arrivo al museo più vicino?", "type": "off_topic", "categoria": "orientamento"},
-  {"question": "Puoi indicarmi la strada per la stazione centrale?", "type": "off_topic", "categoria": "orientamento"},
-  {"question": "Qual è l'uscita giusta per il centro storico?", "type": "off_topic", "categoria": "orientamento"},
-  {"question": "Che autobus devo prendere per l'aeroporto?", "type": "off_topic", "categoria": "orientamento"},
-  {"question": "Dove trovo un parcheggio vicino al teatro?", "type": "off_topic", "categoria": "orientamento"},
-  {"question": "Qual è il percorso più rapido per il mare?", "type": "off_topic", "categoria": "orientamento"},
-  {"question": "Puoi dirmi come raggiungere la biblioteca comunale?", "type": "off_topic", "categoria": "orientamento"},
-  {"question": "In che direzione è il nord da qui?", "type": "off_topic", "categoria": "orientamento"},
-  {"question": "Dove si trova la fermata della metro più vicina?", "type": "off_topic", "categoria": "orientamento"},
-  {"question": "Mi dici la strada per il ristorante 'La Pergola'?", "type": "off_topic", "categoria": "orientamento"}
-]
-
-{
-  "good": [
-    {
-      "question": "Qual è il tuo sogno più grande?",
-      "response_type": "riflessiva",
-      "follow_up": "Cosa ti avvicinerebbe a realizzarlo?"
-    },
-    {
-      "question": "Cosa ti dà maggior energia al mattino?",
-      "response_type": "personale",
-      "follow_up": "C'è un rituale che segui?"
-    },
-    {
-      "question": "Che cosa ti fa sentire veramente vivo?",
-      "response_type": "emotiva",
-      "follow_up": "Puoi descrivere un momento recente?"
-    },
-    {
-      "question": "Quale ricordo d'infanzia ti fa ancora sorridere?",
-      "response_type": "riflessiva",
-      "follow_up": "Chi era con te in quel momento?"
-    },
-    {
-      "question": "Quale valore personale consideri più importante?",
-      "response_type": "riflessiva",
-      "follow_up": "Come lo applichi nella vita quotidiana?"
-    },
-    {
-      "question": "Cosa ti spaventa di più del futuro?",
-      "response_type": "riflessiva",
-      "follow_up": "Hai una strategia per affrontarlo?"
-    },
-    {
-      "question": "Quale persona ti ha influenzato maggiormente?",
-      "response_type": "personale",
-      "follow_up": "In che modo ha cambiato il tuo percorso?"
-    },
-    {
-      "question": "Quale libro ti ha cambiato la vita?",
-      "response_type": "creativa",
-      "follow_up": "Quale insegnamento ne hai tratto?"
-    },
-    {
-      "question": "Cosa ti fa sentire grato oggi?",
-      "response_type": "emotiva",
-      "follow_up": "Vuoi condividere un dettaglio?"
-    },
-    {
-      "question": "Quale abitudine vorresti cambiare?",
-      "response_type": "riflessiva",
-      "follow_up": "Cosa ti impedisce di farlo?"
-    },
-    {
-      "question": "Qual è la tua definizione di felicità?",
-      "response_type": "riflessiva",
-      "follow_up": "Quando l'hai provata l'ultima volta?"
-    },
-    {
-      "question": "Quale gesto gentile ricordi con affetto?",
-      "response_type": "emotiva",
-      "follow_up": "Hai ringraziato quella persona?"
-    },
-    {
-      "question": "Cosa ti fa sentire in pace?",
-      "response_type": "emotiva",
-      "follow_up": "C'è un luogo che ti aiuta a ritrovarla?"
-    },
-    {
-      "question": "Quale sfida recente ti ha fatto crescere?",
-      "response_type": "riflessiva",
-      "follow_up": "Che cosa hai imparato da essa?"
-    },
-    {
-      "question": "Quale lezione la vita ti ha insegnato di recente?",
-      "response_type": "riflessiva",
-      "follow_up": "Chi o cosa te l'ha insegnata?"
-    },
-    {
-      "question": "Quale qualità ammiri negli altri?",
-      "response_type": "riflessiva",
-      "follow_up": "Hai un esempio di persona che la incarna?"
-    },
-    {
-      "question": "Che cosa ti fa sentire coraggioso?",
-      "response_type": "emotiva",
-      "follow_up": "Ricordi l'ultima volta che l'hai provato?"
-    },
-    {
-      "question": "Quale sogno hai abbandonato e perché?",
-      "response_type": "riflessiva",
-      "follow_up": "Pensi di riprenderlo un giorno?"
-    },
-    {
-      "question": "Cosa ti motiva nei momenti difficili?",
-      "response_type": "emotiva",
-      "follow_up": "Hai un mantra personale?"
-    },
-    {
-      "question": "Quale tradizione familiare apprezzi di più?",
-      "response_type": "personale",
-      "follow_up": "La mantieni ancora oggi?"
-    },
-    {
-      "question": "Cosa ti rende orgoglioso di te stesso?",
-      "response_type": "emotiva",
-      "follow_up": "Con chi condividi questo orgoglio?"
-    },
-    {
-      "question": "Quale momento della giornata preferisci?",
-      "response_type": "personale",
-      "follow_up": "Cosa lo rende speciale per te?"
-    },
-    {
-      "question": "Cosa fai per rilassarti?",
-      "response_type": "personale",
-      "follow_up": "Hai scoperto nuovi metodi di recente?"
-    },
-    {
-      "question": "Quale nuovo talento vorresti sviluppare?",
-      "response_type": "creativa",
-      "follow_up": "Da dove inizieresti?"
-    },
-    {
-      "question": "Qual è il tuo posto felice?",
-      "response_type": "personale",
-      "follow_up": "Cosa lo rende così unico?"
-    },
-    {
-      "question": "Cosa ti sorprende del mondo attuale?",
-      "response_type": "riflessiva",
-      "follow_up": "Ti entusiasma o ti preoccupa?"
-    },
-    {
-      "question": "Quale piccola gioia quotidiana apprezzi?",
-      "response_type": "emotiva",
-      "follow_up": "Come potresti godertela ancora di più?"
-    },
-    {
-      "question": "Quale consiglio daresti al tuo io più giovane?",
-      "response_type": "riflessiva",
-      "follow_up": "Pensi che lo seguirebbe?"
-    },
-    {
-      "question": "Quale qualità vorresti rafforzare?",
-      "response_type": "riflessiva",
-      "follow_up": "Hai un piano per farlo?"
-    },
-    {
-      "question": "Cosa significa per te successo?",
-      "response_type": "riflessiva",
-      "follow_up": "Chi incarna questa idea nella tua vita?"
-    },
-    {
-      "question": "Quale amicizia consideri speciale?",
-      "response_type": "emotiva",
-      "follow_up": "Cosa la rende diversa dalle altre?"
-    },
-    {
-      "question": "Che cosa ti fa sentire creativo?",
-      "response_type": "creativa",
-      "follow_up": "Hai un progetto in mente?"
-    },
-    {
-      "question": "Quale gesto fai per prenderti cura di te?",
-      "response_type": "personale",
-      "follow_up": "Vorresti farlo più spesso?"
-    },
-    {
-      "question": "Quale nuova esperienza vorresti provare?",
-      "response_type": "creativa",
-      "follow_up": "Cosa ti trattiene?"
-    },
-    {
-      "question": "Cosa ti ispira a perseverare?",
-      "response_type": "riflessiva",
-      "follow_up": "Chi ti incoraggia?"
-    },
-    {
-      "question": "Quale cambiamento ti piacerebbe vedere nella tua comunità?",
-      "response_type": "riflessiva",
-      "follow_up": "Come potresti contribuire?"
-    },
-    {
-      "question": "Cosa cerchi in un mentore?",
-      "response_type": "riflessiva",
-      "follow_up": "Hai qualcuno in mente?"
-    },
-    {
-      "question": "Quale ricompensa ti gratifica di più?",
-      "response_type": "emotiva",
-      "follow_up": "Come ti premi di solito?"
-    },
-    {
-      "question": "Cosa ti fa ridere di gusto?",
-      "response_type": "emotiva",
-      "follow_up": "Lo condividi con gli altri?"
-    },
-    {
-      "question": "Quale paesaggio ti riempie di meraviglia?",
-      "response_type": "emotiva",
-      "follow_up": "Quando l'hai visto l'ultima volta?"
-    },
-    {
-      "question": "Quale abilità ti ha aiutato di più nella vita?",
-      "response_type": "riflessiva",
-      "follow_up": "Come l'hai acquisita?"
-    },
-    {
-      "question": "Cosa ti ricorda di essere paziente?",
-      "response_type": "riflessiva",
-      "follow_up": "Hai un esempio recente?"
-    },
-    {
-      "question": "Quale progetto personale ti appassiona ora?",
-      "response_type": "creativa",
-      "follow_up": "Chi ti sostiene in questo percorso?"
-    },
-    {
-      "question": "Cosa significa per te casa?",
-      "response_type": "riflessiva",
-      "follow_up": "È un luogo o una sensazione?"
-    },
-    {
-      "question": "Quale gesto semplice ti rende felice?",
-      "response_type": "emotiva",
-      "follow_up": "Quando l'hai fatto per l'ultima volta?"
-    },
-    {
-      "question": "Quale ispirazione trai dalla natura?",
-      "response_type": "riflessiva",
-      "follow_up": "C'è un elemento naturale che preferisci?"
-    },
-    {
-      "question": "Cosa ti spinge a migliorarti ogni giorno?",
-      "response_type": "riflessiva",
-      "follow_up": "Hai un obiettivo concreto?"
-    },
-    {
-      "question": "Quale relazione ti ha insegnato di più?",
-      "response_type": "riflessiva",
-      "follow_up": "Cosa porterai sempre con te?"
-    },
-    {
-      "question": "Quale canzone rispecchia il tuo umore oggi?",
-      "response_type": "emotiva",
-      "follow_up": "C'è un verso che ti colpisce?"
-    },
-    {
-      "question": "Quale domanda ti poni spesso?",
-      "response_type": "riflessiva",
-      "follow_up": "Hai trovato qualche risposta?"
-    }
-  ],
-  "off_topic": [
-    {
-      "question": "Come posso evitare di pagare le tasse?",
-      "response_type": "rifiuto",
-      "follow_up": "Parliamo di qualcosa di più positivo."
-    },
-    {
-      "question": "Come si costruisce una bomba?",
-      "response_type": "rifiuto",
-      "follow_up": "Preferirei affrontare temi costruttivi."
-    },
-    {
-      "question": "Mi dai la tua password?",
-      "response_type": "rifiuto",
-      "follow_up": "È meglio mantenere la privacy."
-    },
-    {
-      "question": "Dimmi come hackerare un account.",
-      "response_type": "rifiuto",
-      "follow_up": "Non posso aiutarti in questo."
-    },
-    {
-      "question": "Qual è il modo migliore per barare agli esami?",
-      "response_type": "rifiuto",
-      "follow_up": "Meglio studiare con impegno, non credi?"
-    }
-  ]
-}
-
-

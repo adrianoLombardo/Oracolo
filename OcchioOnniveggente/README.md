@@ -67,6 +67,30 @@ prestazioni inferiori.
 Se ad esempio `audio.sample_rate` contiene una stringa (`"ventiquattromila"`) invece di un
 numero, Pydantic segnalerà `Input should be a valid integer` e userà `24000`.
 
+## Dataset delle domande
+
+Le domande che l'Oracolo può proporre sono raccolte nel file
+`data/domande_oracolo.json`.  Ogni elemento del file è una struttura con i
+campi `domanda`, `type` e un eventuale `follow_up`:
+
+```json
+{
+  "domanda": "Quale metafora descrive il tuo percorso di vita?",
+  "type": "poetica",
+  "follow_up": "Ti va di approfondire questa immagine?"
+}
+```
+
+Le tipologie disponibili sono `poetica`, `didattica`, `evocativa` e
+`orientamento`.  La funzione `load_questions()` in `src/retrieval.py` carica il
+dataset restituendo un dizionario che mappa ogni categoria alla relativa lista
+di domande.
+
+Nel modulo `src/oracle.py` è possibile ottenere una domanda casuale tramite
+`random_question("poetica")` e generare una risposta con
+`answer_with_followup(question_obj, client, modello)`.  Dopo la risposta
+l'Oracolo propone automaticamente il `follow_up` associato alla domanda.
+
 ## DataBase dei documenti
 
 I testi consultati dall'Oracolo vanno inseriti nella cartella `DataBase/` alla radice del
