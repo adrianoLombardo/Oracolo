@@ -213,7 +213,7 @@ async def _run(url: str, sr: int, barge_threshold: float) -> None:
         "barge_threshold": barge_threshold,
         "ducking": False,
     }
-    conv = ConversationManager(idle_timeout=50)
+    conv = ConversationManager(idle_timeout=60)
     conv.transition(DialogState.LISTENING)
 
     async with websockets.connect(url, ping_interval=20, ping_timeout=20) as ws:
