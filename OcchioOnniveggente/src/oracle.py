@@ -13,8 +13,10 @@ import asyncio
 import csv
 import json
 import inspect
+import time
+from threading import Event
 from pathlib import Path
-from typing import Any, AsyncGenerator, Callable, Iterable, List, Tuple
+from typing import Any, AsyncGenerator, Callable, Iterable, Iterator, List, Tuple
 
 
 # ---------------------------------------------------------------------------
@@ -272,6 +274,48 @@ async def oracle_answer_stream(
                 yield delta, False
                 await asyncio.sleep(0)  # allow cooperative scheduling
     yield output_text, True
+
+
+def stream_generate(
+    question: str,
+    lang_hint: str,
+    client: Any,
+    llm_model: str,
+    style_prompt: str,
+    *,
+    context: List[dict[str, Any]] | None = None,
+    history: List[dict[str, str]] | None = None,
+    policy_prompt: str = "",
+    mode: str = "detailed",
+    topic: str | None = None,
+    timeout: float | None = None,
+    stop_event: "Event" | None = None,
+) -> Iterator[str]:
+    """Yield answer tokens from the model synchronously.
+
+    The generator mirrors :func:`oracle_answer_stream` but operates in a
+    synchronous context.  It forwards each token as soon as it is produced and
+    can be interrupted either by setting ``stop_event`` or after ``timeout``
+    seconds have elapsed.
+    """
+
+    instructions = _build_instructions(lang_hint, context, mode)
+    messages = _build_messages(question, context, history)
+    response = client.responses.with_streaming_response.create(
+        model=llm_model, instructions=instructions, input=messages
+    )
+
+    start = time.monotonic()
+    with response as stream_resp:
+        for event in stream_resp:
+            if stop_event is not None and stop_event.is_set():
+                break
+            if timeout is not None and (time.monotonic() - start) > timeout:
+                break
+            if getattr(event, "type", "") == "response.output_text.delta":
+                delta = getattr(event, "delta", "")
+                if delta:
+                    yield delta
 
 
 # ---------------------------------------------------------------------------
