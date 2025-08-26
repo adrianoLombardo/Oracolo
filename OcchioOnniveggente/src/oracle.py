@@ -660,7 +660,13 @@ async def synthesize_async(*args, **kwargs):  # pragma: no cover - thin wrapper
 
 
 
-def transcribe(audio_path: Path, client: Any, model: str, *, lang_hint: str | None = None) -> str | None:
+async def transcribe(
+    audio_path: Path,
+    client: Any,
+    model: str,
+    *,
+    lang_hint: str | None = None,
+) -> str | None:
     """Effettua una trascrizione gestendo gli errori in modo centralizzato.
 
     Il client passato deve esporre un metodo ``transcribe`` compatibile con le
@@ -672,20 +678,36 @@ def transcribe(audio_path: Path, client: Any, model: str, *, lang_hint: str | No
 
     try:
         if hasattr(client, "transcribe"):
-            return client.transcribe(audio_path, model, lang_hint=lang_hint)
+            result = client.transcribe(audio_path, model, lang_hint=lang_hint)
+            if inspect.isawaitable(result):
+                result = await result
+            return result
 
         # Fallback per ``AsyncOpenAI`` che espone l'API moderna
         with audio_path.open("rb") as f:
             params: dict[str, Any] = {"model": model, "file": f}
             if lang_hint:
                 params["language"] = lang_hint
-            response = client.audio.transcriptions.create(**params)
+            create = client.audio.transcriptions.create
+            if inspect.iscoroutinefunction(create):
+                response = await create(**params)
+            else:
+                response = create(**params)
+            if inspect.isawaitable(response):
+                response = await response
         return getattr(response, "text", None)
     except Exception as exc:  # noqa: BLE001 - delegato a handle_error
         return handle_error(exc, context="transcribe")
 
 
-def fast_transcribe(audio_path: Path, client: Any, model: str, *, lang_hint: str | None = None) -> str | None:
+async def fast_transcribe(
+    audio_path: Path,
+    client: Any,
+    model: str,
+    *,
+    lang_hint: str | None = None,
+) -> str | None:
     """Wrapper around :func:`transcribe` returning only the transcription text."""
-    return transcribe(audio_path, client, model, lang_hint=lang_hint)
+
+    return await transcribe(audio_path, client, model, lang_hint=lang_hint)
 

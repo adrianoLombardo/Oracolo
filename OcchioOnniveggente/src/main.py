@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 from collections import defaultdict
 
+import asyncio
 import numpy as np
 import sounddevice as sd
 import yaml
@@ -31,6 +32,7 @@ from src.oracle import (
     synthesize,
     append_log,
     extract_summary,
+    detect_language,
 )
 from src.domain import validate_question
 from src.hotword import is_wake, matches_hotword_text, strip_hotword_prefix
@@ -327,18 +329,24 @@ def main() -> None:
                 if not ok:
                     continue
 
-                text = fast_transcribe(INPUT_WAV, client, STT_MODEL)
+                text = asyncio.run(
+                    fast_transcribe(INPUT_WAV, client, STT_MODEL)
+                )
                 wake, lang = is_wake(text, WAKE_IT, WAKE_EN)
                 if not wake:
-                    text_it = fast_transcribe(
-                        INPUT_WAV, client, STT_MODEL, lang_hint="it"
+                    text_it = asyncio.run(
+                        fast_transcribe(
+                            INPUT_WAV, client, STT_MODEL, lang_hint="it"
+                        )
                     )
                     wake, lang = is_wake(text_it, WAKE_IT, WAKE_EN)
                     if wake:
                         text = text_it
                 if not wake:
-                    text_en = fast_transcribe(
-                        INPUT_WAV, client, STT_MODEL, lang_hint="en"
+                    text_en = asyncio.run(
+                        fast_transcribe(
+                            INPUT_WAV, client, STT_MODEL, lang_hint="en"
+                        )
                     )
                     wake, lang = is_wake(text_en, WAKE_IT, WAKE_EN)
                     if wake:
@@ -352,8 +360,12 @@ def main() -> None:
                 wake_lang = session_lang or lang or "it"
 
                 # prova trascrizione forzando IT/EN per maggiore robustezza
-                text_it = fast_transcribe(INPUT_WAV, client, STT_MODEL, lang_hint="it")
-                text_en = fast_transcribe(INPUT_WAV, client, STT_MODEL, lang_hint="en")
+                text_it = asyncio.run(
+                    fast_transcribe(INPUT_WAV, client, STT_MODEL, lang_hint="it")
+                )
+                text_en = asyncio.run(
+                    fast_transcribe(INPUT_WAV, client, STT_MODEL, lang_hint="en")
+                )
                 wake_it, lang_it = is_wake(text_it, WAKE_IT, WAKE_EN)
                 wake_en, lang_en = is_wake(text_en, WAKE_IT, WAKE_EN)
                 is_it = wake_it and lang_it == "it"
@@ -439,13 +451,15 @@ def main() -> None:
                 if not ok:
                     continue
                 dlg.refresh_deadline()
-                q, qlang = transcribe(
-                    INPUT_WAV,
-                    client,
-                    STT_MODEL,
-                    debug=DEBUG and (not args.quiet),
-                    lang_hint=session_lang,
+                q = asyncio.run(
+                    transcribe(
+                        INPUT_WAV,
+                        client,
+                        STT_MODEL,
+                        lang_hint=session_lang,
+                    )
                 )
+                qlang = detect_language(q or "")
                 matched, remainder = strip_hotword_prefix(q, WAKE_IT + WAKE_EN)
                 if matched:
                     q = remainder
