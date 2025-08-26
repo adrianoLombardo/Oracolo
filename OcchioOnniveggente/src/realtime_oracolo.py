@@ -27,7 +27,13 @@ import websockets
 from src.conversation import ConversationManager, DialogState
 from src.retrieval import load_questions
 from src import local_audio
-from src.oracle import answer_with_followup
+from src.oracle import (
+    enqueue_generate_reply,
+    enqueue_synthesize_voice,
+    transcribe_worker,
+    generate_reply_worker,
+    synthesize_voice_worker,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +45,15 @@ BYTES_PER_SAMPLE = 2  # int16
 CHANNELS = 1
 NEED_BYTES = BLOCKSIZE * BYTES_PER_SAMPLE * CHANNELS
 WS_URL = os.getenv("ORACOLO_WS_URL", "ws://localhost:8765")
+
+
+async def start_queue_workers() -> None:
+    """Start background workers for the task queue."""
+
+    loop = asyncio.get_running_loop()
+    loop.create_task(transcribe_worker())
+    loop.create_task(generate_reply_worker())
+    loop.create_task(synthesize_voice_worker())
 
 
 def _emit(kind: str, text: str) -> None:
@@ -217,23 +232,20 @@ async def _receiver(
                     off_list = state.get("off_topic_questions", [])
                     if any(norm == q.domanda.strip().lower() for q in off_list):
                         state["off_topic"] = True
-                        reply, _ = answer_with_followup(text, None, "")
-                        _emit("answer", f"🔮 {reply}")
-                        conv.transition(DialogState.SPEAKING)
-                        await _tts_say(reply, state)
-                        conv.push_assistant(reply)
-                        conv.transition(DialogState.LISTENING)
+                        enqueue_generate_reply(text, None, None, "", conv=conv)
+                        enqueue_synthesize_voice(text)
             elif kind == "answer":
                 conv.transition(DialogState.SPEAKING)
                 text = data.get("text", "")
                 conv.chat.stream_assistant(iter([text]))
                 _emit("answer", f"🔮 {text}")
+                enqueue_synthesize_voice(text)
                 if not state.get("off_topic"):
                     follow = state.get("follow_ups", [])
                     if follow:
                         q = random.choice(follow)
                         conv.transition(DialogState.SPEAKING)
-                        await _tts_say(q, state)
+                        enqueue_synthesize_voice(q)
                         conv.push_assistant(q)
                         conv.transition(DialogState.LISTENING)
                 else:
@@ -257,6 +269,7 @@ async def _run(
     """Avvia la sessione realtime verso ``url`` con retry esponenziale."""
 
     logger.info("Connessione %s/%s verso %s", attempt, retries, url)
+    await start_queue_workers()
     send_q: "queue.Queue[bytes]" = queue.Queue()
     audio_q: "queue.Queue[bytes]" = queue.Queue()
     try:

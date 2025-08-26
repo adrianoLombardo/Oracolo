@@ -83,6 +83,42 @@ Nel log (livello `DEBUG`) sono visibili gli stessi dati. La funzione
 `resolve_device` utilizza `gpu_utilization_percent` per dirottare le nuove
 richieste sulla CPU quando l'uso della GPU supera il 90%.
 
+Per ambienti **production** è possibile avviare un piccolo server di
+esportazione con:
+
+```python
+from OcchioOnniveggente.src.metrics import metrics_loop, start_metrics_server
+
+# espone le metriche su http://localhost:9000/metrics
+start_metrics_server(9000)
+
+# raccolta periodica CPU/GPU
+asyncio.create_task(metrics_loop())
+```
+
+Le metriche possono quindi essere acquisite da Prometheus o da un collector
+OpenTelemetry/OTLP e utilizzate come sorgente per sistemi di *autoscaling*.
+La classe `Autoscaler` offre un semplice esempio di scalatore basato sull'uso
+della CPU:
+
+```python
+from OcchioOnniveggente.src.metrics import Autoscaler
+
+def scale_up():
+    subprocess.run(["kubectl", "scale", "--replicas=3", "deploy/oracolo"])
+
+def scale_down():
+    subprocess.run(["kubectl", "scale", "--replicas=1", "deploy/oracolo"])
+
+autoscaler = Autoscaler(scale_up, scale_down, high=80.0, low=20.0)
+asyncio.create_task(autoscaler.run())
+```
+
+Su **Kubernetes** è possibile agganciare le metriche a un `HorizontalPodAutoscaler`
+tramite il Prometheus Adapter. In **Docker Swarm** si può eseguire uno script
+simile al precedente per regolare il numero di repliche in funzione dei valori
+raccolti.
+
 ## LLM locale
 
 Per usare un modello eseguito in locale è possibile impostare `llm_backend: local`

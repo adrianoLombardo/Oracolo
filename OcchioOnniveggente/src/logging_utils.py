@@ -37,6 +37,19 @@ class JsonFormatter(logging.Formatter):
         return json.dumps(log_record, ensure_ascii=False)
 
 
+class ErrorMetricHandler(logging.Handler):
+    """Increment Prometheus counter on error logs."""
+
+    def emit(self, record: logging.LogRecord) -> None:  # type: ignore[override]
+        if record.levelno >= logging.ERROR:
+            try:  # pragma: no cover - metrics optional
+                from . import metrics as _metrics
+
+                _metrics.LOG_ERRORS.labels(record.name).inc()
+            except Exception:  # pragma: no cover - metrics not configured
+                pass
+
+
 def setup_logging(
     log_path: Path,
     level: int = logging.INFO,
@@ -98,6 +111,9 @@ def setup_logging(
     file_handler.setFormatter(json_fmt)
 
     handlers = [file_handler]
+
+    # Export error counts as Prometheus metrics
+    handlers.append(ErrorMetricHandler())
 
     if console:
         console_fmt = logging.Formatter(

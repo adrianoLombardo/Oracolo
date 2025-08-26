@@ -4,7 +4,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from typing import Dict
+from typing import Callable, Dict
 
 from prometheus_client import (
     CONTENT_TYPE_LATEST,
@@ -13,9 +13,11 @@ from prometheus_client import (
     Gauge,
     Histogram,
     generate_latest,
+    start_http_server,
 )
 from starlette.requests import Request
 from starlette.responses import Response
+from .task_queue import task_queue
 
 try:  # pragma: no cover - optional dependencies
     import torch  # type: ignore
@@ -29,34 +31,77 @@ except Exception:  # pragma: no cover
 
 logger = logging.getLogger(__name__)
 
-# HTTP request metrics
+"""Prometheus metrics and simple autoscaling helpers."""
+
 REGISTRY = CollectorRegistry()
+
+# HTTP request metrics
 REQUEST_COUNT = Counter(
     "http_requests_total", "Total HTTP requests", ["method", "endpoint"], registry=REGISTRY
 )
 REQUEST_LATENCY = Histogram(
     "http_request_duration_seconds", "HTTP request latency", ["method", "endpoint"], registry=REGISTRY
 )
+REQUEST_ERRORS = Counter(
+    "http_request_errors_total",
+    "Total HTTP requests returning errors",
+    ["method", "endpoint", "status"],
+    registry=REGISTRY,
+)
+
+# Application level errors
+LOG_ERRORS = Counter(
+    "application_errors_total",
+    "Total number of error log records",
+    ["logger"],
+    registry=REGISTRY,
+)
 
 # System metrics
 GPU_MEMORY = Gauge("gpu_memory_bytes", "Allocated GPU memory in bytes", registry=REGISTRY)
 GPU_UTILIZATION = Gauge("gpu_utilization_percent", "GPU utilisation percentage", registry=REGISTRY)
 CPU_PERCENT = Gauge("cpu_usage_percent", "CPU usage percentage", registry=REGISTRY)
+QUEUE_LENGTH = Gauge(
+    "task_queue_length", "Number of pending tasks", ["job"], registry=REGISTRY
+)
 
 
 async def metrics_middleware(request: Request, call_next):  # type: ignore[no-untyped-def]
-    """Middleware capturing request count and latency for each call."""
+    """Middleware capturing request count, errors and latency for each call."""
     start = time.perf_counter()
-    response = await call_next(request)
+    try:
+        response = await call_next(request)
+    except Exception:
+        # Unhandled exception – count as 500 and re-raise
+        REQUEST_ERRORS.labels(request.method, request.url.path, "500").inc()
+        REQUEST_COUNT.labels(request.method, request.url.path).inc()
+        REQUEST_LATENCY.labels(request.method, request.url.path).observe(
+            time.perf_counter() - start
+        )
+        raise
+
     duration = time.perf_counter() - start
     REQUEST_COUNT.labels(request.method, request.url.path).inc()
     REQUEST_LATENCY.labels(request.method, request.url.path).observe(duration)
+    if response.status_code >= 400:
+        REQUEST_ERRORS.labels(
+            request.method, request.url.path, str(response.status_code)
+        ).inc()
     return response
 
 
 def metrics_endpoint() -> Response:
     """Expose collected metrics in Prometheus text format."""
     return Response(generate_latest(REGISTRY), media_type=CONTENT_TYPE_LATEST)
+
+
+def start_metrics_server(port: int = 8000) -> None:
+    """Start a dedicated Prometheus exporter on ``port``.
+
+    Useful when the hosting application cannot easily expose the
+    ``/metrics`` endpoint (e.g. for standalone scripts).
+    """
+    start_http_server(port, registry=REGISTRY)
 
 
 def read_system_metrics() -> Dict[str, float]:
@@ -94,12 +139,55 @@ def record_system_metrics() -> Dict[str, float]:
     return m
 
 
+def record_queue_metrics() -> None:
+    """Update queue length gauges for all registered jobs."""
+
+    for name in ("transcribe", "generate_reply", "synthesize_voice"):
+        QUEUE_LENGTH.labels(name).set(task_queue.size(name))
+
+
 async def metrics_loop(interval: float = 5.0) -> None:
     """Background task periodically collecting system metrics."""
 
     while True:  # pragma: no cover - simple loop
         record_system_metrics()
+        record_queue_metrics()
         await asyncio.sleep(interval)
+
+
+class Autoscaler:
+    """Basic autoscaling helper based on CPU usage.
+
+    ``scale_up`` and ``scale_down`` are callables that perform the
+    actual scaling action (e.g. invoking ``kubectl`` or ``docker``).
+    The class periodically samples CPU usage and triggers the
+    callbacks when thresholds are crossed.
+    """
+
+    def __init__(
+        self,
+        scale_up: Callable[[], None],
+        scale_down: Callable[[], None],
+        *,
+        high: float = 80.0,
+        low: float = 20.0,
+    ) -> None:
+        self.scale_up = scale_up
+        self.scale_down = scale_down
+        self.high = high
+        self.low = low
+
+    async def run(self, interval: float = 30.0) -> None:
+        """Continuously check CPU usage and invoke callbacks."""
+        while True:  # pragma: no cover - simple loop
+            cpu = record_system_metrics()["cpu"]
+            if cpu > self.high:
+                logger.info("autoscaler: scale up cpu=%s", cpu)
+                self.scale_up()
+            elif cpu < self.low:
+                logger.info("autoscaler: scale down cpu=%s", cpu)
+                self.scale_down()
+            await asyncio.sleep(interval)
 
 
 def resolve_device(preferred: str = "auto", *, threshold: float = 90.0) -> str:
