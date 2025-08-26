@@ -76,6 +76,7 @@ def _load_index(path: str | Path) -> List[Dict]:
     return documents
 
 
+
 def load_questions(path: str | Path) -> Dict[str, Any]:
     """Load oracle questions from ``path`` grouping off-topic ones by category.
 
@@ -85,9 +86,16 @@ def load_questions(path: str | Path) -> Dict[str, Any]:
     ``off_topic`` must also provide a ``categoria`` field; these are grouped
     under ``off_topic`` using the category as key.
 
+def load_questions(
+    path: str | Path | None = None,
+) -> Tuple[List[Dict[str, str]], List[Dict[str, str]], List[str]]:
+    """Read oracle questions and follow ups from ``path``.
+
+
     Parameters
     ----------
     path:
+
         Location of ``domande_oracolo.json``.
 
     Returns
@@ -117,6 +125,39 @@ def load_questions(path: str | Path) -> Dict[str, Any]:
             good.append(item)
 
     return {"good": good, "off_topic": off_topic}
+
+        Optional custom location of the JSON file.  When ``None`` the
+        function looks for ``data/domande_oracolo.json`` relative to the
+        project root.
+
+    Returns
+    -------
+    tuple
+        ``(good, off_topic, follow_ups)`` where ``good`` and ``off_topic`` are
+        lists of dictionaries containing at least ``question`` and
+        ``response_type``.  ``follow_ups`` is a list with all the
+        ``follow_up`` strings present in the file.  Empty lists are returned
+        when the file cannot be read.
+    """
+
+    p = (
+        Path(path)
+        if path is not None
+        else Path(__file__).resolve().parent.parent / "data" / "domande_oracolo.json"
+    )
+    if not p.exists():
+        logger.warning("Questions file not found: %s", p)
+        return [], [], []
+    try:
+        data = json.loads(p.read_text(encoding="utf-8"))
+    except Exception:
+        logger.exception("Failed to read questions file: %s", p)
+        return [], [], []
+    good = data.get("good", []) if isinstance(data, dict) else []
+    off_topic = data.get("off_topic", []) if isinstance(data, dict) else []
+    follow_ups = [q.get("follow_up", "") for q in good + off_topic if q.get("follow_up")]
+    return good, off_topic, follow_ups
+
 
 
 def _make_chunks(text: str, max_chars: int = 800, overlap_ratio: float = 0.1) -> List[str]:
