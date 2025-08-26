@@ -53,3 +53,30 @@ def test_session_serves_all_questions_before_repeat():
     q = session.next_question("demo")
     assert q.domanda in seen
 
+
+def test_next_question_filters_by_tags():
+    questions = {
+        "demo": [
+            Question(domanda="q1", type="demo", tag=["a", "b"]),
+            Question(domanda="q2", type="demo", tag=["b"]),
+        ]
+    }
+    session = QuestionSession(questions)
+    q = session.next_question("demo", tags={"a"})
+    assert q.domanda == "q1"
+    assert session.next_question("demo", tags={"z"}) is None
+
+
+def test_next_question_recalculates_category_for_tags():
+    questions = {
+        "a": [Question(domanda="qa", type="a", tag=["x"])],
+        "b": [Question(domanda="qb", type="b", tag=["y"])],
+    }
+    session = QuestionSession(questions)
+    q = session.next_question(tags={"y"})
+    assert q.type == "b"
+    assert "y" in (q.tag or [])
+
+    # No category contains requested tag
+    assert session.next_question(tags={"not-there"}) is None
+
