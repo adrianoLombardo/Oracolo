@@ -1,0 +1,1042 @@
+{
+  "$defs": {
+    "AudioConfig": {
+      "properties": {
+        "sample_rate": {
+          "default": 24000,
+          "title": "Sample Rate",
+          "type": "integer"
+        },
+        "ask_seconds": {
+          "default": 10,
+          "title": "Ask Seconds",
+          "type": "integer"
+        },
+        "input_wav": {
+          "default": "data/temp/input.wav",
+          "title": "Input Wav",
+          "type": "string"
+        },
+        "output_wav": {
+          "default": "data/temp/answer.wav",
+          "title": "Output Wav",
+          "type": "string"
+        },
+        "input_device": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Input Device"
+        },
+        "output_device": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Output Device"
+        },
+        "barge_rms_threshold": {
+          "default": 0.25,
+          "title": "Barge Rms Threshold",
+          "type": "number"
+        },
+        "denoise": {
+          "default": false,
+          "title": "Denoise",
+          "type": "boolean"
+        },
+        "echo_cancel": {
+          "default": false,
+          "title": "Echo Cancel",
+          "type": "boolean"
+        }
+      },
+      "title": "AudioConfig",
+      "type": "object"
+    },
+    "ChatConfig": {
+      "properties": {
+        "inactivity_timeout_s": {
+          "default": 60,
+          "title": "Inactivity Timeout S",
+          "type": "integer"
+        },
+        "remember_turns": {
+          "default": 8,
+          "title": "Remember Turns",
+          "type": "integer"
+        },
+        "pinned": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Pinned",
+          "type": "array"
+        },
+        "summary_model": {
+          "default": "gpt-4o-mini",
+          "title": "Summary Model",
+          "type": "string"
+        },
+        "summary_max_tokens": {
+          "default": 256,
+          "title": "Summary Max Tokens",
+          "type": "integer"
+        },
+        "tone": {
+          "default": "informal",
+          "enum": [
+            "formal",
+            "informal"
+          ],
+          "title": "Tone",
+          "type": "string"
+        }
+      },
+      "title": "ChatConfig",
+      "type": "object"
+    },
+    "ComputeConfig": {
+      "properties": {
+        "device": {
+          "default": "auto",
+          "enum": [
+            "auto",
+            "cpu",
+            "cuda"
+          ],
+          "title": "Device",
+          "type": "string"
+        },
+        "use_onnx": {
+          "default": false,
+          "title": "Use Onnx",
+          "type": "boolean"
+        },
+        "device_concurrency": {
+          "default": 1,
+          "title": "Device Concurrency",
+          "type": "integer"
+        },
+        "stt": {
+          "$ref": "#/$defs/ComputeModuleConfig",
+          "default": {
+            "device": "auto",
+            "precision": "fp16",
+            "batch_interval": 100,
+            "max_batch_size": 4
+          }
+        },
+        "llm": {
+          "$ref": "#/$defs/ComputeModuleConfig",
+          "default": {
+            "device": "auto",
+            "precision": "fp16",
+            "batch_interval": 100,
+            "max_batch_size": 4
+          }
+        },
+        "tts": {
+          "$ref": "#/$defs/ComputeModuleConfig",
+          "default": {
+            "device": "auto",
+            "precision": "fp16",
+            "batch_interval": 100,
+            "max_batch_size": 4
+          }
+        }
+      },
+      "title": "ComputeConfig",
+      "type": "object"
+    },
+    "ComputeModuleConfig": {
+      "properties": {
+        "device": {
+          "default": "auto",
+          "enum": [
+            "auto",
+            "cpu",
+            "cuda"
+          ],
+          "title": "Device",
+          "type": "string"
+        },
+        "precision": {
+          "default": "fp16",
+          "enum": [
+            "fp32",
+            "fp16",
+            "bf16",
+            "int4"
+          ],
+          "title": "Precision",
+          "type": "string"
+        },
+        "batch_interval": {
+          "default": 100,
+          "title": "Batch Interval",
+          "type": "integer"
+        },
+        "max_batch_size": {
+          "default": 4,
+          "title": "Max Batch Size",
+          "type": "integer"
+        }
+      },
+      "title": "ComputeModuleConfig",
+      "type": "object"
+    },
+    "DomainConfig": {
+      "properties": {
+        "enabled": {
+          "default": true,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "profile": {
+          "default": "museo",
+          "title": "Profile",
+          "type": "string"
+        },
+        "topic": {
+          "default": "",
+          "title": "Topic",
+          "type": "string"
+        },
+        "keywords": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Keywords",
+          "type": "array"
+        },
+        "kw_min_overlap": {
+          "default": 0.04,
+          "title": "Kw Min Overlap",
+          "type": "number"
+        },
+        "emb_min_sim": {
+          "default": 0.22,
+          "title": "Emb Min Sim",
+          "type": "number"
+        },
+        "rag_min_hits": {
+          "default": 1,
+          "title": "Rag Min Hits",
+          "type": "integer"
+        },
+        "weights": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "title": "Weights",
+          "type": "object"
+        },
+        "accept_threshold": {
+          "default": 0.65,
+          "title": "Accept Threshold",
+          "type": "number"
+        },
+        "clarify_margin": {
+          "default": 0.1,
+          "title": "Clarify Margin",
+          "type": "number"
+        },
+        "profiles": {
+          "additionalProperties": {
+            "$ref": "#/$defs/DomainProfileConfig"
+          },
+          "title": "Profiles",
+          "type": "object"
+        }
+      },
+      "title": "DomainConfig",
+      "type": "object"
+    },
+    "DomainProfileConfig": {
+      "properties": {
+        "keywords": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Keywords",
+          "type": "array"
+        },
+        "weights": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "type": "number"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Weights"
+        },
+        "accept_threshold": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Accept Threshold"
+        },
+        "clarify_margin": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Clarify Margin"
+        }
+      },
+      "title": "DomainProfileConfig",
+      "type": "object"
+    },
+    "FilterConfig": {
+      "properties": {
+        "mode": {
+          "default": "block",
+          "enum": [
+            "block",
+            "mask"
+          ],
+          "title": "Mode",
+          "type": "string"
+        }
+      },
+      "title": "FilterConfig",
+      "type": "object"
+    },
+    "LightingConfig": {
+      "properties": {
+        "mode": {
+          "default": "sacn",
+          "enum": [
+            "sacn",
+            "wled"
+          ],
+          "title": "Mode",
+          "type": "string"
+        },
+        "sacn": {
+          "$ref": "#/$defs/SacnConfig",
+          "default": {
+            "universe": 1,
+            "destination_ip": "192.168.1.50",
+            "rgb_channels": [
+              1,
+              2,
+              3
+            ],
+            "idle_level": 10,
+            "peak_level": 255
+          }
+        },
+        "wled": {
+          "$ref": "#/$defs/WledConfig",
+          "default": {
+            "host": "192.168.1.77"
+          }
+        }
+      },
+      "title": "LightingConfig",
+      "type": "object"
+    },
+    "OpenAIConfig": {
+      "properties": {
+        "api_key": {
+          "default": "",
+          "title": "Api Key",
+          "type": "string"
+        },
+        "stt_model": {
+          "default": "gpt-4o-mini-transcribe",
+          "title": "Stt Model",
+          "type": "string"
+        },
+        "llm_model": {
+          "default": "gpt-5-mini",
+          "title": "Llm Model",
+          "type": "string"
+        },
+        "tts_model": {
+          "default": "gpt-4o-mini-tts",
+          "title": "Tts Model",
+          "type": "string"
+        },
+        "tts_voice": {
+          "default": "alloy",
+          "title": "Tts Voice",
+          "type": "string"
+        },
+        "embed_model": {
+          "default": "text-embedding-3-large",
+          "title": "Embed Model",
+          "type": "string"
+        },
+        "max_workers": {
+          "default": 4,
+          "title": "Max Workers",
+          "type": "integer"
+        }
+      },
+      "title": "OpenAIConfig",
+      "type": "object"
+    },
+    "PaletteItem": {
+      "properties": {
+        "rgb": {
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "integer"
+            }
+          ],
+          "title": "Rgb",
+          "type": "array"
+        },
+        "style": {
+          "title": "Style",
+          "type": "string"
+        }
+      },
+      "required": [
+        "rgb",
+        "style"
+      ],
+      "title": "PaletteItem",
+      "type": "object"
+    },
+    "PersonaConfig": {
+      "properties": {
+        "current": {
+          "default": "standard",
+          "title": "Current",
+          "type": "string"
+        },
+        "profiles": {
+          "additionalProperties": {
+            "$ref": "#/$defs/PersonaProfile"
+          },
+          "title": "Profiles",
+          "type": "object"
+        }
+      },
+      "title": "PersonaConfig",
+      "type": "object"
+    },
+    "PersonaProfile": {
+      "properties": {
+        "tone": {
+          "default": "neutro",
+          "title": "Tone",
+          "type": "string"
+        },
+        "style": {
+          "default": "formale",
+          "title": "Style",
+          "type": "string"
+        }
+      },
+      "title": "PersonaProfile",
+      "type": "object"
+    },
+    "RealtimeAudioConfig": {
+      "properties": {
+        "chunk_ms": {
+          "default": 20,
+          "title": "Chunk Ms",
+          "type": "integer"
+        },
+        "start_level": {
+          "default": 300,
+          "title": "Start Level",
+          "type": "integer"
+        },
+        "end_sil_ms": {
+          "default": 700,
+          "title": "End Sil Ms",
+          "type": "integer"
+        },
+        "max_utt_ms": {
+          "default": 15000,
+          "title": "Max Utt Ms",
+          "type": "integer"
+        }
+      },
+      "title": "RealtimeAudioConfig",
+      "type": "object"
+    },
+    "RealtimeConfig": {
+      "properties": {
+        "barge_in_threshold": {
+          "default": 0.55,
+          "title": "Barge In Threshold",
+          "type": "number"
+        },
+        "ducking_db": {
+          "default": -12.0,
+          "title": "Ducking Db",
+          "type": "number"
+        },
+        "cpu_workers": {
+          "default": 4,
+          "title": "Cpu Workers",
+          "type": "integer"
+        },
+        "gpu_workers": {
+          "default": 1,
+          "title": "Gpu Workers",
+          "type": "integer"
+        }
+      },
+      "title": "RealtimeConfig",
+      "type": "object"
+    },
+    "RecordingConfig": {
+      "properties": {
+        "mode": {
+          "default": "vad",
+          "enum": [
+            "vad",
+            "timed"
+          ],
+          "title": "Mode",
+          "type": "string"
+        },
+        "timed_seconds": {
+          "default": 10,
+          "title": "Timed Seconds",
+          "type": "integer"
+        },
+        "fallback_to_timed": {
+          "default": false,
+          "title": "Fallback To Timed",
+          "type": "boolean"
+        },
+        "min_speech_level": {
+          "default": 0.02,
+          "title": "Min Speech Level",
+          "type": "number"
+        },
+        "hold_off_after_tts_ms": {
+          "default": 500,
+          "title": "Hold Off After Tts Ms",
+          "type": "integer"
+        },
+        "use_webrtcvad": {
+          "default": true,
+          "title": "Use Webrtcvad",
+          "type": "boolean"
+        },
+        "vad_sensitivity": {
+          "default": 2,
+          "title": "Vad Sensitivity",
+          "type": "integer"
+        }
+      },
+      "title": "RecordingConfig",
+      "type": "object"
+    },
+    "RetrievalConfig": {
+      "properties": {
+        "hybrid": {
+          "default": true,
+          "title": "Hybrid",
+          "type": "boolean"
+        },
+        "rerank": {
+          "default": true,
+          "title": "Rerank",
+          "type": "boolean"
+        },
+        "max_chunks": {
+          "default": 6,
+          "title": "Max Chunks",
+          "type": "integer"
+        },
+        "chunk_strategy": {
+          "default": "semantic",
+          "enum": [
+            "semantic",
+            "fixed_overlap"
+          ],
+          "title": "Chunk Strategy",
+          "type": "string"
+        }
+      },
+      "title": "RetrievalConfig",
+      "type": "object"
+    },
+    "SacnConfig": {
+      "properties": {
+        "universe": {
+          "default": 1,
+          "title": "Universe",
+          "type": "integer"
+        },
+        "destination_ip": {
+          "title": "Destination Ip",
+          "type": "string"
+        },
+        "rgb_channels": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "Rgb Channels",
+          "type": "array"
+        },
+        "idle_level": {
+          "default": 10,
+          "title": "Idle Level",
+          "type": "integer"
+        },
+        "peak_level": {
+          "default": 255,
+          "title": "Peak Level",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "destination_ip",
+        "rgb_channels"
+      ],
+      "title": "SacnConfig",
+      "type": "object"
+    },
+    "VadConfig": {
+      "properties": {
+        "frame_ms": {
+          "default": 30,
+          "title": "Frame Ms",
+          "type": "integer"
+        },
+        "start_ms": {
+          "default": 200,
+          "title": "Start Ms",
+          "type": "integer"
+        },
+        "end_ms": {
+          "default": 800,
+          "title": "End Ms",
+          "type": "integer"
+        },
+        "max_ms": {
+          "default": 15000,
+          "title": "Max Ms",
+          "type": "integer"
+        },
+        "preroll_ms": {
+          "default": 300,
+          "title": "Preroll Ms",
+          "type": "integer"
+        },
+        "noise_window_ms": {
+          "default": 1000,
+          "title": "Noise Window Ms",
+          "type": "integer"
+        },
+        "start_mult": {
+          "default": 1.8,
+          "title": "Start Mult",
+          "type": "number"
+        },
+        "end_mult": {
+          "default": 1.3,
+          "title": "End Mult",
+          "type": "number"
+        },
+        "base_start": {
+          "default": 0.006,
+          "title": "Base Start",
+          "type": "number"
+        },
+        "base_end": {
+          "default": 0.0035,
+          "title": "Base End",
+          "type": "number"
+        }
+      },
+      "title": "VadConfig",
+      "type": "object"
+    },
+    "WakeConfig": {
+      "properties": {
+        "enabled": {
+          "default": true,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "single_turn": {
+          "default": false,
+          "title": "Single Turn",
+          "type": "boolean"
+        },
+        "idle_timeout": {
+          "default": 60.0,
+          "title": "Idle Timeout",
+          "type": "number"
+        },
+        "it_phrases": {
+          "items": {
+            "type": "string"
+          },
+          "title": "It Phrases",
+          "type": "array"
+        },
+        "en_phrases": {
+          "items": {
+            "type": "string"
+          },
+          "title": "En Phrases",
+          "type": "array"
+        }
+      },
+      "title": "WakeConfig",
+      "type": "object"
+    },
+    "WledConfig": {
+      "properties": {
+        "host": {
+          "title": "Host",
+          "type": "string"
+        }
+      },
+      "required": [
+        "host"
+      ],
+      "title": "WledConfig",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "debug": {
+      "default": false,
+      "title": "Debug",
+      "type": "boolean"
+    },
+    "stt_backend": {
+      "default": "openai",
+      "enum": [
+        "openai",
+        "whisper"
+      ],
+      "title": "Stt Backend",
+      "type": "string"
+    },
+    "stt_provider": {
+      "default": "local",
+      "title": "Stt Provider",
+      "type": "string"
+    },
+    "tts_provider": {
+      "default": "local",
+      "title": "Tts Provider",
+      "type": "string"
+    },
+    "llm_provider": {
+      "default": "openai",
+      "title": "Llm Provider",
+      "type": "string"
+    },
+    "wakeword": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Wakeword"
+    },
+    "openai": {
+      "$ref": "#/$defs/OpenAIConfig",
+      "default": {
+        "api_key": "",
+        "stt_model": "gpt-4o-mini-transcribe",
+        "llm_model": "gpt-5-mini",
+        "tts_model": "gpt-4o-mini-tts",
+        "tts_voice": "alloy",
+        "embed_model": "text-embedding-3-large",
+        "max_workers": 4
+      }
+    },
+    "compute": {
+      "$ref": "#/$defs/ComputeConfig",
+      "default": {
+        "device": "auto",
+        "use_onnx": false,
+        "device_concurrency": 1,
+        "stt": {
+          "batch_interval": 100,
+          "device": "auto",
+          "max_batch_size": 4,
+          "precision": "fp16"
+        },
+        "llm": {
+          "batch_interval": 100,
+          "device": "auto",
+          "max_batch_size": 4,
+          "precision": "fp16"
+        },
+        "tts": {
+          "batch_interval": 100,
+          "device": "auto",
+          "max_batch_size": 4,
+          "precision": "fp16"
+        }
+      }
+    },
+    "audio": {
+      "$ref": "#/$defs/AudioConfig",
+      "default": {
+        "sample_rate": 24000,
+        "ask_seconds": 10,
+        "input_wav": "data/temp/input.wav",
+        "output_wav": "data/temp/answer.wav",
+        "input_device": null,
+        "output_device": null,
+        "barge_rms_threshold": 0.25,
+        "denoise": false,
+        "echo_cancel": false
+      }
+    },
+    "recording": {
+      "$ref": "#/$defs/RecordingConfig",
+      "default": {
+        "mode": "vad",
+        "timed_seconds": 10,
+        "fallback_to_timed": false,
+        "min_speech_level": 0.02,
+        "hold_off_after_tts_ms": 500,
+        "use_webrtcvad": true,
+        "vad_sensitivity": 2
+      }
+    },
+    "vad": {
+      "$ref": "#/$defs/VadConfig",
+      "default": {
+        "frame_ms": 30,
+        "start_ms": 200,
+        "end_ms": 800,
+        "max_ms": 15000,
+        "preroll_ms": 300,
+        "noise_window_ms": 1000,
+        "start_mult": 1.8,
+        "end_mult": 1.3,
+        "base_start": 0.006,
+        "base_end": 0.0035
+      }
+    },
+    "filter": {
+      "$ref": "#/$defs/FilterConfig",
+      "default": {
+        "mode": "block"
+      }
+    },
+    "lighting": {
+      "$ref": "#/$defs/LightingConfig",
+      "default": {
+        "mode": "sacn",
+        "sacn": {
+          "destination_ip": "192.168.1.50",
+          "idle_level": 10,
+          "peak_level": 255,
+          "rgb_channels": [
+            1,
+            2,
+            3
+          ],
+          "universe": 1
+        },
+        "wled": {
+          "host": "192.168.1.77"
+        }
+      }
+    },
+    "palette_keywords": {
+      "additionalProperties": {
+        "$ref": "#/$defs/PaletteItem"
+      },
+      "title": "Palette Keywords",
+      "type": "object"
+    },
+    "oracle_system": {
+      "default": "",
+      "title": "Oracle System",
+      "type": "string"
+    },
+    "oracle_policy": {
+      "default": "",
+      "title": "Oracle Policy",
+      "type": "string"
+    },
+    "answer_mode": {
+      "default": "detailed",
+      "enum": [
+        "detailed",
+        "concise"
+      ],
+      "title": "Answer Mode",
+      "type": "string"
+    },
+    "persona": {
+      "$ref": "#/$defs/PersonaConfig",
+      "default": {
+        "current": "standard",
+        "profiles": {
+          "standard": {
+            "style": "formale",
+            "tone": "neutro"
+          }
+        }
+      }
+    },
+    "docstore_path": {
+      "default": "data/docstore",
+      "title": "Docstore Path",
+      "type": "string"
+    },
+    "retrieval_top_k": {
+      "default": 3,
+      "title": "Retrieval Top K",
+      "type": "integer"
+    },
+    "wake": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/WakeConfig"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": {
+        "enabled": true,
+        "single_turn": false,
+        "idle_timeout": 60.0,
+        "it_phrases": [
+          "ciao oracolo",
+          "ehi oracolo",
+          "salve oracolo",
+          "ciao, oracolo"
+        ],
+        "en_phrases": [
+          "hello oracle",
+          "hey oracle",
+          "hi oracle",
+          "hello, oracle"
+        ]
+      }
+    },
+    "domain": {
+      "$ref": "#/$defs/DomainConfig",
+      "default": {
+        "enabled": true,
+        "profile": "museo",
+        "topic": "",
+        "keywords": [],
+        "kw_min_overlap": 0.04,
+        "emb_min_sim": 0.22,
+        "rag_min_hits": 1,
+        "weights": {
+          "emb": 0.2,
+          "kw": 0.6,
+          "rag": 0.2
+        },
+        "accept_threshold": 0.65,
+        "clarify_margin": 0.1,
+        "profiles": {}
+      }
+    },
+    "retrieval": {
+      "$ref": "#/$defs/RetrievalConfig",
+      "default": {
+        "hybrid": true,
+        "rerank": true,
+        "max_chunks": 6,
+        "chunk_strategy": "semantic"
+      }
+    },
+    "chat": {
+      "$ref": "#/$defs/ChatConfig",
+      "default": {
+        "inactivity_timeout_s": 60,
+        "remember_turns": 8,
+        "pinned": [],
+        "summary_model": "gpt-4o-mini",
+        "summary_max_tokens": 256,
+        "tone": "informal"
+      }
+    },
+    "realtime": {
+      "$ref": "#/$defs/RealtimeConfig",
+      "default": {
+        "barge_in_threshold": 0.55,
+        "ducking_db": -12.0,
+        "cpu_workers": 4,
+        "gpu_workers": 1
+      }
+    },
+    "realtime_audio": {
+      "$ref": "#/$defs/RealtimeAudioConfig",
+      "default": {
+        "chunk_ms": 20,
+        "start_level": 300,
+        "end_sil_ms": 700,
+        "max_utt_ms": 15000
+      }
+    },
+    "cache_dir": {
+      "default": "data/cache",
+      "title": "Cache Dir",
+      "type": "string"
+    },
+    "cache_ttl": {
+      "default": 3600,
+      "title": "Cache Ttl",
+      "type": "integer"
+    }
+  },
+  "title": "Settings",
+  "type": "object"
+}

@@ -434,3 +434,25 @@ class LocalTextToSpeech:
         tts_local(text, tmp, lang=lang)
         return tmp.read_bytes()
 
+
+# Plugin registration -------------------------------------------------------
+
+def create_local_stt(container: "ServiceContainer") -> SpeechToText:
+    """Factory for the built-in local STT backend."""
+    return LocalSpeechToText()
+
+
+def create_local_tts(container: "ServiceContainer") -> TextToSpeech:
+    """Factory for the built-in local TTS backend."""
+    return LocalTextToSpeech()
+
+
+try:  # pragma: no cover - registry may not be available during docs build
+    from .plugins import register_stt, register_tts
+    from .service_container import ServiceContainer  # for type checking
+
+    register_stt("local", create_local_stt)
+    register_tts("local", create_local_tts)
+except Exception:  # pragma: no cover - defensive
+    pass
+
