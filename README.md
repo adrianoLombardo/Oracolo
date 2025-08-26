@@ -199,7 +199,13 @@ Servono inoltre:
 
 ## 2. Configurazione
 
-Le impostazioni Pydantic si trovano in `settings.yaml` (parametri generali) e `settings.local.yaml` (override locali, es. dispositivi audio).
+Le impostazioni Pydantic si trovano in `settings.yaml` (parametri generali).
+È possibile creare profili aggiuntivi copiando il file in
+`settings.<nome>.yaml` e selezionandolo con la variabile d'ambiente
+`ORACOLO_ENV=<nome>` (es. `ORACOLO_ENV=local`). I valori definiti nel profilo
+scelto sovrascrivono quelli di base e qualsiasi parametro può essere
+personalizzato (`debug`, `openai.api_key`, `audio.input_device`...).
+
 Esempio minimale di `settings.yaml`:
 
 ```yaml
@@ -224,6 +230,23 @@ openai:
 recording:
   use_webrtcvad: true
   vad_sensitivity: 2  # 0=più sensibile, 3=più severo
+```
+
+Per aggiungere un profilo dedicato (ad esempio `museo`):
+
+```yaml
+# settings.museo.yaml
+debug: false
+audio:
+  input_device: "USB Microphone"
+openai:
+  api_key: "sk-..."
+```
+
+e attivalo esportando la variabile d'ambiente:
+
+```bash
+export ORACOLO_ENV=museo
 ```
 
 Il file include inoltre sezioni per l'attivazione tramite **hotword** e per

@@ -5,6 +5,19 @@ import os
 import yaml
 from functools import lru_cache
 from pydantic import BaseModel, Field
+
+
+def _deep_update(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any]:
+    """Recursively update *base* with values from *override*."""
+
+    for key, value in override.items():
+        if isinstance(value, dict) and isinstance(base.get(key), dict):
+            base[key] = _deep_update(base.get(key, {}), value)
+        else:
+            base[key] = value
+    return base
+
+
 class WakeConfig(BaseModel):
     enabled: bool = True
     single_turn: bool = False
@@ -199,15 +212,18 @@ class Settings(BaseModel):
     cache_dir: str = "data/cache"
     cache_ttl: int = 3600
 
-    
+
     @classmethod
     def model_validate_yaml(cls, path: Path) -> "Settings":
-        """Load settings from a YAML file.
+        """Load settings from a YAML file with optional profile overrides.
 
-        Returns the default configuration if the file does not exist and raises
-        a ``ValueError`` when the YAML content is invalid. This makes the
-        application fail fast on misconfigured YAML files instead of silently
-        falling back to defaults.
+        The base configuration is read from ``settings.yaml``. If the
+        environment variable ``ORACOLO_ENV`` is set, values in
+        ``settings.<env>.yaml`` override the base configuration. The method
+        returns the default configuration if the base file does not exist and
+        raises a ``ValueError`` when any YAML content is invalid. This makes the
+        application fail fast on misconfigured files instead of silently falling
+        back to defaults.
         """
 
         try:
@@ -220,13 +236,28 @@ class Settings(BaseModel):
         except yaml.YAMLError as exc:
             raise ValueError(f"Invalid YAML in {path}") from exc
 
+        env = os.getenv("ORACOLO_ENV")
+        if env:
+            env_path = path.with_name(f"{path.stem}.{env}{path.suffix}")
+            if env_path.exists():
+                try:
+                    env_data = yaml.safe_load(env_path.read_text(encoding="utf-8")) or {}
+                except yaml.YAMLError as exc:
+                    raise ValueError(f"Invalid YAML in {env_path}") from exc
+                data = _deep_update(data, env_data)
+
         return cls.model_validate(data)
 
 
 @lru_cache()
 def _load_api_key_from_files() -> str:
     """Load the OpenAI API key from settings files, if present."""
-    for name in ("settings.local.yaml", "settings.yaml"):
+    names: List[str] = []
+    env = os.getenv("ORACOLO_ENV")
+    if env:
+        names.append(f"settings.{env}.yaml")
+    names.append("settings.yaml")
+    for name in names:
         p = Path(name)
         if not p.exists():
             continue
@@ -246,7 +277,8 @@ def get_openai_api_key(settings: Any | None = None) -> str:
     The key is resolved from, in order of priority:
     1. Environment variable ``OPENAI_API_KEY``;
     2. the provided ``settings`` object or mapping;
-    3. ``settings.local.yaml`` or ``settings.yaml`` on disk.
+    3. ``settings.<env>.yaml`` (with ``<env>`` from ``ORACOLO_ENV``) or
+       ``settings.yaml`` on disk.
 
     Settings files are read only once and cached.
     """
