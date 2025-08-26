@@ -25,6 +25,23 @@ from .utils.error_handler import handle_error
 from .retrieval import Question, load_questions
 
 
+_QUESTIONS_CACHE: dict[str, List[dict[str, Any]]] | None = None
+_QUESTIONS_MTIME: float | None = None
+
+
+def get_questions() -> dict[str, List[dict[str, Any]]]:
+    """Return the questions dataset reloading it when the file changes."""
+
+    global _QUESTIONS_CACHE, _QUESTIONS_MTIME
+    path = Path(__file__).resolve().parent.parent / "data" / "domande_oracolo.json"
+    mtime = path.stat().st_mtime if path.exists() else None
+
+    if _QUESTIONS_CACHE is None or mtime != _QUESTIONS_MTIME:
+        _QUESTIONS_CACHE = load_questions(path)
+        _QUESTIONS_MTIME = mtime
+
+    return _QUESTIONS_CACHE or {}
+
 QUESTIONS_BY_TYPE: dict[str, List[Question]] = load_questions()
 
 # Track questions already asked for each category during the current session.
@@ -32,6 +49,7 @@ QUESTIONS_BY_TYPE: dict[str, List[Question]] = load_questions()
 # that have been served.  Once all questions in a category have been used the
 # set is cleared to start a new cycle.
 _USED_QUESTIONS: dict[str, set[int]] = {}
+
 
 
 # Risposte predefinite per domande fuori tema
@@ -436,6 +454,9 @@ def stream_generate(
 def random_question(category: str) -> Question | None:
     """Return a random question object from the desired ``category``."""
 
+
+    qs = get_questions().get(category.lower())
+
 def random_question(category: str) -> dict[str, str] | None:
     """Return a random question from ``category`` without immediate repeats.
 
@@ -447,6 +468,7 @@ def random_question(category: str) -> dict[str, str] | None:
 
     cat = category.lower()
     qs = QUESTIONS_BY_TYPE.get(cat)
+
     if not qs:
         return None
 
