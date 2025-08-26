@@ -9,6 +9,7 @@ minimal interface to a fake language model client.
 """
 
 from dataclasses import dataclass
+import asyncio
 import csv
 import json
 import logging
@@ -281,6 +282,44 @@ def oracle_answer(
     return getattr(resp, "output_text", ""), context or []
 
 
+async def oracle_answer_async(
+    question: str,
+    lang_hint: str,
+    client: Any,
+    llm_model: str,
+    style_prompt: str,
+    *,
+    context: list[dict[str, Any]] | None = None,
+    history: list[dict[str, str]] | None = None,
+    mode: str | None = None,
+    policy_prompt: str | None = None,
+    stream: bool = False,
+    on_token: Callable[[str], None] | None = None,
+    question_type: str | None = None,
+    categoria: str | None = None,
+    off_topic_category: str | None = None,
+) -> Tuple[str, List[dict[str, Any]]]:
+    """Async wrapper around :func:`oracle_answer` using ``asyncio.to_thread``."""
+
+    return await asyncio.to_thread(
+        oracle_answer,
+        question,
+        lang_hint,
+        client,
+        llm_model,
+        style_prompt,
+        context=context,
+        history=history,
+        mode=mode,
+        policy_prompt=policy_prompt,
+        stream=stream,
+        on_token=on_token,
+        question_type=question_type,
+        categoria=categoria,
+        off_topic_category=off_topic_category,
+    )
+
+
 async def oracle_answer_stream(
     question: str,
     lang_hint: str,
@@ -410,6 +449,21 @@ def synthesize(text: str, *_, **__) -> bytes:
     return b""
 
 
+async def synthesize_async(
+    text: str,
+    path: Path,
+    client: Any,
+    model: str,
+    voice: str,
+    **kwargs: Any,
+) -> bytes:
+    """Async wrapper around :func:`synthesize` using ``asyncio.to_thread``."""
+
+    return await asyncio.to_thread(
+        synthesize, text, path, client, model, voice, **kwargs
+    )
+
+
 # ---------------------------------------------------------------------------
 # Transcription helpers
 # ---------------------------------------------------------------------------
@@ -523,11 +577,13 @@ __all__ = [
     "detect_language",
     "export_audio_answer",
     "synthesize",
+    "synthesize_async",
     "extract_summary",
     "format_citations",
     "get_questions",
     "off_topic_reply",
     "oracle_answer",
+    "oracle_answer_async",
     "oracle_answer_stream",
     "random_question",
     "stream_generate",
