@@ -3,8 +3,13 @@ from pathlib import Path
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
+from OcchioOnniveggente.src.retrieval import Context
 from OcchioOnniveggente.src.oracle import (
+
+    QUESTIONS_BY_CONTEXT,
+
     get_questions,
+
     random_question,
     _USED_QUESTIONS,
 )
@@ -12,20 +17,33 @@ from OcchioOnniveggente.src.oracle import (
 
 def test_random_question_no_repeat_until_exhaustion():
     category = "poetica"
+    context = Context.GENERIC
     # reset session tracking
     _USED_QUESTIONS.clear()
+
+
+    total = len(QUESTIONS_BY_CONTEXT[context][category])
+    seen = set()
+    for _ in range(total):
+        q = random_question(category, context)
 
     total = len(get_questions()[category])
     seen = set()
     for _ in range(total):
         q = random_question(category)
+
         assert q.domanda not in seen
         seen.add(q.domanda)
 
     assert len(seen) == total
-    assert len(_USED_QUESTIONS[category]) == total
+    assert len(_USED_QUESTIONS[(context, category)]) == total
 
     # After exhausting all questions, the next call should reset the set
+
+    q = random_question(category, context)
+    assert q.domanda in seen
+    assert len(_USED_QUESTIONS[(context, category)]) == 1
+
     q = random_question(category)
     assert q.domanda in seen
     assert len(_USED_QUESTIONS[category]) == 1
@@ -39,3 +57,4 @@ def test_random_question_no_repeat_until_exhaustion():
         seen_second_cycle.add(q.domanda)
 
     assert len(_USED_QUESTIONS[category]) == total
+
