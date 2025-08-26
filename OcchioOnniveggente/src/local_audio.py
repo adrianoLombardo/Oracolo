@@ -24,7 +24,6 @@ from . import metrics
 from .service_container import container
 from .utils.device import resolve_device
 from .cache import get_tts_cache, set_tts_cache, get_stt_cache, set_stt_cache
-from .service_container import container
 
 
 # Cache per i modelli Whisper caricati localmente. La chiave identifica
@@ -114,6 +113,8 @@ def tts_local(
         engine.runAndWait()
         set_tts_cache(text, lang, out_path)
         return
+    except Exception:
+        pass
 
     metrics.record_system_metrics()
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -156,23 +157,7 @@ def tts_speak(text: str, *, lang: str = "it") -> None:
         logger.warning("tts_speak failed", exc_info=True)
 
 
-def stt_local(audio_path: Path, lang: str = "it") -> str:
 
-
-
-def stt_local(audio_path: Path, lang: str = "it") -> str:
-    """Attempt a local transcription of ``audio_path`` using cached models."""
-
-    backend, model = container.load_stt_model()
-
-    if backend == "faster_whisper":
-        try:
-            segments, _ = model.transcribe(
-                audio_path.as_posix(), language=lang, task="transcribe"
-            )
-            return "".join(seg.text for seg in segments).strip()
-        except Exception:
-            return ""
 
 def stt_local(
     audio_path: Path,
@@ -180,46 +165,27 @@ def stt_local(
     lang: str = "it",
     device: Literal["auto", "cpu", "cuda"] = "auto",
 ) -> str:
-    """Attempt a local transcription of ``audio_path`` using a cleaned signal."""
+    """Transcribe ``audio_path`` using a local backend if available.
 
-    try:
-        import torch  # type: ignore
+    The function prefers ``faster-whisper`` on the specified ``device`` and
+    falls back to ``speech_recognition`` (PocketSphinx) when the faster backend
+    is unavailable.  Any error results in an empty string.
+    """
 
+    backend, model = container.load_stt_model()
 
-
-        actual_device = (
-            "cuda" if device == "auto" and torch.cuda.is_available() else device
-        )
-    except Exception:
-        actual_device = "cpu" if device == "auto" else device
-
-
-    metrics.record_system_metrics()
-
-    compute_type = "int8_float16" if actual_device == "cuda" else "int8"
-
-
-    try:
-        model = _get_whisper("base", actual_device, compute_type)
-        segments, _ = model.transcribe(
-            audio_path.as_posix(), language=lang, task="transcribe"
-        )
-
-
-            device = metrics.resolve_device("auto")
+    if backend == "faster_whisper":
+        actual_device = resolve_device(device)
+        compute_type = "int8_float16" if actual_device == "cuda" else "int8"
+        metrics.record_system_metrics()
+        try:
+            model = _get_whisper("base", actual_device, compute_type)
+            segments, _ = model.transcribe(
+                audio_path.as_posix(), language=lang, task="transcribe"
+            )
+            return "".join(seg.text for seg in segments).strip()
         except Exception:
-            device = "cpu"
-
-        device = resolve_device("auto")
-
-        compute_type = "int8_float16" if device == "cuda" else "int8"
-        model = WhisperModel("base", device=device, compute_type=compute_type)
-        segments, _ = model.transcribe(audio_path.as_posix(), language=lang, task="transcribe")
-
-        return "".join(seg.text for seg in segments).strip()
-    except Exception:
-        pass
-
+            return ""
 
     if backend == "speech_recognition":
         try:
@@ -242,7 +208,6 @@ def stt_local(
 
     return ""
 
-
 def stt_local_faster(
     audio_path: Path,
     lang: str = "it",
@@ -252,17 +217,12 @@ def stt_local_faster(
     model_path: str = "base",
     use_onnx: bool = False,
 ) -> str:
-    """Transcribe ``audio_path`` using a cached ``faster-whisper`` model."""
-
-
-    backend, model = container.load_stt_model()
-    if backend != "faster_whisper":
+    """Transcribe ``audio_path`` using a cached ``faster-whisper`` model.
 
     ``device`` can be ``"cpu"`` or ``"cuda"``; ``compute_type`` controls the
     precision used by the model.  On failure or missing dependencies an empty
     string is returned.
     """
-
 
     setts = container.settings
     pre = AudioPreprocessor(
@@ -279,16 +239,14 @@ def stt_local_faster(
     if cached is not None:
         return cached
 
-
     device = metrics.resolve_device(device)
     metrics.record_system_metrics()
 
     try:
         model = _get_whisper(model_path, device, compute_type, use_onnx)
     except Exception:
-
         logger.warning("faster-whisper non disponibile, fallback a stt_local")
-        return stt_local(audio_path, lang)
+        return stt_local(audio_path, lang=lang)
 
     if use_onnx and device == "cpu":
         logger.warning("Trascrizione ONNX semplificata non implementata")
