@@ -23,6 +23,7 @@ from langdetect import LangDetectException, detect  # type: ignore
 
 from .conversation import ChatState
 from .retrieval import Question, load_questions, Context
+from .service_container import container
 
 logger = logging.getLogger(__name__)
 
@@ -239,9 +240,9 @@ def _build_instructions(
 def oracle_answer(
     question: str,
     lang_hint: str,
-    client: Any,
-    llm_model: str,
-    style_prompt: str,
+    client: Any | None = None,
+    llm_model: str | None = None,
+    style_prompt: str = "",
     *,
     context: list[dict[str, Any]] | None = None,
     history: list[dict[str, str]] | None = None,
@@ -255,6 +256,9 @@ def oracle_answer(
     chat: ChatState | None = None,
 ) -> Tuple[str, List[dict[str, Any]]]:
     """Return an answer from ``client`` and the context used."""
+
+    client = client or container.llm_client()
+    llm_model = llm_model or container.settings.openai.llm_model
 
     if question_type == "off_topic":
         return off_topic_reply(categoria), []
@@ -292,9 +296,9 @@ def oracle_answer(
 async def oracle_answer_async(
     question: str,
     lang_hint: str,
-    client: Any,
-    llm_model: str,
-    style_prompt: str,
+    client: Any | None = None,
+    llm_model: str | None = None,
+    style_prompt: str = "",
     *,
     context: list[dict[str, Any]] | None = None,
     history: list[dict[str, str]] | None = None,
@@ -308,6 +312,8 @@ async def oracle_answer_async(
     chat: ChatState | None = None,
 ) -> Tuple[str, List[dict[str, Any]]]:
     """Async wrapper around :func:`oracle_answer` using ``asyncio.to_thread``."""
+    client = client or container.llm_client()
+    llm_model = llm_model or container.settings.openai.llm_model
 
     return await asyncio.to_thread(
         oracle_answer,
@@ -332,9 +338,9 @@ async def oracle_answer_async(
 async def oracle_answer_stream(
     question: str,
     lang_hint: str,
-    client: Any,
-    llm_model: str,
-    style_prompt: str,
+    client: Any | None = None,
+    llm_model: str | None = None,
+    style_prompt: str = "",
     *,
     context: list[dict[str, Any]] | None = None,
     mode: str | None = None,
@@ -342,6 +348,8 @@ async def oracle_answer_stream(
     chat: ChatState | None = None,
 ) -> AsyncGenerator[Tuple[str, bool], None]:
     """Async generator yielding response chunks and completion flag."""
+    client = client or container.llm_client()
+    llm_model = llm_model or container.settings.openai.llm_model
 
     msgs = _build_messages(question, context, None)
     instr = _build_instructions(lang_hint, context, style_prompt, mode, policy_prompt)
@@ -362,14 +370,16 @@ async def oracle_answer_stream(
 def stream_generate(
     question: str,
     lang_hint: str,
-    client: Any,
-    llm_model: str,
-    style_prompt: str,
+    client: Any | None = None,
+    llm_model: str | None = None,
+    style_prompt: str = "",
     *,
     stop_event: Event | None = None,
     chat: ChatState | None = None,
 ) -> Iterator[str]:
     """Return a generator producing chunks from the streaming response."""
+    client = client or container.llm_client()
+    llm_model = llm_model or container.settings.openai.llm_model
 
     msgs = _build_messages(question, None, None)
     instr = _build_instructions(lang_hint, None, style_prompt, None, None)
@@ -457,29 +467,24 @@ def export_audio_answer(
 
 
 def synthesize(text: str, *_, **__) -> bytes:
-    """Placeholder text-to-speech function returning dummy bytes.
+    """Synthesize ``text`` using the configured TTS provider."""
 
-    The real project exposes a much richer audio synthesis pipeline.  The
-    tests only require the function to exist so that other modules can import
-    it.  The returned value is therefore an empty byte string.
-    """
-
-    return b""
+    tts = container.text_to_speech()
+    return tts.synthesize(text)
 
 
 async def synthesize_async(
     text: str,
     path: Path,
-    client: Any,
-    model: str,
-    voice: str,
+    client: Any | None = None,
+    model: str = "",
+    voice: str = "",
     **kwargs: Any,
 ) -> bytes:
     """Async wrapper around :func:`synthesize` using ``asyncio.to_thread``."""
 
-    return await asyncio.to_thread(
-        synthesize, text, path, client, model, voice, **kwargs
-    )
+    tts = container.text_to_speech()
+    return await asyncio.to_thread(tts.synthesize, text)
 
 
 # ---------------------------------------------------------------------------
@@ -487,16 +492,20 @@ async def synthesize_async(
 # ---------------------------------------------------------------------------
 
 async def transcribe(
-    audio_path: Path, client: Any, model: str, *, chat: ChatState | None = None
+    audio_path: Path,
+    client: Any | None = None,
+    model: str | None = None,
+    *,
+    chat: ChatState | None = None,
 ) -> str:
-    """Best effort transcription with coarse error handling.
+    """Best effort transcription with coarse error handling."""
 
-    ``AsyncOpenAI`` removed the ``client.transcribe`` shortcut in favour of the
-    ``audio.transcriptions.create`` endpoint.  The helper now supports both
-    calling conventions for compatibility with older clients used in the tests.
-    When ``chat`` is provided the transcribed text is appended to it as a user
-    message.
-    """
+    if client is None:
+        stt = container.speech_to_text()
+        text = await asyncio.to_thread(stt.transcribe, audio_path)
+        if chat:
+            chat.push_user(text)
+        return text
 
     try:
         result: Any
@@ -544,7 +553,11 @@ async def transcribe(
 
 
 async def fast_transcribe(
-    audio_path: Path, client: Any, model: str, *, chat: ChatState | None = None
+    audio_path: Path,
+    client: Any | None = None,
+    model: str | None = None,
+    *,
+    chat: ChatState | None = None,
 ) -> str:
     """Alias of :func:`transcribe` maintained for backwards compatibility."""
 

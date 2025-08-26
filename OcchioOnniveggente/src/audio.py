@@ -4,7 +4,8 @@ import collections
 import threading
 import time
 from pathlib import Path
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Tuple, Protocol
+import tempfile
 
 import numpy as np
 import soundfile as sf
@@ -26,6 +27,20 @@ try:
     import webrtcvad  # type: ignore
 except Exception:
     webrtcvad = None
+
+
+class SpeechToText(Protocol):
+    """Interface for speech-to-text providers."""
+
+    def transcribe(self, audio_path: Path, lang: str = "it") -> str:
+        ...
+
+
+class TextToSpeech(Protocol):
+    """Interface for text-to-speech providers."""
+
+    def synthesize(self, text: str, lang: str = "it") -> bytes:
+        ...
 
 
 class AudioPreprocessor:
@@ -398,4 +413,24 @@ def play_and_pulse(
         t.join()
         if tts_event is not None:
             tts_event.clear()
+
+
+class LocalSpeechToText:
+    """Simple local STT implementation based on :mod:`local_audio`."""
+
+    def transcribe(self, audio_path: Path, lang: str = "it") -> str:
+        from .local_audio import stt_local
+
+        return stt_local(audio_path, lang=lang)
+
+
+class LocalTextToSpeech:
+    """Simple local TTS implementation based on :mod:`local_audio`."""
+
+    def synthesize(self, text: str, lang: str = "it") -> bytes:
+        from .local_audio import tts_local
+
+        tmp = Path(tempfile.gettempdir()) / "tts_tmp.wav"
+        tts_local(text, tmp, lang=lang)
+        return tmp.read_bytes()
 

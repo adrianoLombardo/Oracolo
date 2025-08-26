@@ -11,6 +11,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from .audio import SpeechToText, TextToSpeech, LocalSpeechToText, LocalTextToSpeech
+from .openai_async import LLMClient, OpenAILLMClient
+
 import atexit
 
 from concurrent.futures import ProcessPoolExecutor
@@ -34,7 +37,6 @@ from .config import Settings, get_openai_api_key
 from .ui_state import UIState
 from . import openai_async
 from .utils.device import resolve_device
-from .llm_batcher import LLMBatcher
 
 
 @dataclass
@@ -56,6 +58,10 @@ class ServiceContainer:
         default_factory=dict, init=False
     )
 
+    _stt_service: SpeechToText | None = field(default=None, init=False)
+    _tts_service: TextToSpeech | None = field(default=None, init=False)
+    _llm_service: LLMClient | None = field(default=None, init=False)
+
 
     def openai_client(self) -> AsyncOpenAI:
         """Return a lazily initialized OpenAI client."""
@@ -73,6 +79,35 @@ class ServiceContainer:
             workers = 1 if resolve_device("auto") == "cuda" else self.settings.openai.max_workers
             self._executor = ProcessPoolExecutor(max_workers=workers)
         return self._executor
+
+    # ------------------------------------------------------------------
+    # Service providers
+    def speech_to_text(self) -> SpeechToText:
+        if self._stt_service is None:
+            provider = getattr(self.settings, "stt_provider", "local")
+            if provider == "local":
+                self._stt_service = LocalSpeechToText()
+            else:
+                raise ValueError(f"Unsupported STT provider: {provider}")
+        return self._stt_service
+
+    def text_to_speech(self) -> TextToSpeech:
+        if self._tts_service is None:
+            provider = getattr(self.settings, "tts_provider", "local")
+            if provider == "local":
+                self._tts_service = LocalTextToSpeech()
+            else:
+                raise ValueError(f"Unsupported TTS provider: {provider}")
+        return self._tts_service
+
+    def llm_client(self) -> LLMClient:
+        if self._llm_service is None:
+            provider = getattr(self.settings, "llm_provider", "openai")
+            if provider == "openai":
+                self._llm_service = OpenAILLMClient(self.openai_client())
+            else:
+                raise ValueError(f"Unsupported LLM provider: {provider}")
+        return self._llm_service
 
     # ------------------------------------------------------------------
     # Local models
@@ -152,6 +187,9 @@ class ServiceContainer:
         if self._llm_batcher is not None:
             self._llm_batcher.shutdown()
             self._llm_batcher = None
+        self._stt_service = None
+        self._tts_service = None
+        self._llm_service = None
 
 
     def close(self) -> None:
@@ -163,6 +201,9 @@ class ServiceContainer:
         self._openai_client = None
         self._stt_model = None
         self._tts_model = None
+        self._stt_service = None
+        self._tts_service = None
+        self._llm_service = None
         for tokenizer, model in self._llm_models.values():
             del tokenizer
             del model
@@ -190,7 +231,9 @@ class ServiceContainer:
             self._llm_batcher.shutdown()
             self._llm_batcher = None
 
-    def llm_batcher(self) -> LLMBatcher:
+    def llm_batcher(self) -> "LLMBatcher":
+        from .llm_batcher import LLMBatcher
+
         if self._llm_batcher is None:
             cfg = self.settings.compute.llm
             self._llm_batcher = LLMBatcher(
