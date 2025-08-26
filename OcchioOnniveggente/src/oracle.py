@@ -23,6 +23,7 @@ from langdetect import LangDetectException, detect  # type: ignore
 
 from .conversation import ChatState
 from .retrieval import Question, load_questions, Context
+from .event_bus import event_bus
 
 logger = logging.getLogger(__name__)
 
@@ -257,11 +258,14 @@ def oracle_answer(
     """Return an answer from ``client`` and the context used."""
 
     if question_type == "off_topic":
-        return off_topic_reply(categoria), []
+        ans = off_topic_reply(categoria)
+        event_bus.publish("response_ready", ans)
+        return ans, []
     if off_topic_category:
         msg = OFF_TOPIC_RESPONSES.get(
             off_topic_category, OFF_TOPIC_RESPONSES["default"]
         )
+        event_bus.publish("response_ready", msg)
         return msg, []
 
     msgs = _build_messages(question, context, history)
@@ -280,12 +284,14 @@ def oracle_answer(
                     on_token(delta)
         if chat:
             chat.push_assistant(text)
+        event_bus.publish("response_ready", text)
         return text, context or []
 
     resp = client.responses.create(model=llm_model, instructions=instr, input=msgs)
     ans = getattr(resp, "output_text", "")
     if chat:
         chat.push_assistant(ans)
+    event_bus.publish("response_ready", ans)
     return ans, context or []
 
 
@@ -356,6 +362,7 @@ async def oracle_answer_stream(
             yield delta, False
     if chat:
         chat.push_assistant(text)
+    event_bus.publish("response_ready", text)
     yield text, True
 
 
@@ -388,6 +395,7 @@ def stream_generate(
                 yield delta
         if chat:
             chat.push_assistant(text)
+        event_bus.publish("response_ready", text)
 
     return _gen()
 
