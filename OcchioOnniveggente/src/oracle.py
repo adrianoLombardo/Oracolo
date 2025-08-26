@@ -25,7 +25,22 @@ from .utils.error_handler import handle_error
 from .retrieval import load_questions
 
 
-QUESTIONS_BY_TYPE = load_questions()
+_QUESTIONS_CACHE: dict[str, List[dict[str, Any]]] | None = None
+_QUESTIONS_MTIME: float | None = None
+
+
+def get_questions() -> dict[str, List[dict[str, Any]]]:
+    """Return the questions dataset reloading it when the file changes."""
+
+    global _QUESTIONS_CACHE, _QUESTIONS_MTIME
+    path = Path(__file__).resolve().parent.parent / "data" / "domande_oracolo.json"
+    mtime = path.stat().st_mtime if path.exists() else None
+
+    if _QUESTIONS_CACHE is None or mtime != _QUESTIONS_MTIME:
+        _QUESTIONS_CACHE = load_questions(path)
+        _QUESTIONS_MTIME = mtime
+
+    return _QUESTIONS_CACHE or {}
 
 
 # Risposte predefinite per domande fuori tema
@@ -429,7 +444,7 @@ def stream_generate(
 def random_question(category: str) -> dict[str, str] | None:
     """Return a random question object from the desired ``category``."""
 
-    qs = QUESTIONS_BY_TYPE.get(category.lower())
+    qs = get_questions().get(category.lower())
     if not qs:
         return None
     return random.choice(qs)
