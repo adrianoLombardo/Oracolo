@@ -469,12 +469,33 @@ async def synthesize_async(
 # ---------------------------------------------------------------------------
 
 async def transcribe(audio_path: Path, client: Any, model: str) -> str:
-    """Best effort transcription with coarse error handling."""
+    """Best effort transcription with coarse error handling.
+
+    ``AsyncOpenAI`` removed the ``client.transcribe`` shortcut in favour of the
+    ``audio.transcriptions.create`` endpoint.  The helper now supports both
+    calling conventions for compatibility with older clients used in the tests.
+    """
 
     try:
-        result = client.transcribe(audio_path, model=model)
+        result: Any
+        audio_api = getattr(client, "audio", None)
+        if audio_api and hasattr(audio_api, "transcriptions"):
+            create = getattr(audio_api.transcriptions, "create", None)
+            if create is not None:
+                with audio_path.open("rb") as fp:
+                    result = await create(model=model, file=fp)
+            else:  # pragma: no cover - unexpected API shape
+                raise AttributeError("transcriptions.create missing")
+        else:
+            call = getattr(client, "transcribe")
+            result = call(audio_path, model=model)
+            if asyncio.iscoroutine(result):
+                result = await result
+
         if isinstance(result, dict) and "text" in result:
             return str(result["text"])
+        if hasattr(result, "text"):
+            return str(getattr(result, "text"))
         return str(result)
     except ConnectionError:
         logger.warning(
