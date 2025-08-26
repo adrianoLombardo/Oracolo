@@ -1,3 +1,5 @@
+# settings.local.yaml
+# Overrides for `ORACOLO_ENV=local`
 audio:
   input_device: null
   output_device: null

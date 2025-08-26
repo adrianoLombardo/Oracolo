@@ -1,4 +1,6 @@
 # settings.yaml
+# Base configuration. Override values in `settings.<env>.yaml` and set
+# `ORACOLO_ENV=<env>` to activate a profile.
 
 logging:
   level: INFO
