@@ -481,38 +481,8 @@ class ConversationFlow:
         return self.index >= len(self.flow) - 1
 
 
-@dataclass
-class QuestionSession:
-    """Serve questions cycling through categories.
-
-    When ``weights`` is provided, categories with a weight of ``0`` are ignored
-    and the remaining ones are sampled according to the specified weights.  When
-    weights are not supplied, categories are served in round-robin order.
-    """
-
-    weights: Dict[str, float] | None = None
-
-    def __post_init__(self) -> None:
-        self._categories = list(get_questions().keys())
-        self._index = 0
-
-    def next_question(self) -> Question:
-        if self.weights:
-            cats = [c for c in self._categories if self.weights.get(c, 0) > 0]
-            weights = [self.weights.get(c, 0) for c in cats]
-            if not cats:
-                return Question(domanda="", type="")
-            cat = random.choices(cats, weights=weights, k=1)[0]
-        else:
-            cat = self._categories[self._index]
-            self._index = (self._index + 1) % len(self._categories)
-        q = random_question(cat)
-        return q if q is not None else Question(domanda="", type=cat)
-
-
 __all__ = [
     "ConversationFlow",
-    "QuestionSession",
     "DEFAULT_FOLLOW_UPS",
     "OFF_TOPIC_RESPONSES",
     "OFF_TOPIC_REPLIES",
