@@ -12,6 +12,7 @@ from datetime import datetime
 import asyncio
 import csv
 import json
+import inspect
 from pathlib import Path
 from typing import Any, AsyncGenerator, Callable, Iterable, List, Tuple
 
@@ -162,10 +163,76 @@ def oracle_answer(
     return resp.output_text, context or []
 
 
-async def oracle_answer_async(*args, **kwargs):  # pragma: no cover - thin wrapper
-    """Asynchronous wrapper around :func:`oracle_answer`."""
+async def oracle_answer_async(
+    question: str,
+    lang_hint: str,
+    client: Any,
+    llm_model: str,
+    style_prompt: str,
+    *,
+    context: List[dict[str, Any]] | None = None,
+    history: List[dict[str, str]] | None = None,
+    policy_prompt: str = "",
+    mode: str = "detailed",
+    topic: str | None = None,
+    stream: bool = False,
+    on_token: Callable[[str], None] | None = None,
+) -> Tuple[str, List[dict[str, Any]]]:
+    """Async variant of :func:`oracle_answer` supporting ``AsyncOpenAI``."""
 
-    return oracle_answer(*args, **kwargs)
+    instructions = _build_instructions(lang_hint, context, mode)
+    messages = _build_messages(question, context, history)
+
+    if stream:
+        create_fn = client.responses.with_streaming_response.create
+        if inspect.iscoroutinefunction(create_fn):
+            response = await create_fn(
+                model=llm_model, instructions=instructions, input=messages
+            )
+            output_text = ""
+            on_token = on_token or (lambda _t: None)
+            async with response as stream_resp:
+                async for event in stream_resp:
+                    if getattr(event, "type", "") == "response.output_text.delta":
+                        delta = getattr(event, "delta", "")
+                        output_text += delta
+                        on_token(delta)
+            return output_text, context or []
+        # Fallback to synchronous implementation
+        return oracle_answer(
+            question,
+            lang_hint,
+            client,
+            llm_model,
+            style_prompt,
+            context=context,
+            history=history,
+            policy_prompt=policy_prompt,
+            mode=mode,
+            topic=topic,
+            stream=True,
+            on_token=on_token,
+        )
+
+    create_fn = client.responses.create
+    if inspect.iscoroutinefunction(create_fn):
+        resp = await create_fn(
+            model=llm_model, instructions=instructions, input=messages
+        )
+        return resp.output_text, context or []
+    # Fallback to synchronous implementation
+    return oracle_answer(
+        question,
+        lang_hint,
+        client,
+        llm_model,
+        style_prompt,
+        context=context,
+        history=history,
+        policy_prompt=policy_prompt,
+        mode=mode,
+        topic=topic,
+    )
 
 
 async def oracle_answer_stream(
