@@ -1,0 +1,14 @@
+site_name: Oracolo
+nav:
+  - Overview: index.md
+  - Installation: install.md
+  - API: api.md
+  - FAQ: faq.md
+  - Tutorials:
+      - STT/TTS locale: tutorials/stt_tts.md
+      - Configurazione LLM: tutorials/llm_config.md
+      - Ingestione documenti: tutorials/document_ingestion.md
+  - Deploy: deploy.md
+  - Versionamento: versioning.md
+theme:
+  name: material
