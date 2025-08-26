@@ -25,6 +25,7 @@ import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox, scrolledtext, simpledialog, ttk
 from typing import Any, Callable
+from urllib.parse import urlparse
 
 from src.retrieval import retrieve
 from src.chat import ChatState
@@ -566,6 +567,8 @@ class OracoloUI(tk.Tk):
         self._srv_start_idx = server_menu.index("end")
         server_menu.add_command(label="Ferma server WS", command=self.stop_ws_server, state="disabled")
         self._srv_stop_idx = server_menu.index("end")
+        server_menu.add_separator()
+        server_menu.add_command(label="Configura server…", command=self._open_ws_dialog)
         menubar.add_cascade(label="Server", menu=server_menu)
         self.server_menu = server_menu
 
@@ -2556,6 +2559,34 @@ class OracoloUI(tk.Tk):
         rest = f.read()
         if rest:
             self.after(0, lambda rest=rest: self._append_log(f"[WS-SRV] {rest}", "WS"))
+
+    def _open_ws_dialog(self) -> None:
+        win = tk.Toplevel(self)
+        win.title("Configura server WS")
+        win.configure(bg=self._bg)
+
+        rt_conf = self.settings.setdefault("realtime", {})
+        parsed = urlparse(rt_conf.get("ws_url", WS_URL))
+        scheme = parsed.scheme or "ws"
+        host_var = tk.StringVar(value=parsed.hostname or "")
+        port_var = tk.StringVar(value=str(parsed.port or ""))
+
+        tk.Label(win, text="Host", fg=self._fg, bg=self._bg).grid(row=0, column=0, padx=6, pady=6, sticky="e")
+        tk.Entry(win, textvariable=host_var, width=24).grid(row=0, column=1, padx=6, pady=6, sticky="w")
+        tk.Label(win, text="Porta", fg=self._fg, bg=self._bg).grid(row=1, column=0, padx=6, pady=6, sticky="e")
+        tk.Entry(win, textvariable=port_var, width=8).grid(row=1, column=1, padx=6, pady=6, sticky="w")
+
+        def on_ok() -> None:
+            host = host_var.get().strip() or "localhost"
+            try:
+                port = int(port_var.get())
+            except Exception:
+                port = parsed.port or 8765
+            rt_conf["ws_url"] = f"{scheme}://{host}:{port}"
+            self._append_log(f"WS URL: {rt_conf['ws_url']}\n", "MISC")
+            win.destroy()
+
+        ttk.Button(win, text="OK", command=on_ok).grid(row=2, column=0, columnspan=2, pady=10)
 
     def start_ws_server(self) -> None:
         if self.ws_server_proc and self.ws_server_proc.poll() is None:
