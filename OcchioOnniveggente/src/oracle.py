@@ -16,6 +16,8 @@ import inspect
 from pathlib import Path
 from typing import Any, AsyncGenerator, Callable, Iterable, List, Tuple
 
+from .utils.error_handler import handle_error
+
 
 # ---------------------------------------------------------------------------
 # Formatting helpers
@@ -371,9 +373,19 @@ async def synthesize_async(*args, **kwargs):  # pragma: no cover - thin wrapper
 
 
 
-def transcribe(*args, **kwargs) -> str | None:
-    """Minimal speech-to-text stub used only for imports in tests."""
-    return ""
+def transcribe(audio_path: Path, client: Any, model: str, *, lang_hint: str | None = None) -> str | None:
+    """Effettua una trascrizione gestendo gli errori in modo centralizzato.
+
+    Il client passato deve esporre un metodo ``transcribe`` compatibile con le
+    firme utilizzate nei test. In caso di eccezioni la funzione utilizza
+    :func:`handle_error` per classificare l'errore e restituisce il messaggio
+    destinato all'utente.
+    """
+
+    try:
+        return client.transcribe(audio_path, model, lang_hint=lang_hint)
+    except Exception as exc:  # noqa: BLE001 - delegato a handle_error
+        return handle_error(exc, context="transcribe")
 
 
 def fast_transcribe(*args, **kwargs) -> str | None:
