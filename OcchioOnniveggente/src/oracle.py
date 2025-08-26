@@ -491,10 +491,12 @@ class QuestionSession:
     """
 
     weights: Dict[str, float] | None = None
+    rng: random.Random | None = None
 
     def __post_init__(self) -> None:
         self._categories = list(get_questions().keys())
         self._index = 0
+        self._rng = self.rng or random
 
     def next_question(self) -> Question:
         if self.weights:
@@ -502,7 +504,7 @@ class QuestionSession:
             weights = [self.weights.get(c, 0) for c in cats]
             if not cats:
                 return Question(domanda="", type="")
-            cat = random.choices(cats, weights=weights, k=1)[0]
+            cat = self._rng.choices(cats, weights=weights, k=1)[0]
         else:
             cat = self._categories[self._index]
             self._index = (self._index + 1) % len(self._categories)
