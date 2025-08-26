@@ -3,6 +3,8 @@ from __future__ import annotations
 import os
 from typing import Literal
 
+from ..metrics import read_system_metrics
+
 try:
     import torch  # type: ignore
 except Exception:  # pragma: no cover - torch may be missing
@@ -24,6 +26,7 @@ except Exception:  # pragma: no cover - torch may be missing
     torch = _TorchStub()  # type: ignore
 
 _MIN_CUDA_GB = int(os.getenv("ORACOLO_MIN_CUDA_GB", "4"))
+_GPU_UTIL_THRESHOLD = float(os.getenv("ORACOLO_GPU_UTIL_THRESHOLD", "90"))
 
 
 def resolve_device(preferred: Literal["auto", "cpu", "cuda"]) -> str:
@@ -44,7 +47,8 @@ def resolve_device(preferred: Literal["auto", "cpu", "cuda"]) -> str:
     if torch.cuda.is_available():
         try:
             total = torch.cuda.get_device_properties(0).total_memory
-            if total >= _MIN_CUDA_GB * 1024 ** 3:
+            util = read_system_metrics().get("gpu_util", 0.0)
+            if util < _GPU_UTIL_THRESHOLD and total >= _MIN_CUDA_GB * 1024 ** 3:
                 return "cuda"
         except Exception:  # pragma: no cover - very defensive
             return "cuda"

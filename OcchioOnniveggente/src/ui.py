@@ -42,7 +42,9 @@ from src.config import get_openai_api_key
 from src.ui_state import UIState
 from src.ui_controller import UIController
 from src.ui_controller import UiController, _REASON_RE
-from src.ui_theme import THEME
+from src.ui_theme import get_theme
+
+THEME = get_theme()
 
 
 import asyncio
@@ -640,7 +642,9 @@ class OracoloUI(tk.Tk):
         self.in_level = tk.DoubleVar(value=0.0)
         self.out_level = tk.DoubleVar(value=0.0)
 
-        self.status_var = tk.StringVar(value="🟡 In attesa")
+        self._text_only = THEME.get("text_only", False)
+        self.status_var = tk.StringVar()
+        self._set_status("In attesa", icon="🟡")
         ttk.Label(bar, textvariable=self.status_var).pack(side="right")
         self.after(100, self._update_orb)
 
@@ -832,7 +836,16 @@ class OracoloUI(tk.Tk):
         footer = ttk.Frame(container)
         footer.pack(fill="x", padx=16, pady=(0, 12))
         ttk.Button(footer, text="Esci", command=self._on_close).pack(side="right")
-    
+
+    def _set_status(self, text: str, *, icon: str | None = None) -> None:
+        prefix = "" if self._text_only or not icon else f"{icon} "
+        self.status_var.set(f"{prefix}{text}")
+
+    def show_error(self, title: str, message: str) -> None:
+        """Display an error dialog and update the status bar."""
+        messagebox.showerror(title, message)
+        self._set_status(message, icon="🔴")
+
     def _update_orb(self) -> None:
         """Aggiorna l'OrbWidget con i livelli audio correnti."""
         if hasattr(self, "orb"):
@@ -1182,7 +1195,7 @@ class OracoloUI(tk.Tk):
         )
         if not path:
             return
-        self.status_var.set("⏳ Esportazione audio…")
+        self._set_status("Esportazione audio…", icon="⏳")
         self._async_loop.call_soon_threadsafe(
             asyncio.create_task, self._export_audio_async(Path(path))
         )
@@ -1196,9 +1209,9 @@ class OracoloUI(tk.Tk):
             tts_voice = openai_conf.get("tts_voice", "alloy")
             await synthesize_async(self.last_answer, Path(path), client, tts_model, tts_voice)
         except Exception as e:
-            self.after(0, lambda: messagebox.showerror("Audio", f"Errore esportando audio: {e}"))
+            self.after(0, lambda: self.show_error("Audio", f"Errore esportando audio: {e}"))
         finally:
-            self.after(0, self.status_var.set, "🟢 Attivo")
+            self.after(0, lambda: self._set_status("Attivo", icon="🟢"))
 
     def _copy_citations(self) -> None:
         if not self.last_sources:
@@ -1605,7 +1618,7 @@ class OracoloUI(tk.Tk):
         if ok:
             messagebox.showinfo("Successo", "Documenti aggiunti.")
         else:
-            messagebox.showerror("Errore", "Ingest fallito.")
+            self.show_error("Errore", "Ingest fallito.")
 
     def _remove_documents(self, docstore_path: str | None = None) -> None:
         paths = list(filedialog.askopenfilenames(parent=self))
@@ -1630,7 +1643,7 @@ class OracoloUI(tk.Tk):
         if ok:
             messagebox.showinfo("Successo", "Documenti rimossi.")
         else:
-            messagebox.showerror("Errore", "Rimozione fallita.")
+            self.show_error("Errore", "Rimozione fallita.")
 
     def _reindex_documents(self, docstore_path: str | None = None) -> None:
         script = self._find_ingest_script()
@@ -1662,7 +1675,7 @@ class OracoloUI(tk.Tk):
                 messagebox.showinfo("Indice", f"Indice aggiornato ({' '.join(args)}).")
                 return
         self._append_log("Reindex: fallito\n", "DOCS")
-        messagebox.showerror(
+        self.show_error(
             "Indice", "Impossibile aggiornare l'indice (nessuna delle opzioni supportata)."
         )
 
@@ -1935,7 +1948,7 @@ class OracoloUI(tk.Tk):
                 if exc.stderr:
                     self._append_log(exc.stderr, "DOCS")
                 self._append_log(str(exc) + "\n", "DOCS")
-                messagebox.showerror(
+                self.show_error(
                     "Libreria", f"Impossibile svuotare la libreria: {exc}"
                 )
 
@@ -1966,7 +1979,7 @@ class OracoloUI(tk.Tk):
         try:
             devs = sd.query_devices()
         except Exception as e:
-            messagebox.showerror("Audio", f"Impossibile leggere i device: {e}")
+            self.show_error("Audio", f"Impossibile leggere i device: {e}")
             return
 
         options = []
@@ -2066,7 +2079,7 @@ class OracoloUI(tk.Tk):
             )
             stream.start()
         except Exception as e:
-            messagebox.showerror("Audio", f"Errore microfono: {e}")
+            self.show_error("Audio", f"Errore microfono: {e}")
             win.destroy()
             return
 
@@ -2090,7 +2103,7 @@ class OracoloUI(tk.Tk):
             sd.play(tone, sr, device=device_index)
             sd.wait()
         except Exception as e:
-            messagebox.showerror("Audio", f"Errore altoparlanti: {e}")
+            self.show_error("Audio", f"Errore altoparlanti: {e}")
 
     def _open_recording_dialog(self) -> None:
         win = tk.Toplevel(self)
@@ -2425,7 +2438,7 @@ class OracoloUI(tk.Tk):
                 "MISC",
             )
         except Exception as e:
-            messagebox.showerror("Impostazioni", f"Errore nel salvataggio: {e}")
+            self.show_error("Impostazioni", f"Errore nel salvataggio: {e}")
 
     # --------------------------- Start / Stop + logs ----------------------- #
     def start_oracolo(self) -> None:
@@ -2436,7 +2449,7 @@ class OracoloUI(tk.Tk):
         try:
             validate_device_config(audio_cfg)
         except ValueError as e:
-            messagebox.showerror("Audio", str(e))
+            self.show_error("Audio", str(e))
             logging.error("Invalid device configuration: %s", e)
             return
         try:
@@ -2478,7 +2491,7 @@ class OracoloUI(tk.Tk):
             self._reader_thread = threading.Thread(target=self._read_stdout, daemon=True)
             self._reader_thread.start()
         except Exception as e:
-            messagebox.showerror("Avvio", f"Impossibile avviare l'oracolo: {e}")
+            self.show_error("Avvio", f"Impossibile avviare l'oracolo: {e}")
 
     def _read_stdout(self) -> None:
         if not self.proc or not self.proc.stdout:
@@ -2631,7 +2644,7 @@ class OracoloUI(tk.Tk):
             self._ws_server_thread = threading.Thread(target=self._read_ws_server_stdout, daemon=True)
             self._ws_server_thread.start()
         except Exception as e:
-            messagebox.showerror("Server WS", f"Impossibile avviare il server: {e}")
+            self.show_error("Server WS", f"Impossibile avviare il server: {e}")
             self.ws_server_proc = None
 
     def stop_ws_server(self) -> None:
@@ -2689,7 +2702,7 @@ class OracoloUI(tk.Tk):
         try:
             validate_device_config(audio)
         except ValueError as e:
-            messagebox.showerror("Audio", str(e))
+            self.show_error("Audio", str(e))
             logging.error("Invalid device configuration: %s", e)
             return
         in_dev = audio.get("input_device", None)
@@ -2742,7 +2755,7 @@ class OracoloUI(tk.Tk):
             self.ws_stop_btn.configure(state="normal")
             self.status_var.set("🟢 In esecuzione (realtime)")
         except Exception as e:
-            messagebox.showerror("Realtime", f"Impossibile avviare il WS: {e}")
+            self.show_error("Realtime", f"Impossibile avviare il WS: {e}")
             self.ws_client = None
 
     def stop_realtime(self) -> None:
