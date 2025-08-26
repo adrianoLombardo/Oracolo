@@ -216,9 +216,15 @@ def record_until_silence(
         pass
 
     if recording_conf.get("use_webrtcvad", True) and webrtcvad is not None:
-        return _record_with_webrtcvad(
-            path, sr, recording_conf, input_device_id, tts_playing, preprocessor
-        )
+        # WebRTC VAD supports only specific sample rates; fall back if unsupported
+        if sr not in (8000, 16000, 32000, 48000):
+            print(
+                f"⚠️ WebRTC VAD richiede 8/16/32/48 kHz. Rilevati {sr} Hz, uso VAD a energia."
+            )
+        else:
+            return _record_with_webrtcvad(
+                path, sr, recording_conf, input_device_id, tts_playing, preprocessor
+            )
 
     FRAME_MS = int(vad_conf.get("frame_ms", 30))
     START_MS = int(vad_conf.get("start_ms", 150))

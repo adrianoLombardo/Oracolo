@@ -63,7 +63,7 @@ openai:
 
 audio:
   # Audio I/O e file temporanei
-  sample_rate: 24000
+  sample_rate: 16000
   ask_seconds: 10
   input_wav: "data/temp/input.wav"
   output_wav: "data/temp/answer.wav"
