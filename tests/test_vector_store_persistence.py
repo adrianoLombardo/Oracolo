@@ -1,6 +1,6 @@
 from pathlib import Path
 import numpy as np
-from src.metadata_store import VectorStore
+from src.storage import VectorStore
 
 
 def test_vector_store_save_load(tmp_path: Path) -> None:

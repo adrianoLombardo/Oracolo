@@ -1,4 +1,4 @@
-from OcchioOnniveggente.src import cache
+from OcchioOnniveggente.src.storage import cache
 
 class DummyCache:
     def __init__(self):

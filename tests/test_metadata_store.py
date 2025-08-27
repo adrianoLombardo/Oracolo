@@ -1,5 +1,5 @@
 from pathlib import Path
-from src.metadata_store import MetadataStore
+from src.storage import MetadataStore
 
 
 def test_metadata_store_search(tmp_path: Path) -> None:

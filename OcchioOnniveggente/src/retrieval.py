@@ -14,12 +14,12 @@ from .utils.math_utils import cosine_similarity
 
 
 try:
-    from .metadata_store import MetadataStore
+    from .storage.metadata import MetadataStore
 except Exception:  # pragma: no cover - optional
     MetadataStore = None  # type: ignore
 
 
-from .cache import cache_get_json, cache_set_json
+from .storage.cache import cache_get_json, cache_set_json
 from .openai_async import run
 
 
