@@ -1,6 +1,6 @@
-import asyncio
 from collections import defaultdict
-from typing import Any, Callable, Awaitable, Dict, List
+import asyncio
+from typing import Any, Callable, Dict, List
 
 
 class EventBus:
@@ -14,10 +14,12 @@ class EventBus:
     """
 
     def __init__(self) -> None:
-        self._listeners: Dict[str, List[Callable[..., Any]]] = defaultdict(list)
-        self._queue: asyncio.Queue[tuple[str, tuple[Any, ...], dict[str, Any]]] = (
-            asyncio.Queue()
+        self._listeners: Dict[str, List[Callable[..., Any]]] = defaultdict(
+            list
         )
+        self._queue: asyncio.Queue[
+            tuple[str, tuple[Any, ...], dict[str, Any]]
+        ] = asyncio.Queue()
 
     def subscribe(self, event: str, callback: Callable[..., Any]) -> None:
         """Register *callback* to be invoked when *event* is published."""

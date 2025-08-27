@@ -1,12 +1,11 @@
-import json
 import sys
-from types import SimpleNamespace
 from pathlib import Path
+from types import SimpleNamespace
 import numpy as np
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
-from OcchioOnniveggente.src.chat import ChatState
-from OcchioOnniveggente.src.retrieval import retrieve
+from OcchioOnniveggente.src.chat import ChatState  # noqa: E402
+from OcchioOnniveggente.src.retrieval import retrieve  # noqa: E402
 
 
 class DummyEmbClient:
@@ -14,6 +13,7 @@ class DummyEmbClient:
         class Embeddings:
             def __init__(self, mapping):
                 self.mapping = mapping
+
             def create(self, model, input):
                 data = []
                 for text in input:
@@ -48,8 +48,7 @@ def test_retrieve_filters_by_topic(tmp_path: Path):
     index.write_text(
         '{"documents": ['
         '{"id": "a", "text": "common cat", "topic": "t1"},'
-        '{"id": "b", "text": "common dog", "topic": "t2"}]}'
-    ,
+        '{"id": "b", "text": "common dog", "topic": "t2"}]}',
         encoding="utf-8",
     )
 
@@ -61,4 +60,3 @@ def test_retrieve_filters_by_topic(tmp_path: Path):
     res_all = retrieve("common", index, top_k=5)
     ids_all = {d["id"] for d in res_all}
     assert ids_all == {"a", "b"}
-

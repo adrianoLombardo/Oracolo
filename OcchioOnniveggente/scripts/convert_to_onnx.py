@@ -8,10 +8,12 @@ Questo script supporta due tipi di modello:
 Esempi d'uso::
 
     # Esporta un modello transformers in ONNX
-    python scripts/convert_to_onnx.py --model gpt2 --output gpt2.onnx --type llm
+    python scripts/convert_to_onnx.py --model gpt2 --output gpt2.onnx \
+        --type llm
 
     # Esporta un modello Whisper base in ONNX
-    python scripts/convert_to_onnx.py --model base --output whisper-base.onnx --type whisper
+    python scripts/convert_to_onnx.py --model base --output whisper-base.onnx \
+        --type whisper
 """
 
 from __future__ import annotations
@@ -47,10 +49,17 @@ def _convert_whisper(model: str, output: Path) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Converti modelli in ONNX")
-    parser.add_argument("--model", required=True, help="Nome o percorso del modello")
-    parser.add_argument("--output", required=True, help="File ONNX di destinazione")
     parser.add_argument(
-        "--type", choices=["llm", "whisper"], default="llm", help="Tipo di modello"
+        "--model", required=True, help="Nome o percorso del modello"
+    )
+    parser.add_argument(
+        "--output", required=True, help="File ONNX di destinazione"
+    )
+    parser.add_argument(
+        "--type",
+        choices=["llm", "whisper"],
+        default="llm",
+        help="Tipo di modello",
     )
     args = parser.parse_args()
 
@@ -63,4 +72,3 @@ def main() -> None:
 
 if __name__ == "__main__":  # pragma: no cover - script utility
     main()
-
