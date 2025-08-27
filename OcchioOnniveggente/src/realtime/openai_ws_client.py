@@ -1,4 +1,4 @@
-# src/realtime_ws.py
+# Minimal WebSocket client for OpenAI's realtime API.
 """Minimal WebSocket client for OpenAI's realtime API.
 
 This helper is primarily used for manual experiments.  The function now pulls a
@@ -11,7 +11,7 @@ import asyncio, json, os, sys
 import websockets
 
 from src.config import get_openai_api_key
-from .utils.container import get_container
+from ..utils.container import get_container
 
 REALTIME_MODEL = os.getenv("REALTIME_MODEL", "gpt-4o-realtime-preview")
 WS_URL = f"wss://api.openai.com/v1/realtime?model={REALTIME_MODEL}"

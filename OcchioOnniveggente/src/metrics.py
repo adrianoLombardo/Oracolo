@@ -20,7 +20,7 @@ from starlette.responses import Response
 from starlette.status import HTTP_401_UNAUTHORIZED
 import os
 from typing import Any
-from .task_queue import task_queue
+from .realtime.queue import task_queue
 
 try:  # pragma: no cover - optional dependencies
     import torch  # type: ignore
