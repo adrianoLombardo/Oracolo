@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.append(str(ROOT))
 sys.path.append(str(ROOT / "OcchioOnniveggente"))
 sys.modules.setdefault("sounddevice", types.SimpleNamespace(play=lambda *a, **k: None, wait=lambda: None))
-from OcchioOnniveggente.src import local_audio
+from OcchioOnniveggente.src.hardware import local_audio
 
 
 def test_async_tts_speak_non_blocking(monkeypatch):

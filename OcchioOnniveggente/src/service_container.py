@@ -210,7 +210,7 @@ class ServiceContainer:
 
         # Svuota il cache dei modelli Whisper per liberare la VRAM
         try:
-            from .local_audio import _WHISPER_CACHE
+            from .hardware.local_audio import _WHISPER_CACHE
 
             _WHISPER_CACHE.clear()
         except Exception:  # pragma: no cover - se il modulo non è caricato

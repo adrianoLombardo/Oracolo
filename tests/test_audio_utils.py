@@ -3,7 +3,7 @@ from pathlib import Path
 import numpy as np
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
-from OcchioOnniveggente.src.audio import apply_agc, apply_limiter
+from OcchioOnniveggente.src.hardware.audio import apply_agc, apply_limiter
 
 
 def test_apply_agc_and_limiter():

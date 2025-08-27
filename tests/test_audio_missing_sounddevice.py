@@ -1,6 +1,6 @@
 import pytest
 
-from OcchioOnniveggente.src import audio
+from OcchioOnniveggente.src.hardware import audio
 
 
 def test_record_wav_requires_sounddevice(tmp_path, monkeypatch):
