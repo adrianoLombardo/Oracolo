@@ -43,15 +43,11 @@ compute:
     
   tts:
     device: auto
-
-openai:
-  # Modello per trascrizione audio (puoi usare anche "whisper-1")
-  stt_model: gpt-4o-mini-transcribe
-
 # Backend STT: "openai" per l'API, "whisper" per modelli locali (faster-whisper, richiede ~4GB VRAM)
 stt_backend: openai
 
 openai:
+  api_key: ""  # Inserisci la tua OpenAI API key oppure usa la variabile d'ambiente OPENAI_API_KEY
   # Modello per trascrizione audio (puoi usare anche "whisper-1")
   stt_model: gpt-4o-mini-transcribe
 
