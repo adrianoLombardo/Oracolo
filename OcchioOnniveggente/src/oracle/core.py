@@ -207,8 +207,24 @@ def oracle_answer(
     off_topic_category: str | None = None,
 ) -> Tuple[str, List[dict[str, Any] | str]]:
     """Return an answer from ``client`` and the context used."""
-    # Check cache first
-    cache_key = "oracle:" + hashlib.sha256(question.encode("utf-8")).hexdigest()
+    # Resolve model early so it can be part of the cache key
+    llm_model = llm_model or container.settings.openai.llm_model
+
+    # Check cache first, hashing relevant parameters to differentiate entries
+    cache_payload = json.dumps(
+        {
+            "question": question,
+            "context": context,
+            "lang_hint": lang_hint,
+            "style_prompt": style_prompt,
+            "mode": mode,
+            "llm_model": llm_model,
+        },
+        sort_keys=True,
+        default=str,
+        ensure_ascii=False,
+    ).encode("utf-8")
+    cache_key = "oracle:" + hashlib.sha256(cache_payload).hexdigest()
     cached = cache_get_json(cache_key)
     if cached:
         return cached.get("answer", ""), cached.get("context", [])
@@ -217,7 +233,6 @@ def oracle_answer(
     rate_limiter.hit("oracle_answer")
 
     client = client or container.llm_client()
-    llm_model = llm_model or container.settings.openai.llm_model
 
     if question_type == "off_topic":
         ans = off_topic_reply(categoria)
