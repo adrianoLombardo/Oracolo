@@ -4,7 +4,8 @@ import asyncio
 import tempfile
 from pathlib import Path
 
-from flask import Flask, render_template, request, jsonify, Response as FlaskResponse
+from flask import Flask, render_template, request, jsonify, Response
+from typing import Any, cast
 from dotenv import load_dotenv
 
 from .service_container import container
@@ -27,7 +28,7 @@ def create_app() -> Flask:
         return render_template("docs.html")
 
     @app.post("/chat")
-    def chat_endpoint() -> "flask.Response":
+    def chat_endpoint() -> Response:
         data = request.get_json(force=True) or {}
         message = data.get("message", "")
         if message:
@@ -38,7 +39,7 @@ def create_app() -> Flask:
         return jsonify({"response": answer})
 
     @app.post("/voice")
-    def voice_endpoint() -> "flask.Response":
+    def voice_endpoint() -> Response | tuple[Response, int]:
         if "audio" not in request.files:
             return jsonify({"error": "missing audio"}), 400
         file = request.files["audio"]
@@ -50,19 +51,22 @@ def create_app() -> Flask:
         return jsonify({"transcript": text, "response": answer})
 
     @app.get("/logs")
-    def logs_endpoint() -> "flask.Response":
+    def logs_endpoint() -> Response:
         return jsonify(conv.messages_for_llm() if conv else [])
 
     @app.get("/metrics")
-    def metrics() -> "flask.Response":
-        resp = metrics_endpoint(request)
-        return FlaskResponse(
+    def metrics() -> Response:
+        resp = metrics_endpoint(cast(Any, request))
+        return Response(
             resp.body, status=resp.status_code, headers=dict(resp.headers), mimetype=resp.media_type
         )
 
     @app.get("/healthz")
-    def health() -> "flask.Response":
-        return health_endpoint()
+    def health() -> Response:
+        resp = health_endpoint()
+        return Response(
+            resp.body, status=resp.status_code, headers=dict(resp.headers), mimetype=resp.media_type
+        )
 
     return app
 
