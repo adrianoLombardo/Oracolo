@@ -19,7 +19,7 @@ import numpy as np
 import soundfile as sf
 import sounddevice as sd
 
-from .cache import get_tts_cache, set_tts_cache
+from src.storage.cache import get_tts_cache, set_tts_cache
 from types import SimpleNamespace
 
 from .utils.container import get_container

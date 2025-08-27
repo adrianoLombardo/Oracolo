@@ -28,7 +28,7 @@ import sounddevice as sd
 import websockets
 from src.conversation import ConversationManager, DialogState
 from src.retrieval import load_questions
-from src import local_audio
+from src.local_audio import async_tts_speak
 from src.oracle import (
     enqueue_generate_reply,
     enqueue_synthesize_voice,
@@ -69,7 +69,7 @@ async def _tts_say(text: str, state: dict[str, Any]) -> None:
         await asyncio.sleep(0.1)
     try:
         state["tts_playing"] = True
-        await local_audio.async_tts_speak(text)
+        await async_tts_speak(text)
     except Exception:  # pragma: no cover - best effort playback
         logger.warning("tts playback failed", exc_info=True)
     finally:
