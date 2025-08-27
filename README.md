@@ -51,7 +51,7 @@ cortese rifiuto adeguata al contesto.
 
 ## Sequenza delle categorie di domande
 
-Il modulo `question_session` offre la classe `QuestionSession` per gestire la
+Il sottopacchetto `conversation` offre la classe `QuestionSession` per gestire la
 scelta delle categorie quando non ne viene specificata una esplicitamente e per
 memorizzare le risposte fornite dall'utente.  Di default le categorie vengono
 proposte in rotazione **round‑robin**, evitando ripetizioni immediate.  È
@@ -59,7 +59,7 @@ possibile modificare le probabilità di estrazione definendo delle "pesature" in
 `settings.yaml` oppure passando un dizionario `weights` al costruttore:
 
 ```python
-from OcchioOnniveggente.src.question_session import QuestionSession
+from OcchioOnniveggente.src.conversation import QuestionSession
 
 session = QuestionSession(weights={"poetica": 0.7, "didattica": 0.2, "orientamento": 0.1})
 next_q = session.next_question()  # sceglie la categoria in base alle pesature

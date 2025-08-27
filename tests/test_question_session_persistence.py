@@ -4,7 +4,7 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 from OcchioOnniveggente.src.retrieval import Question
-from OcchioOnniveggente.src.question_session import QuestionSession
+from OcchioOnniveggente.src.conversation import QuestionSession
 
 
 def test_rotation_after_reload(tmp_path: Path) -> None:
