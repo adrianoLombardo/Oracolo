@@ -4,26 +4,7 @@ import os
 from typing import Literal
 
 from ..metrics import read_system_metrics
-
-try:
-    import torch  # type: ignore
-except Exception:  # pragma: no cover - torch may be missing
-    class _CudaStub:
-        @staticmethod
-        def is_available() -> bool:
-            return False
-
-        @staticmethod
-        def get_device_properties(_index: int):
-            class _Props:
-                total_memory = 0
-
-            return _Props()
-
-    class _TorchStub:
-        cuda = _CudaStub()
-
-    torch = _TorchStub()  # type: ignore
+from .torch_utils import torch
 
 _MIN_CUDA_GB = int(os.getenv("ORACOLO_MIN_CUDA_GB", "4"))
 _GPU_UTIL_THRESHOLD = float(os.getenv("ORACOLO_GPU_UTIL_THRESHOLD", "90"))

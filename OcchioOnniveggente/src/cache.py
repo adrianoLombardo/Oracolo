@@ -79,15 +79,12 @@ def cache_set_json(key: str, value: Any, *, ttl: int = 3600) -> None:
 # ---------------------------------------------------------------------------
 
 from .config import Settings  # noqa: E402
+from .utils.container import get_container
 
 
 def _settings() -> Settings:
-    try:
-        from .service_container import container
-
-        return container.settings
-    except Exception:
-        return Settings()
+    container = get_container()
+    return getattr(container, "settings", Settings())
 
 
 def _cache_root() -> Path:

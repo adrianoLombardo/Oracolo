@@ -10,6 +10,7 @@ from enum import Enum
 from typing import List, Dict, Iterable, Optional, Any, Protocol
 
 import numpy as np
+from .utils.math_utils import cosine_similarity
 
 
 try:
@@ -497,15 +498,6 @@ def _make_chunks(text: str, max_chars: int = 800, overlap_ratio: float = 0.1) ->
         if tmp:
             out.append(tmp)
     return out
-
-
-def _cosine(a: np.ndarray, b: np.ndarray) -> float:
-    na, nb = np.linalg.norm(a), np.linalg.norm(b)
-    if na == 0.0 or nb == 0.0:
-        return 0.0
-    return float(np.dot(a, b) / (na * nb))
-
-
 def _embed_texts(
     client: Any, model: str, texts: List[str], *, cache_dir: str | Path | None = None
 ) -> List[np.ndarray]:
@@ -720,7 +712,7 @@ def retrieve(
             qv = _embed_texts(client, embed_model, [query])[0]
             texts = [c.text for c, _ in best]
             vecs = _embed_texts(client, embed_model, texts, cache_dir=cache_dir)
-            sims = [_cosine(qv, v) for v in vecs]
+            sims = [cosine_similarity(qv, v) for v in vecs]
             combo: List[Tuple[Chunk, float]] = []
             for (ch, bm_sc), sim in zip(best, sims):
                 combo.append((ch, 0.5 * bm_sc + 0.5 * sim))

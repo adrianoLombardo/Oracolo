@@ -7,7 +7,7 @@ from pathlib import Path
 from flask import Flask, render_template, request, jsonify, Response as FlaskResponse
 from dotenv import load_dotenv
 
-from .service_container import container
+from .utils.container import get_container
 from .oracle import oracle_answer, transcribe
 from .metrics import metrics_endpoint, health_endpoint
 
@@ -18,6 +18,7 @@ def create_app() -> Flask:
     load_dotenv()
     app = Flask(__name__, template_folder="templates", static_folder="static")
 
+    container = get_container()
     conv = container.conversation_manager
     queue = container.message_queue
 

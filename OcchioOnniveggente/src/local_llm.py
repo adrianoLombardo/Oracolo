@@ -10,9 +10,6 @@ returns the generated text.
 
 
 from typing import Dict, List, Tuple, Literal, Iterator
-from typing import Dict, List
-from .service_container import container
-from typing import Dict, List, Tuple, Literal
 
 
 # simple in-memory cache so that the model is loaded only once
@@ -106,10 +103,6 @@ def generate(
     """
 
     tokenizer, model = _load_model(model_path, device, precision, use_onnx)
-
-
-    tokenizer, model = container.load_llm(model_path, device)
-    tokenizer, model = _load_model(model_path, device, precision)
 
 
 

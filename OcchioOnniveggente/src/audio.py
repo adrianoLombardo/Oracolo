@@ -449,7 +449,6 @@ def create_local_tts(container: "ServiceContainer") -> TextToSpeech:
 
 try:  # pragma: no cover - registry may not be available during docs build
     from .plugins import register_stt, register_tts
-    from .service_container import ServiceContainer  # for type checking
 
     register_stt("local", create_local_stt)
     register_tts("local", create_local_tts)

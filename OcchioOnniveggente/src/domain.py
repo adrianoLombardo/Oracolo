@@ -76,12 +76,10 @@ def _keyword_overlap_score(text: str, keywords: Iterable[str]) -> float:
     return len(inter) / denom
 
 
+from .utils.math_utils import cosine_similarity
+
+
 # ------------------------- embeddings ------------------------- #
-def _cosine(a: np.ndarray, b: np.ndarray) -> float:
-    na, nb = np.linalg.norm(a), np.linalg.norm(b)
-    if na == 0.0 or nb == 0.0:
-        return 0.0
-    return float(np.dot(a, b) / (na * nb))
 
 
 def _embed_texts(client: Any, model: str, texts: list[str]) -> list[np.ndarray]:
@@ -200,7 +198,7 @@ def _embedding_score(question: str, keywords: list[str], client: Any, model: str
     try:
         vecs = _embed_texts(client, model, [question, " ".join(keywords)])
         if len(vecs) == 2:
-            return _cosine(vecs[0], vecs[1])
+            return cosine_similarity(vecs[0], vecs[1])
     except Exception:
         pass
     return 0.0

@@ -16,6 +16,7 @@ except ImportError:  # pragma: no cover - when ``src`` is top-level
     from DataBase.conversation_store import ConversationStore  # type: ignore
 from .config import Settings, get_openai_api_key
 from .dialogue import DialogueManager, DialogState
+from .utils.container import get_container
 
 
 def summarize_history(prev_summary: str, msgs: List[Dict[str, str]]) -> str:
@@ -39,7 +40,7 @@ def summarize_history(prev_summary: str, msgs: List[Dict[str, str]]) -> str:
     )
 
     if model == "local":
-        from .service_container import container
+        container = get_container()
         try:
             return container.llm_batcher().generate_sync(prompt)
         except Exception:

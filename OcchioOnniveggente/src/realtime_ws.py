@@ -11,7 +11,7 @@ import asyncio, json, os, sys
 import websockets
 
 from src.config import get_openai_api_key
-from .service_container import container
+from .utils.container import get_container
 
 REALTIME_MODEL = os.getenv("REALTIME_MODEL", "gpt-4o-realtime-preview")
 WS_URL = f"wss://api.openai.com/v1/realtime?model={REALTIME_MODEL}"
@@ -23,6 +23,7 @@ async def run(
     conv=None,
     queue: asyncio.Queue | None = None,
 ):
+    container = get_container()
     conv = conv or container.conversation_manager
     queue = queue or container.message_queue
     async with websockets.connect(
