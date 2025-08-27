@@ -29,7 +29,7 @@ from ..retrieval import Question, Context
 from ..event_bus import event_bus
 from ..utils.container import get_container
 from ..task_queue import task_queue
-from ..cache import cache_get_json, cache_set_json
+from ..storage.cache import cache_get_json, cache_set_json
 from ..rate_limiter import rate_limiter
 from ..exceptions import RateLimitExceeded, ExternalServiceError
 from ..utils import retry_with_backoff

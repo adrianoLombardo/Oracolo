@@ -245,7 +245,7 @@ def _detect_language(text: str) -> str:
 def _load_db(path: str) -> object:
     if path.endswith(".db") or "://" in path:
         try:
-            from src.metadata_store import MetadataStore
+            from src.storage import MetadataStore
             logging.info("Uso MetadataStore (%s)", path)
             return MetadataStore(path)
         except Exception as e:

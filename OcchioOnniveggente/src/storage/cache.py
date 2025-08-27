@@ -78,8 +78,8 @@ def cache_set_json(key: str, value: Any, *, ttl: int = 3600) -> None:
 #  File-based cache helpers for TTS/STT outputs
 # ---------------------------------------------------------------------------
 
-from .config import Settings  # noqa: E402
-from .utils.container import get_container
+from ..config import Settings  # noqa: E402
+from ..utils.container import get_container
 
 
 def _settings() -> Settings:
@@ -176,3 +176,4 @@ def cleanup_cache(ttl: int | None = None) -> int:
             except OSError:
                 pass
     return removed
+
