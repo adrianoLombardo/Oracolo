@@ -15,11 +15,11 @@ from PySide6.QtCore import (
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtQml import QQmlApplicationEngine
 
-from src.ui_controller import UIController
+from src.frontend.controller import UIController
 from src.chat import ChatState
 import logging
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parents[2]
 
 
 class HistoryModel(QAbstractListModel):

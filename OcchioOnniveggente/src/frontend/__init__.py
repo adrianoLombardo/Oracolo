@@ -17,7 +17,7 @@ class CLIFrontend:
     """Very small wrapper around console helpers."""
 
     def run(self) -> None:  # pragma: no cover - simple passthrough
-        from .cli import _ensure_utf8_stdout, oracle_greeting
+        from src.cli import _ensure_utf8_stdout, oracle_greeting
 
         _ensure_utf8_stdout()
         print(oracle_greeting("it"))
@@ -27,7 +27,7 @@ class WebFrontend:
     """Wrapper launching the Flask web application."""
 
     def __init__(self) -> None:
-        from .webapp import create_app
+        from .web.webapp import create_app
 
         self.app = create_app()
 

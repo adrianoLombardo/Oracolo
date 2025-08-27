@@ -5,7 +5,7 @@ from contextvars import ContextVar
 from typing import Any, Callable, Iterable
 
 from src.profile_utils import save_profile
-from src.ui_state import UIState, apply_to_chat
+from src.frontend.state import UIState, apply_to_chat
 
 # Per-request UI state container.
 _STATE_VAR: ContextVar[UIState] = ContextVar("ui_state")
