@@ -8,9 +8,9 @@ from typing import Any
 
 import sounddevice as sd
 
-from src.audio import AudioPreprocessor
-from src.audio_device import pick_device, debug_print_devices
-from src.lights import SacnLight, WledLight
+from src.audio.processing import AudioPreprocessor
+from src.audio.audio_device import pick_device, debug_print_devices
+from src.hardware.lights import SacnLight, WledLight
 from src.config import Settings
 
 logger = logging.getLogger(__name__)
