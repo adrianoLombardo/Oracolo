@@ -542,16 +542,17 @@ async def transcribe(
     client: Any | None = None,
     model: str | None = None,
     *,
-
+    lang_hint: str | None = None,
     chat: ChatState | None = None,
-
     conv: ConversationManager | None = None,
 ) -> str:
     """Best effort transcription with coarse error handling."""
 
     if client is None:
         stt = container.speech_to_text()
-        text = await asyncio.to_thread(stt.transcribe, audio_path)
+        text = await asyncio.to_thread(
+            stt.transcribe, audio_path, lang=lang_hint or "it"
+        )
 
         if chat:
             chat.push_user(text)
@@ -579,12 +580,18 @@ async def transcribe(
             create = getattr(audio_api.transcriptions, "create", None)
             if create is not None:
                 with audio_path.open("rb") as fp:
-                    result = await create(model=model, file=fp)
+                    kwargs: dict[str, Any] = {"model": model, "file": fp}
+                    if lang_hint:
+                        kwargs["language"] = lang_hint
+                    result = await create(**kwargs)
             else:  # pragma: no cover - unexpected API shape
                 raise AttributeError("transcriptions.create missing")
         else:
             call = getattr(client, "transcribe")
-            result = call(audio_path, model=model)
+            if lang_hint:
+                result = call(audio_path, model=model, language=lang_hint)
+            else:
+                result = call(audio_path, model=model)
             if asyncio.iscoroutine(result):
                 result = await result
 
@@ -622,11 +629,14 @@ async def fast_transcribe(
     client: Any | None = None,
     model: str | None = None,
     *,
+    lang_hint: str | None = None,
     conv: ConversationManager | None = None,
 ) -> str:
     """Alias of :func:`transcribe` maintained for backwards compatibility."""
 
-    return await transcribe(audio_path, client, model, conv=conv)
+    return await transcribe(
+        audio_path, client, model, lang_hint=lang_hint, conv=conv
+    )
 
 
 # ---------------------------------------------------------------------------
