@@ -39,10 +39,9 @@ except ImportError:  # pragma: no cover - async wrappers optional
 from src.domain import validate_question
 from src.validators import validate_device_config
 from src.config import get_openai_api_key
-from src.ui_state import UIState
-from src.ui_controller import UIController
-from src.ui_controller import UiController, _REASON_RE
-from src.ui_theme import get_theme
+from src.frontend.state import UIState
+from src.frontend.controller import UIController, UiController, _REASON_RE
+from src.frontend.theme import get_theme
 from .realtime_ws import RealtimeWSClient
 from .utils import highlight_terms
 

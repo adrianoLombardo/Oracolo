@@ -26,7 +26,7 @@ from .utils.torch_utils import torch
 
 from openai import AsyncOpenAI
 from .config import Settings, get_openai_api_key
-from .ui_state import UIState
+from .frontend.state import UIState
 from . import openai_async
 from .utils.device import resolve_device
 

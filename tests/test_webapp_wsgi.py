@@ -5,7 +5,7 @@ from pathlib import Path
 from wsgiref.util import setup_testing_defaults
 
 sys.path.append(str(Path(__file__).resolve().parents[1] / "OcchioOnniveggente"))
-from src.webapp_wsgi import app
+from src.frontend.web.webapp_wsgi import app
 
 
 def _make_environ(path: str, body: bytes) -> dict:
@@ -37,7 +37,7 @@ def test_concurrent_state(monkeypatch):
     def fake_apply(state, text):
         states.append(state)
 
-    monkeypatch.setattr("src.webapp_wsgi.apply_to_chat", fake_apply)
+    monkeypatch.setattr("src.frontend.web.webapp_wsgi.apply_to_chat", fake_apply)
 
     env1 = _make_environ("/api/docs/apply", b'{"text": "one"}')
     env2 = _make_environ("/api/docs/apply", b'{"text": "two"}')

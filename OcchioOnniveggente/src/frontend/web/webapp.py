@@ -8,9 +8,9 @@ from flask import Flask, render_template, request, jsonify, Response
 from typing import Any, cast
 from dotenv import load_dotenv
 
-from .utils.container import get_container
-from .oracle import oracle_answer, transcribe
-from .metrics import metrics_endpoint, health_endpoint
+from src.utils.container import get_container
+from src.oracle import oracle_answer, transcribe
+from src.metrics import metrics_endpoint, health_endpoint
 
 
 def create_app() -> Flask:
