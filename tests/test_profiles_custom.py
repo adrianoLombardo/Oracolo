@@ -4,7 +4,7 @@ from pathlib import Path
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 from OcchioOnniveggente.scripts.realtime_server import get_active_profile
-from OcchioOnniveggente.src.retrieval import retrieve
+from src.retrieval import retrieve
 
 
 def test_custom_profile_loaded_and_retrieval_filters(tmp_path: Path) -> None:

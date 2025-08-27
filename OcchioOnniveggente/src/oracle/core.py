@@ -25,7 +25,7 @@ import requests
 from langdetect import LangDetectException, detect  # type: ignore
 
 from ..conversation import ConversationManager, ChatState
-from ..retrieval import Question, Context
+from src.retrieval import Context, Question
 from ..event_bus import event_bus
 from ..utils.container import get_container
 from ..task_queue import task_queue

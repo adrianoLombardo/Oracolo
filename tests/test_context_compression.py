@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
-from OcchioOnniveggente.src.retrieval import retrieve, _simple_sentences
+from src.retrieval import _simple_sentences, retrieve
 from OcchioOnniveggente.src.domain import _get_field
 
 
