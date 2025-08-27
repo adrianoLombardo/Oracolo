@@ -10,15 +10,11 @@ readme = "README.md"
 requires-python = ">=3.10"
 
 [project.entry-points."oracolo.stt"]
-
-local = "OcchioOnniveggente.src.hardware.audio:create_local_stt"
-
-[project.entry-points."oracolo.tts"]
-local = "OcchioOnniveggente.src.hardware.audio:create_local_tts"
-
+hardware = "OcchioOnniveggente.src.hardware.audio:create_local_stt"
 local = "OcchioOnniveggente.src.audio.protocols:create_local_stt"
 
 [project.entry-points."oracolo.tts"]
+hardware = "OcchioOnniveggente.src.hardware.audio:create_local_tts"
 local = "OcchioOnniveggente.src.audio.protocols:create_local_tts"
 
 
