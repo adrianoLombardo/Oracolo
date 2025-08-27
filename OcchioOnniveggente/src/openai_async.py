@@ -15,18 +15,8 @@ from typing import Callable, TypeVar, Any
 import asyncio
 import os
 import atexit
-try:
-    import torch
-except Exception:  # pragma: no cover
-    class _CudaStub:
-        @staticmethod
-        def is_available() -> bool:
-            return False
 
-    class _TorchStub:
-        cuda = _CudaStub()
-
-    torch = _TorchStub()  # type: ignore
+from .utils.torch_utils import torch
 
 from .config import Settings
 from .utils.device import resolve_device
@@ -142,7 +132,6 @@ def create_openai_llm(container: "ServiceContainer") -> LLMClient:
 
 try:  # pragma: no cover - registry may not be available during docs build
     from .plugins import register_llm
-    from .service_container import ServiceContainer
 
     register_llm("openai", create_openai_llm)
 except Exception:  # pragma: no cover - defensive

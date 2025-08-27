@@ -27,7 +27,7 @@ from langdetect import LangDetectException, detect  # type: ignore
 from .conversation import ConversationManager, ChatState
 from .retrieval import Question, load_questions, Context
 from .event_bus import event_bus
-from .service_container import container
+from .utils.container import get_container
 from .task_queue import task_queue
 from .cache import cache_get_json, cache_set_json
 from .rate_limiter import rate_limiter
@@ -43,6 +43,7 @@ except Exception:  # pragma: no cover - tenacity not available
 
 logger = logging.getLogger(__name__)
 API_URL = os.getenv("ORACOLO_API_URL")
+container = get_container()
 
 # ---------------------------------------------------------------------------
 # Question dataset utilities

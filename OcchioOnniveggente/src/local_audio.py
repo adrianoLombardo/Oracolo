@@ -20,15 +20,17 @@ import soundfile as sf
 import sounddevice as sd
 
 from .cache import get_tts_cache, set_tts_cache
+from types import SimpleNamespace
 
-try:  # pragma: no cover - tests patch this module heavily
-    from .service_container import container  # type: ignore
-except Exception:  # pragma: no cover
-    from types import SimpleNamespace
-    container = SimpleNamespace(
-        load_tts_model=lambda: ("gtts", lambda text, lang: (np.zeros(1), 16000)),
-        load_stt_model=lambda: ("", None),
-    )
+from .utils.container import get_container
+
+
+_container_stub = SimpleNamespace(
+    load_tts_model=lambda: ("gtts", lambda text, lang: (np.zeros(1), 16000)),
+    load_stt_model=lambda: ("", None),
+)
+
+container = get_container(_container_stub)
 
 logger = logging.getLogger(__name__)
 

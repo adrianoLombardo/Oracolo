@@ -22,18 +22,7 @@ import atexit
 from concurrent.futures import ProcessPoolExecutor
 
 import openai
-try:
-    import torch
-except Exception:  # pragma: no cover
-    class _CudaStub:
-        @staticmethod
-        def is_available() -> bool:
-            return False
-
-    class _TorchStub:
-        cuda = _CudaStub()
-
-    torch = _TorchStub()  # type: ignore
+from .utils.torch_utils import torch
 
 from openai import AsyncOpenAI
 from .config import Settings, get_openai_api_key
