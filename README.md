@@ -449,7 +449,7 @@ Didattica).
 ### Client
 
 ```
-python -m src.realtime_oracolo
+python -m src.realtime.ws_client
 ```
 
 Variabili utili:
@@ -568,7 +568,7 @@ I test includono:
 | `lights.py` / `wled_client.py` | Driver per sACN e WLED, con effetti pulsanti |
 | `domain.py` | Controllo pertinenza domanda (keyword overlap + embeddings) |
 | `retrieval.py` | BM25/fallback token overlap per recupero dei documenti |
-| `realtime_oracolo.py` / `realtime_ws.py` | Client Realtime WS (microfono ↔ TTS) |
+| `realtime/ws_client.py` / `realtime/openai_ws_client.py` | Client Realtime WS (microfono ↔ TTS) |
 | `config.py` | Modelli Pydantic delle impostazioni e loader YAML con validazione |
 | `ui.py` | Interfaccia grafica Tk interattiva (config, log, gestione documenti) |
 

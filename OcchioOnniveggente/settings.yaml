@@ -293,7 +293,7 @@ retrieval:
   max_chunks: 6
   chunk_strategy: semantic   # semantic|fixed_overlap
 
-# ⬇️ NUOVO: parametri per client Realtime/WebSocket (usati da realtime_oracolo.py / UI)
+# ⬇️ NUOVO: parametri per client Realtime/WebSocket (usati da realtime/ws_client.py / UI)
 realtime:
   ws_url: "ws://127.0.0.1:8765"  # URL del server WS
   sample_rate: 24000

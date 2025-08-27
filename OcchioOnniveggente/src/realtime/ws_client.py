@@ -1,4 +1,4 @@
-# src/realtime_oracolo.py
+# WebSocket client for the realtime backend.
 """Client WebSocket realtime per l'Oracolo.
 
 Questo modulo apre una connessione WebSocket verso un backend che accetta
@@ -29,7 +29,7 @@ import websockets
 from src.conversation import ConversationManager, DialogState
 from src.retrieval import load_questions
 from src import local_audio
-from src.oracle import (
+from .workers import (
     enqueue_generate_reply,
     enqueue_synthesize_voice,
     transcribe_worker,
