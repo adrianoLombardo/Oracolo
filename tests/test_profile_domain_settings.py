@@ -9,7 +9,7 @@ sys.modules.setdefault("sounddevice", MagicMock())
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.append(str(ROOT))
 sys.path.append(str(ROOT / "OcchioOnniveggente"))
-from OcchioOnniveggente.src.main import get_active_profile, make_domain_settings
+from OcchioOnniveggente.src.profile_utils import get_active_profile, make_domain_settings
 
 
 def test_get_active_profile_selects_profile():
