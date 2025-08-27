@@ -4,7 +4,7 @@ from pathlib import Path
 # Ensure repository root is on the path
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
-from OcchioOnniveggente.src.language_session import update_language
+from OcchioOnniveggente.src.conversation import update_language
 
 
 def test_language_persists_across_turns():

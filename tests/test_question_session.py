@@ -1,4 +1,5 @@
 import sys
+import sys
 from pathlib import Path
 import random
 
@@ -6,9 +7,11 @@ sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 
 
-from OcchioOnniveggente.src.oracle import QuestionSession as OracleQuestionSession, get_questions
-from OcchioOnniveggente.src.question_session import QuestionSession
-from OcchioOnniveggente.src.oracle import get_questions
+from OcchioOnniveggente.src.oracle import (
+    QuestionSession as OracleQuestionSession,
+    get_questions,
+)
+from OcchioOnniveggente.src.conversation import QuestionSession
 
 
 
@@ -30,7 +33,6 @@ def test_weighted_selection():
     assert chosen == {target}
 
 from OcchioOnniveggente.src.retrieval import Question
-import random
 
 
 def test_session_serves_all_questions_before_repeat():
