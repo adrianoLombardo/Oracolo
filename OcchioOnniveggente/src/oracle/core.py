@@ -140,6 +140,23 @@ def append_log(
 # Language model interaction helpers
 # ---------------------------------------------------------------------------
 
+def _normalize_context(
+    context: Iterable[dict[str, Any] | str] | dict[str, Any] | str | None,
+) -> list[dict[str, Any] | str] | None:
+    """Return ``context`` as a list or ``None``.
+
+    Strings and dictionaries are wrapped in a list. Non-iterables raise
+    ``TypeError`` to provide clearer feedback to callers.
+    """
+    if context is None:
+        return None
+    if isinstance(context, (str, dict)):
+        return [context]
+    try:
+        return list(context)
+    except TypeError:
+        raise TypeError("context must be an iterable of dict or str") from None
+
 def _build_messages(
     question: str,
     context: list[dict[str, Any] | str] | None,
@@ -196,7 +213,7 @@ def oracle_answer(
     llm_model: str | None = None,
     style_prompt: str = "",
     *,
-    context: list[dict[str, Any] | str] | None = None,
+    context: Iterable[dict[str, Any] | str] | dict[str, Any] | str | None = None,
     conv: ConversationManager | None = None,
     mode: str | None = None,
     policy_prompt: str | None = None,
@@ -207,6 +224,7 @@ def oracle_answer(
     off_topic_category: str | None = None,
 ) -> Tuple[str, List[dict[str, Any] | str]]:
     """Return an answer from ``client`` and the context used."""
+
     # Resolve model early so it can be part of the cache key
     llm_model = llm_model or container.settings.openai.llm_model
 
@@ -225,6 +243,12 @@ def oracle_answer(
         ensure_ascii=False,
     ).encode("utf-8")
     cache_key = "oracle:" + hashlib.sha256(cache_payload).hexdigest()
+
+    context = _normalize_context(context)
+
+    # Check cache first
+    cache_key = "oracle:" + hashlib.sha256(question.encode("utf-8")).hexdigest()
+
     cached = cache_get_json(cache_key)
     if cached:
         return cached.get("answer", ""), cached.get("context", [])
@@ -331,7 +355,7 @@ async def oracle_answer_async(
     llm_model: str | None = None,
     style_prompt: str = "",
     *,
-    context: list[dict[str, Any] | str] | None = None,
+    context: Iterable[dict[str, Any] | str] | dict[str, Any] | str | None = None,
     conv: ConversationManager | None = None,
     mode: str | None = None,
     policy_prompt: str | None = None,
@@ -342,6 +366,7 @@ async def oracle_answer_async(
     off_topic_category: str | None = None,
 ) -> Tuple[str, List[dict[str, Any] | str]]:
     """Async wrapper around :func:`oracle_answer` using ``asyncio.to_thread``."""
+    context = _normalize_context(context)
     client = client or container.llm_client()
     llm_model = llm_model or container.settings.openai.llm_model
 
@@ -372,12 +397,13 @@ async def oracle_answer_stream(
     llm_model: str | None = None,
     style_prompt: str = "",
     *,
-    context: list[dict[str, Any] | str] | None = None,
+    context: Iterable[dict[str, Any] | str] | dict[str, Any] | str | None = None,
     mode: str | None = None,
     policy_prompt: str | None = None,
     conv: ConversationManager | None = None,
 ) -> AsyncGenerator[Tuple[str, bool], None]:
     """Async generator yielding response chunks and completion flag."""
+    context = _normalize_context(context)
     if API_URL:
         resp = requests.post(
             f"{API_URL}/chat",

@@ -89,6 +89,10 @@ def setup_logging(
     queue_handler = QueueHandler(queue)
     root = logging.getLogger()
     root.setLevel(level)
+    # Remove any pre-existing QueueHandler to avoid duplicate logs
+    for handler in list(root.handlers):
+        if isinstance(handler, QueueHandler):
+            root.removeHandler(handler)
     root.addHandler(queue_handler)
 
     if sentry_dsn and sentry_sdk is not None:

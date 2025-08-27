@@ -73,6 +73,37 @@ def test_oracle_answer_handles_string_context():
     assert any("nota di contesto" in m.get("content", "") for m in messages)
 
 
+def test_oracle_answer_accepts_single_string_context():
+    client = DummyClient()
+    ans, ctx = oracle_answer(
+        question="Che cos'è?",
+        lang_hint="it",
+        client=client,
+        llm_model="test-model",
+        context="nota singola",
+    )
+    assert ans == "risposta"
+    assert ctx == ["nota singola"]
+    _, _, messages = client.responses.called_with
+    assert any("nota singola" in m.get("content", "") for m in messages)
+
+
+def test_oracle_answer_accepts_single_dict_context():
+    client = DummyClient()
+    ctx_item = {"text": "fonte"}
+    ans, ctx = oracle_answer(
+        question="Che cos'è?",
+        lang_hint="it",
+        client=client,
+        llm_model="test-model",
+        context=ctx_item,
+    )
+    assert ans == "risposta"
+    assert ctx == [ctx_item]
+    _, _, messages = client.responses.called_with
+    assert any("fonte" in m.get("content", "") for m in messages)
+
+
 def test_answer_and_log_followup(tmp_path: Path):
     client = DummyClient()
     qdata = Question(id="1", domanda="Chi sei?", type="poetica", follow_up="Vuoi continuare?")
