@@ -11,7 +11,7 @@ import random
 from random import Random
 from typing import Dict, List, Optional, Set
 
-from ..retrieval import Question
+from src.retrieval import Question
 
 
 @dataclass

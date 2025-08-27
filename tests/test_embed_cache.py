@@ -4,7 +4,7 @@ import sys
 import numpy as np
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
-from OcchioOnniveggente.src.retrieval import _embed_texts
+from src.retrieval import _embed_texts
 
 
 class DummyEmbClient:

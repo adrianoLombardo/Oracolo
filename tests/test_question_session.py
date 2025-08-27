@@ -32,7 +32,7 @@ def test_weighted_selection():
     chosen = {session.next_question().type for _ in range(10)}
     assert chosen == {target}
 
-from OcchioOnniveggente.src.retrieval import Question
+from src.retrieval import Question
 
 
 def test_session_serves_all_questions_before_repeat():

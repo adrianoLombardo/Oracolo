@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Dict, List
 import random
 
-from ..retrieval import Question, load_questions, Context
+from src.retrieval import Context, Question, load_questions
 
 # Load questions once at import time. ``load_questions`` may return either a
 # mapping ``{category: [Question, ...]}`` or ``{Context: {category: [...]}}``.

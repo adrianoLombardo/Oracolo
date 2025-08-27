@@ -12,7 +12,7 @@ from OcchioOnniveggente.src.oracle import (
 )
 
 from OcchioOnniveggente.src.oracle import answer_and_log_followup, oracle_answer
-from OcchioOnniveggente.src.retrieval import Question
+from src.retrieval import Question
 
 
 class DummyResp:

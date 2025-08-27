@@ -3,7 +3,7 @@ from pathlib import Path
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
-from OcchioOnniveggente.src.retrieval import Question
+from src.retrieval import Question
 from OcchioOnniveggente.src.conversation import QuestionSession
 
 

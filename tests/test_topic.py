@@ -5,7 +5,7 @@ import numpy as np
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 from OcchioOnniveggente.src.chat import ChatState  # noqa: E402
-from OcchioOnniveggente.src.retrieval import retrieve  # noqa: E402
+from src.retrieval import retrieve  # noqa: E402
 
 
 class DummyEmbClient:

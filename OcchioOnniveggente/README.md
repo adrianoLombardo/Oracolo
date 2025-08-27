@@ -95,7 +95,7 @@ di domande. I metadati sono accessibili come attributi dell'oggetto
 tag:
 
 ```python
-from OcchioOnniveggente.src.retrieval import load_questions
+from src.retrieval import load_questions
 
 qs = load_questions()
 crypto = [q.domanda for qq in qs.values() for q in qq if q.tag and "CryptoMadonne" in q.tag]
