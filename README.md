@@ -89,7 +89,7 @@ print(session.answers, session.replies)
 
 - **MetadataStore**: nuovo archivio dei metadati basato su SQLite FTS o PostgreSQL, con supporto opzionale al vector store FAISS.
 - Le chiamate OpenAI utilizzano ora il client asincrono nativo (`openai.AsyncOpenAI`), eliminando il thread pool e semplificando l'integrazione.
-- Funzioni TTS/STT locali con utilità di streaming a chunk in `local_audio.py`.
+- Funzioni TTS/STT locali con utilità di streaming a chunk in `audio/local_audio.py`.
 - Backend LLM locale opzionale tramite `llm_backend=local` con fallback automatico a OpenAI.
 
 ## Monitoraggio risorse

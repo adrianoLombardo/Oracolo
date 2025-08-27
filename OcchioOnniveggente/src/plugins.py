@@ -14,7 +14,7 @@ from importlib.metadata import entry_points
 from typing import TYPE_CHECKING, Callable, Dict
 
 if TYPE_CHECKING:  # pragma: no cover - hints only
-    from .audio import SpeechToText, TextToSpeech
+    from .audio.protocols import SpeechToText, TextToSpeech
     from .openai_async import LLMClient
     from .service_container import ServiceContainer
 

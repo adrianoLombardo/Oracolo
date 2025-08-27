@@ -6,7 +6,7 @@ Questa sezione descrive i moduli principali dell'Oracolo.
 
 Pipeline principale STT → validazione → risposta LLM → TTS.
 
-## `local_audio.py`
+## `audio/local_audio.py`
 
 Utilità per TTS/STT locale e streaming a chunk.
 
