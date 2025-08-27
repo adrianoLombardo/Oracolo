@@ -89,7 +89,11 @@ print(session.answers, session.replies)
 
 - **MetadataStore**: nuovo archivio dei metadati basato su SQLite FTS o PostgreSQL, con supporto opzionale al vector store FAISS.
 - Le chiamate OpenAI utilizzano ora il client asincrono nativo (`openai.AsyncOpenAI`), eliminando il thread pool e semplificando l'integrazione.
+
+- Funzioni TTS/STT locali con utilità di streaming a chunk in `hardware/local_audio.py`.
+
 - Funzioni TTS/STT locali con utilità di streaming a chunk in `audio/local_audio.py`.
+
 - Backend LLM locale opzionale tramite `llm_backend=local` con fallback automatico a OpenAI.
 
 ## Monitoraggio risorse
@@ -562,10 +566,10 @@ I test includono:
 
 | Modulo | Scopo |
 | ------ | ----- |
-| `audio.py` | Registrazione audio basata su VAD e riproduzione con pulsazione luci |
+| `hardware/audio.py` | Registrazione audio basata su VAD e riproduzione con pulsazione luci |
 | `filters.py` | Filtro volgarità (IT/EN) con normalizzazione, wildcard e frasi multiple |
 | `oracle.py` | Pipeline STT → validazione dominio → risposta LLM → TTS → log |
-| `lights.py` / `wled_client.py` | Driver per sACN e WLED, con effetti pulsanti |
+| `hardware/lights.py` / `hardware/wled_client.py` | Driver per sACN e WLED, con effetti pulsanti |
 | `domain.py` | Controllo pertinenza domanda (keyword overlap + embeddings) |
 | `retrieval.py` | BM25/fallback token overlap per recupero dei documenti |
 | `realtime_oracolo.py` / `realtime_ws.py` | Client Realtime WS (microfono ↔ TTS) |
