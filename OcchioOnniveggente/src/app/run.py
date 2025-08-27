@@ -16,8 +16,8 @@ import yaml
 import logging
 
 from src.filters import ProfanityFilter
-from src.audio import record_until_silence, play_and_pulse
-from src.lights import color_from_text
+from src.audio.recording import record_until_silence, play_and_pulse
+from src.hardware.lights import color_from_text
 from src.oracle import (
     transcribe,
     fast_transcribe,
@@ -27,10 +27,10 @@ from src.oracle import (
     extract_summary,
     detect_language,
 )
-from src.hotword import is_wake, matches_hotword_text, strip_hotword_prefix
+from src.audio.hotword import is_wake, matches_hotword_text, strip_hotword_prefix
 from src.chat import ChatState
 from src.conversation import ConversationManager, DialogState
-from src.language_session import update_language
+from src.conversation import update_language
 from src.profile_utils import get_active_profile, make_domain_settings
 from src.cli import say, oracle_greeting, default_response
 from src.domain import validate_question
