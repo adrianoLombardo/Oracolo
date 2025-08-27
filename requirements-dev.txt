@@ -9,4 +9,7 @@ pyttsx3>=2.90
 webrtcvad>=2.0.10
 langdetect>=1.0.9
 tenacity>=8.0.0
+types-requests>=2.31.0.20240106
+types-Flask>=1.1.0
+types-PyYAML>=6.0.12.20240210
 
