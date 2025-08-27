@@ -142,22 +142,30 @@ def append_log(
 
 def _build_messages(
     question: str,
-    context: list[dict[str, Any]] | None,
+    context: list[dict[str, Any] | str] | None,
     history: list[dict[str, str]] | None,
 ) -> List[dict[str, str]]:
     msgs: List[dict[str, str]] = []
     if history:
         msgs.extend(history)
     if context:
-        ctx_lines = [f"[{i+1}] {c.get('text', '')}" for i, c in enumerate(context)]
-        msgs.append({"role": "system", "content": "Fonti:\n" + "\n".join(ctx_lines)})
+        ctx_lines: List[str] = []
+        for i, c in enumerate(context):
+            if isinstance(c, dict):
+                text = c.get("text", "")
+            else:
+                text = str(c)
+            if text:
+                ctx_lines.append(f"[{i+1}] {text}")
+        if ctx_lines:
+            msgs.append({"role": "system", "content": "Fonti:\n" + "\n".join(ctx_lines)})
     msgs.append({"role": "user", "content": question})
     return msgs
 
 
 def _build_instructions(
     lang_hint: str,
-    context: list[dict[str, Any]] | None,
+    context: list[dict[str, Any] | str] | None,
     style_prompt: str,
     mode: str | None,
     policy_prompt: str | None,
@@ -188,7 +196,7 @@ def oracle_answer(
     llm_model: str | None = None,
     style_prompt: str = "",
     *,
-    context: list[dict[str, Any]] | None = None,
+    context: list[dict[str, Any] | str] | None = None,
     conv: ConversationManager | None = None,
     mode: str | None = None,
     policy_prompt: str | None = None,
@@ -197,7 +205,7 @@ def oracle_answer(
     question_type: str | None = None,
     categoria: str | None = None,
     off_topic_category: str | None = None,
-) -> Tuple[str, List[dict[str, Any]]]:
+) -> Tuple[str, List[dict[str, Any] | str]]:
     """Return an answer from ``client`` and the context used."""
     # Check cache first
     cache_key = "oracle:" + hashlib.sha256(question.encode("utf-8")).hexdigest()
@@ -308,7 +316,7 @@ async def oracle_answer_async(
     llm_model: str | None = None,
     style_prompt: str = "",
     *,
-    context: list[dict[str, Any]] | None = None,
+    context: list[dict[str, Any] | str] | None = None,
     conv: ConversationManager | None = None,
     mode: str | None = None,
     policy_prompt: str | None = None,
@@ -317,7 +325,7 @@ async def oracle_answer_async(
     question_type: str | None = None,
     categoria: str | None = None,
     off_topic_category: str | None = None,
-) -> Tuple[str, List[dict[str, Any]]]:
+) -> Tuple[str, List[dict[str, Any] | str]]:
     """Async wrapper around :func:`oracle_answer` using ``asyncio.to_thread``."""
     client = client or container.llm_client()
     llm_model = llm_model or container.settings.openai.llm_model
@@ -349,7 +357,7 @@ async def oracle_answer_stream(
     llm_model: str | None = None,
     style_prompt: str = "",
     *,
-    context: list[dict[str, Any]] | None = None,
+    context: list[dict[str, Any] | str] | None = None,
     mode: str | None = None,
     policy_prompt: str | None = None,
     conv: ConversationManager | None = None,
