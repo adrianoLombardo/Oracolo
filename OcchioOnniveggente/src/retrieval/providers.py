@@ -57,7 +57,7 @@ def load_questions(path: str | Path | None = None) -> Dict[str, List[Question]]:
     root = (
         Path(path)
         if path is not None
-        else Path(__file__).resolve().parent.parent / "data" / "domande_oracolo.json"
+        else Path(__file__).resolve().parents[2] / "data" / "domande_oracolo.json"
     )
     if root.is_dir():
         root = root / "domande_oracolo.json"

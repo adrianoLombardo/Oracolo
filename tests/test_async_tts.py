@@ -12,8 +12,7 @@ sys.path.append(str(ROOT))
 sys.path.append(str(ROOT / "OcchioOnniveggente"))
 sys.modules.setdefault("sounddevice", types.SimpleNamespace(play=lambda *a, **k: None, wait=lambda: None))
 
-from OcchioOnniveggente.src.hardware import local_audio
-=======from OcchioOnniveggente.src.audio import local_audio
+from OcchioOnniveggente.src.audio import local_audio
 
 
 

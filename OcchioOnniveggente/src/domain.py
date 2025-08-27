@@ -340,7 +340,7 @@ def validate_question(
         reason += f" kw0 rag_hits={rag_hits}"
     if clarify and docstore_path:
         alt_ctx = _try_retrieve(
-            question, settings, docstore_path, top_k, None, client, emb_model
+            question, settings, docstore_path, max(top_k, 3), None, client, emb_model
         )
         for it in alt_ctx:
             t = str(it.get("topic") or "")
@@ -389,11 +389,14 @@ def _try_retrieve(
     except Exception:
         raw_ctx = []
     # normalizza
+    q_tokens = set(_tokens(question))
     out: list[dict] = []
     for it in raw_ctx or []:
         if isinstance(it, dict):
             t = str(it.get("text") or it.get("content") or "").strip()
             if not t:
+                continue
+            if q_tokens and not (q_tokens & set(_tokens(t))):
                 continue
             it = dict(it)
             it["text"] = t[:1000]
@@ -401,5 +404,7 @@ def _try_retrieve(
         else:
             t = str(it).strip()
             if t:
+                if q_tokens and not (q_tokens & set(_tokens(t))):
+                    continue
                 out.append({"text": t[:1000]})
     return out
