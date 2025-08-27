@@ -29,6 +29,7 @@ import websockets
 from src.conversation import ConversationManager, DialogState
 from src.retrieval import load_questions
 from src.hardware import local_audio
+from src.audio import local_audio
 from src.oracle import (
     enqueue_generate_reply,
     enqueue_synthesize_voice,

@@ -3,7 +3,7 @@ from pathlib import Path
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
-from OcchioOnniveggente.src.hotword import strip_hotword_prefix
+from OcchioOnniveggente.src.audio.hotword import strip_hotword_prefix
 
 
 def test_strip_hotword_prefix_removes_match():

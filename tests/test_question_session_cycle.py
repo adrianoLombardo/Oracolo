@@ -4,7 +4,7 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 from OcchioOnniveggente.src.retrieval import Question
-from OcchioOnniveggente.src.question_session import QuestionSession
+from OcchioOnniveggente.src.conversation import QuestionSession
 from OcchioOnniveggente.src.oracle import answer_and_log_followup, acknowledge_followup
 
 

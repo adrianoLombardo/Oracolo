@@ -6,7 +6,7 @@ from typing import Any, Callable
 import logging
 
 from src.conversation import ConversationManager
-from src.ui_state import UIState
+from .state import UIState
 from src.chat import ChatState
 from src.event_bus import event_bus
 

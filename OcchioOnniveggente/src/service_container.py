@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from typing import Any
 import asyncio
 
-from .audio import SpeechToText, TextToSpeech
+from .audio.protocols import SpeechToText, TextToSpeech
 from .openai_async import LLMClient
 from .plugins import create_stt, create_tts, create_llm
 from .conversation import ConversationManager
@@ -26,7 +26,7 @@ from .utils.torch_utils import torch
 
 from openai import AsyncOpenAI
 from .config import Settings, get_openai_api_key
-from .ui_state import UIState
+from .frontend.state import UIState
 from . import openai_async
 from .utils.device import resolve_device
 
@@ -210,7 +210,11 @@ class ServiceContainer:
 
         # Svuota il cache dei modelli Whisper per liberare la VRAM
         try:
+
             from .hardware.local_audio import _WHISPER_CACHE
+
+            from .audio.local_audio import _WHISPER_CACHE
+
 
             _WHISPER_CACHE.clear()
         except Exception:  # pragma: no cover - se il modulo non è caricato

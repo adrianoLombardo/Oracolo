@@ -1,9 +1,13 @@
 import pytest
 
+
 from OcchioOnniveggente.src.hardware import audio
+
+from OcchioOnniveggente.src.audio import recording
+
 
 
 def test_record_wav_requires_sounddevice(tmp_path, monkeypatch):
-    monkeypatch.setattr(audio, "sd", None)
+    monkeypatch.setattr(recording, "sd", None)
     with pytest.raises(RuntimeError):
-        audio.record_wav(tmp_path / "out.wav", seconds=1, sr=16000)
+        recording.record_wav(tmp_path / "out.wav", seconds=1, sr=16000)

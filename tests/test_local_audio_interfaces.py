@@ -6,12 +6,23 @@ import numpy as np
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
+
 from OcchioOnniveggente.src.hardware.audio import LocalSpeechToText, LocalTextToSpeech
+
+from OcchioOnniveggente.src.audio.protocols import (
+    LocalSpeechToText,
+    LocalTextToSpeech,
+)
+
 
 
 def _import_local_audio():
     sys.modules.setdefault("sounddevice", types.SimpleNamespace())
+
     return importlib.import_module("OcchioOnniveggente.src.hardware.local_audio")
+
+    return importlib.import_module("OcchioOnniveggente.src.audio.local_audio")
+
 
 
 def test_stt_local_transcribes(monkeypatch, tmp_path):

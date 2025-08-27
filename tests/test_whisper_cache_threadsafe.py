@@ -16,7 +16,11 @@ def test_get_whisper_thread_safety(monkeypatch):
     monkeypatch.setitem(sys.modules, "sounddevice", types.ModuleType("sounddevice"))
     monkeypatch.setitem(sys.modules, "soundfile", types.ModuleType("soundfile"))
 
+
     local_audio = importlib.import_module("OcchioOnniveggente.src.hardware.local_audio")
+
+    local_audio = importlib.import_module("OcchioOnniveggente.src.audio.local_audio")
+
     local_audio._WHISPER_CACHE.clear()
 
     created = []

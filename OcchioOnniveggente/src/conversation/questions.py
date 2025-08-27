@@ -11,8 +11,7 @@ import random
 from random import Random
 from typing import Dict, List, Optional, Set
 
-from .oracle import get_questions
-from .retrieval import Question
+from ..retrieval import Question
 
 
 @dataclass
@@ -30,6 +29,8 @@ class QuestionSession:
 
     def __post_init__(self) -> None:
         if self.questions is None:
+            from ..oracle import get_questions
+
             self.questions = get_questions()
         # normalise category keys
         self.questions = {k.lower(): list(v) for k, v in self.questions.items()}
