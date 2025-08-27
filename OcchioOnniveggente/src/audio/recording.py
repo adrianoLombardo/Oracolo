@@ -2,132 +2,28 @@ from __future__ import annotations
 
 import collections
 import threading
-import time
 from pathlib import Path
-from typing import Any, Dict, Tuple, Protocol
-import tempfile
+from typing import Any, Dict
 
 import numpy as np
 import soundfile as sf
+
 try:  # pragma: no cover - optional dependency
     import sounddevice as sd
 except Exception:  # pragma: no cover
     sd = None
 
 try:  # pragma: no cover - optional dependency
-    import webrtc_audio_processing as wap  # type: ignore
-except Exception:  # pragma: no cover
-    wap = None
-try:  # pragma: no cover - optional dependency
-    import rnnoise  # type: ignore
-except Exception:  # pragma: no cover
-    rnnoise = None
-
-try:
     import webrtcvad  # type: ignore
-except Exception:
+except Exception:  # pragma: no cover
     webrtcvad = None
 
-
-class SpeechToText(Protocol):
-    """Interface for speech-to-text providers."""
-
-    def transcribe(self, audio_path: Path, lang: str = "it") -> str:
-        ...
-
-
-class TextToSpeech(Protocol):
-    """Interface for text-to-speech providers."""
-
-    def synthesize(self, text: str, lang: str = "it") -> bytes:
-        ...
-
-
-class AudioPreprocessor:
-    """Optional noise suppression / echo cancellation / AGC processor."""
-
-    def __init__(
-        self,
-        sr: int,
-        *,
-        denoise: bool = False,
-        echo_cancel: bool = False,
-        agc: bool = True,
-    ) -> None:
-        self.sr = sr
-        self._proc: Any | None = None
-        self._kind = "none"
-        if wap is not None:
-            self._proc = wap.AudioProcessor(
-                enable_ns=denoise,
-                enable_agc=agc,
-                enable_aec=echo_cancel,
-            )
-            self._proc.set_stream_format(wap.StreamFormat(sr, 1))
-            self._kind = "webrtc"
-        elif rnnoise is not None and denoise:
-            self._proc = rnnoise.RNNoise()
-            self._kind = "rnnoise"
-
-    def process(self, y: np.ndarray) -> np.ndarray:
-        """Process ``y`` returning a cleaned signal."""
-        if self._proc is None:
-            return y
-        if self._kind == "webrtc":
-            arr = np.asarray(y, dtype=np.float32).reshape(-1, 1)
-            out = self._proc.process_stream(arr)
-            return out.reshape(-1)
-        if self._kind == "rnnoise":
-            frame = 480
-            padded = np.pad(y, (0, (-len(y)) % frame), mode="constant")
-            out = np.empty_like(padded)
-            for i in range(0, len(padded), frame):
-                out[i : i + frame] = self._proc.process_frame(padded[i : i + frame])
-            return out[: len(y)]
-        return y
-
-
-def load_audio_as_float(path: Path, target_sr: int) -> Tuple[np.ndarray, int]:
-    """Load an audio file and return mono float32 samples and sample rate."""
-    if path.suffix.lower() != ".mp3":
-        y, sr = sf.read(path.as_posix(), dtype="float32", always_2d=False)
-        if y.ndim > 1:
-            y = y.mean(axis=1)
-        return y, sr
-
-    try:  # MP3 fallback
-        from pydub import AudioSegment
-    except Exception:
-        raise RuntimeError(
-            "File MP3 ma pydub/ffmpeg non disponibili. Usa WAV oppure installa ffmpeg."
-        )
-    audio = AudioSegment.from_mp3(path.as_posix())
-    audio = audio.set_channels(1).set_frame_rate(target_sr)
-    y = np.array(audio.get_array_of_samples()).astype(np.float32) / 32768.0
-    return y, target_sr
-
-
-def apply_agc(y: np.ndarray, target_rms: float = 0.1, max_gain: float = 10.0) -> np.ndarray:
-    """Apply a simple automatic gain control to ``y``.
-
-    The signal is amplified towards ``target_rms`` but never more than
-    ``max_gain`` and clipped at [-1, 1]."""
-
-    if y.size == 0:
-        return y
-    rms = float(np.sqrt(np.mean(y**2))) + 1e-8
-    gain = min(max_gain, target_rms / rms)
-    y = y * gain
-    return np.clip(y, -1.0, 1.0)
-
-
-def apply_limiter(y: np.ndarray, threshold: float = 0.95) -> np.ndarray:
-    """Limit the peak amplitude of ``y`` to ``threshold``."""
-
-    peak = float(np.max(np.abs(y))) if y.size else 0.0
-    if peak <= threshold or peak == 0.0:
-        return y
-    return y * (threshold / peak)
+from .processing import (
+    AudioPreprocessor,
+    apply_agc,
+    apply_limiter,
+    load_audio_as_float,
+)
 
 
 def record_wav(path: Path, seconds: int, sr: int) -> None:
@@ -231,7 +127,6 @@ def record_until_silence(
         pass
 
     if recording_conf.get("use_webrtcvad", True) and webrtcvad is not None:
-        # WebRTC VAD supports only specific sample rates; fall back if unsupported
         if sr not in (8000, 16000, 32000, 48000):
             print(
                 f"⚠️ WebRTC VAD richiede 8/16/32/48 kHz. Rilevati {sr} Hz, uso VAD a energia."
@@ -413,45 +308,3 @@ def play_and_pulse(
         t.join()
         if tts_event is not None:
             tts_event.clear()
-
-
-class LocalSpeechToText:
-    """Simple local STT implementation based on :mod:`local_audio`."""
-
-    def transcribe(self, audio_path: Path, lang: str = "it") -> str:
-        from .local_audio import stt_local
-
-        return stt_local(audio_path, lang=lang)
-
-
-class LocalTextToSpeech:
-    """Simple local TTS implementation based on :mod:`local_audio`."""
-
-    def synthesize(self, text: str, lang: str = "it") -> bytes:
-        from .local_audio import tts_local
-
-        tmp = Path(tempfile.gettempdir()) / "tts_tmp.wav"
-        tts_local(text, tmp, lang=lang)
-        return tmp.read_bytes()
-
-
-# Plugin registration -------------------------------------------------------
-
-def create_local_stt(container: "ServiceContainer") -> SpeechToText:
-    """Factory for the built-in local STT backend."""
-    return LocalSpeechToText()
-
-
-def create_local_tts(container: "ServiceContainer") -> TextToSpeech:
-    """Factory for the built-in local TTS backend."""
-    return LocalTextToSpeech()
-
-
-try:  # pragma: no cover - registry may not be available during docs build
-    from .plugins import register_stt, register_tts
-
-    register_stt("local", create_local_stt)
-    register_tts("local", create_local_tts)
-except Exception:  # pragma: no cover - defensive
-    pass
-

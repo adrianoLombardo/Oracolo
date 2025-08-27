@@ -18,7 +18,7 @@ sd_stub.default = types.SimpleNamespace(device=(0, 1))
 sd_stub.query_devices = _fake_query
 sys.modules["sounddevice"] = sd_stub
 
-from OcchioOnniveggente.src.audio_device import pick_device, debug_print_devices
+from OcchioOnniveggente.src.audio.audio_device import pick_device, debug_print_devices
 
 
 def test_pick_device():

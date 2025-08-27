@@ -19,10 +19,10 @@ import numpy as np
 import soundfile as sf
 import sounddevice as sd
 
-from .cache import get_tts_cache, set_tts_cache
+from ..cache import get_tts_cache, set_tts_cache
 from types import SimpleNamespace
 
-from .utils.container import get_container
+from ..utils.container import get_container
 
 
 _container_stub = SimpleNamespace(

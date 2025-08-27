@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from typing import Any
 import asyncio
 
-from .audio import SpeechToText, TextToSpeech
+from .audio.protocols import SpeechToText, TextToSpeech
 from .openai_async import LLMClient
 from .plugins import create_stt, create_tts, create_llm
 from .conversation import ConversationManager
@@ -210,7 +210,7 @@ class ServiceContainer:
 
         # Svuota il cache dei modelli Whisper per liberare la VRAM
         try:
-            from .local_audio import _WHISPER_CACHE
+            from .audio.local_audio import _WHISPER_CACHE
 
             _WHISPER_CACHE.clear()
         except Exception:  # pragma: no cover - se il modulo non è caricato
