@@ -143,7 +143,13 @@ def _make_chunks(text: str, max_chars: int = 800, overlap_ratio: float = 0.1) ->
 
 
 def _embed_texts(
-    client: Any, model: str, texts: List[str], *, cache_dir: str | Path | None = None
+    client: Any,
+    model: str,
+    texts: List[str],
+    *,
+    cache_dir: str | Path | None = None,
+    timeout: float = 10.0,
+    retries: int = 2,
 ) -> List[np.ndarray]:
     if not texts:
         return []
@@ -174,11 +180,26 @@ def _embed_texts(
             to_compute.append((idx, txt, cache_key, None))
 
     if to_compute:
-        resp = run(
-            client.embeddings.create,  # type: ignore[attr-defined]
-            model=model,
-            input=[t for _, t, _, _ in to_compute],
-        )
+        from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
+        from ..utils import retry_with_backoff
+
+        def _call() -> Any:
+            with ThreadPoolExecutor(max_workers=1) as pool:
+                future = pool.submit(
+                    run,
+                    client.embeddings.create,  # type: ignore[attr-defined]
+                    model=model,
+                    input=[t for _, t, _, _ in to_compute],
+                )
+                return future.result(timeout=timeout)
+
+        try:
+            resp = retry_with_backoff(_call, retries=retries)
+        except FuturesTimeout as e:
+            msg = f"Embedding request timed out after {timeout} seconds"
+            logger.error(msg)
+            raise TimeoutError(msg) from e
+
         for (idx, _txt, cache_key, fp), item in zip(to_compute, resp.data):
             vec = np.array(getattr(item, "embedding", []), dtype=np.float32)
             results[idx] = vec
