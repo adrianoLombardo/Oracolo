@@ -45,6 +45,9 @@ from src.frontend.theme import get_theme
 from .realtime_ws import RealtimeWSClient
 from .utils import highlight_terms
 
+# Names exported when ``from src.ui.core import *`` is used
+__all__ = ["OrbWidget", "OracoloUI", "UILogHandler", "main"]
+
 THEME = get_theme()
 
 
